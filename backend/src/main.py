@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 import os
 from src.db import supabase
 from src.OCR import extract_text
+from src.llm import analyze_policy
 
 
 load_dotenv() # loading  enviroment variable form .env
@@ -47,3 +48,22 @@ async def upload_policy(user_id: str, policy_name:str, file: UploadFile = File(.
         return {"policy_id": response.data[0]["id"], "extracted_text": extracted_text}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"error Processing file : {str(e)}")
+
+@ app.post("/analyze_policy/")
+def analyze(policy_id: str):
+    """
+    Analyse policy using llm based on its extrected level
+
+    using policy id to analyse 
+
+    and return llm result 
+    """
+
+    try:
+        policy=supabase.table("policies").select("extracted_text").eq("id", policy_id).eq("id",policy_id).execute().data[0]
+        analysis=analyze_policy(policy["extracted_text"])
+        return {"analysis":analysis}
+    except IndexError:
+        raise HTTPException(status_code=404, detail="Policy not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error analyzing policy: {str(e)}")    
