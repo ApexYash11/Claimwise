@@ -5,9 +5,19 @@ from src.db import supabase
 from src.OCR import extract_text
 from src.llm import analyze_policy, compare_policies, chat_with_policy
 from src.auth import get_current_user, refresh_token
+from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()  # Load environment variables from .env
 app = FastAPI()
+
+# CORS middleware to allow cross-origin requests
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],  # Allows all origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 def root():

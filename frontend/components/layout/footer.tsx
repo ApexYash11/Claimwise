@@ -66,7 +66,7 @@ export function Footer() {
         </div>
 
         <div className="border-t border-gray-200 mt-8 pt-8 text-center">
-          <p className="text-gray-600">© 2024 ClaimWise. All rights reserved.</p>
+          <p className="text-gray-600">© 2025 ClaimWise. All rights reserved.</p>
         </div>
       </div>
     </footer>

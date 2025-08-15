@@ -95,9 +95,9 @@ export function RecentActivity() {
           <Link href="/history">View All</Link>
         </Button>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pb-4">
         <div className="space-y-4">
-          {mockActivities.map((activity) => {
+          {mockActivities.slice(0, 3).map((activity) => {
             const Icon = getActivityIcon(activity.type)
             return (
               <div
@@ -125,6 +125,11 @@ export function RecentActivity() {
               </div>
             )
           })}
+        </div>
+        <div className="mt-4 text-center">
+          <Button variant="ghost" asChild className="text-blue-600 hover:text-blue-700">
+            <Link href="/history">View All Activity</Link>
+          </Button>
         </div>
       </CardContent>
     </Card>

@@ -15,29 +15,35 @@ supabase: Client = create_client(supabase_url, supabase_key)
 #Oauth 2 scheme for token 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-# secret key for jwt 
-SECRET_KEY = os.getenv("SECRET_KEY","your_secret_key")# fallback for testing
-ALGORITHM = ["HS256"]  
+# Supabase JWT secret for token verification
+SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")
+if not SUPABASE_JWT_SECRET:
+    raise ValueError("SUPABASE_JWT_SECRET environment variable must be set")
+
+ALGORITHM = ["HS256"]  # Supabase Legacy JWT uses HS256 for signing
 
 @lru_cache(maxsize=128)
-def decode_token(token: str)-> str:
+def decode_token(token: str) -> str:
     """
-    decode and verify a jwt toekn 
+    Decode and verify a Supabase-issued JWT token.
+    Supports tokens from email/password and social authentication.
 
-    args: 
-    token (str): The JWT token to decode and verify.
+    Args: 
+        token (str): The JWT token to decode and verify.
 
     Returns:
-    str: user id 
+        str: user id from token payload
 
-    raised error : if token is invalid
+    Raises:
+        JWTError: if token is invalid or verification fails
     """
-
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=ALGORITHM)
+        # Type assertion since we've already checked SUPABASE_JWT_SECRET is not None
+        jwt_secret: str = SUPABASE_JWT_SECRET  # type: ignore
+        payload = jwt.decode(token, jwt_secret, algorithms=ALGORITHM)
         user_id = payload.get("sub")
         if user_id is None:
-            raise JWTError("Invalid authentication credentials")
+            raise JWTError("Invalid authentication credentials: missing 'sub' claim")
         return str(user_id)
     except JWTError:
         raise

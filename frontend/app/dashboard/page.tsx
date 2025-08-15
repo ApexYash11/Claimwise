@@ -44,16 +44,15 @@ export default function DashboardPage() {
             <StatsCard title="Next Renewal" value="45 days" description="Auto insurance expires" icon={Calendar} />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-            {/* Quick Actions */}
-            <div className="lg:col-span-1">
-              <QuickActions />
-            </div>
+          {/* Quick Actions Grid */}
+          <div className="mb-8">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h2>
+            <QuickActions />
+          </div>
 
-            {/* Recent Activity */}
-            <div className="lg:col-span-2">
-              <RecentActivity />
-            </div>
+          {/* Recent Activity */}
+          <div className="mb-8">
+            <RecentActivity />
           </div>
 
           {/* Insights and Alerts */}

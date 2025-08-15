@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
@@ -10,15 +9,27 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { signIn } from "@/lib/auth"
-import { Loader2, Shield } from "lucide-react"
+import { signIn, signInWithProvider } from "@/lib/auth"
+import { Github, Globe, Loader2, Shield } from "lucide-react"
 
 export function LoginForm() {
+  const [loading, setLoading] = useState(false)
+  const [socialLoading, setSocialLoading] = useState<string | null>(null)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const router = useRouter()
+
+  const handleSocialLogin = async (provider: 'google' | 'github') => {
+    setSocialLoading(provider)
+    setError("")
+    const { error: authError } = await signInWithProvider(provider)
+    if (authError) {
+      setError(authError.message)
+      setSocialLoading(null)
+    }
+    // On success, Supabase will redirect automatically
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -49,6 +60,28 @@ export function LoginForm() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="flex flex-col gap-3 mb-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full flex items-center justify-center gap-2 border-gray-200"
+                onClick={() => handleSocialLogin('google')}
+                disabled={socialLoading === 'google' || loading}
+              >
+                <Globe className="w-5 h-5 text-blue-600" />
+                {socialLoading === 'google' ? 'Signing in with Google...' : 'Sign in with Google'}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full flex items-center justify-center gap-2 border-gray-200"
+                onClick={() => handleSocialLogin('github')}
+                disabled={socialLoading === 'github' || loading}
+              >
+                <Github className="w-5 h-5 text-gray-800" />
+                {socialLoading === 'github' ? 'Signing in with GitHub...' : 'Sign in with GitHub'}
+              </Button>
+            </div>
             {error && (
               <Alert variant="destructive">
                 <AlertDescription>{error}</AlertDescription>

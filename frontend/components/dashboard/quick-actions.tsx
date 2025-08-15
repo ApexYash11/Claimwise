@@ -1,6 +1,6 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Upload, FileText, BarChart3, MessageSquare, ArrowRight } from "lucide-react"
+
+import { Card } from "@/components/ui/card"
+import { Upload, FileText } from "lucide-react"
 import Link from "next/link"
 
 const quickActions = [
@@ -9,62 +9,40 @@ const quickActions = [
     description: "Add insurance documents for analysis",
     icon: Upload,
     href: "/upload",
-    color: "bg-blue-600 hover:bg-blue-700",
+    color: "bg-blue-600",
   },
   {
     title: "Analyze Policies",
     description: "Get AI-powered insights and recommendations",
     icon: FileText,
     href: "/analyze",
-    color: "bg-green-600 hover:bg-green-700",
-  },
-  {
-    title: "Compare Coverage",
-    description: "Side-by-side policy comparison",
-    icon: BarChart3,
-    href: "/compare",
-    color: "bg-purple-600 hover:bg-purple-700",
-  },
-  {
-    title: "Ask AI Assistant",
-    description: "Get instant answers about your policies",
-    icon: MessageSquare,
-    href: "/chat",
-    color: "bg-orange-600 hover:bg-orange-700",
+    color: "bg-green-600",
   },
 ]
 
 export function QuickActions() {
   return (
-    <Card className="border-0 shadow-lg">
-      <CardHeader>
-        <CardTitle className="text-lg">Quick Actions</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {quickActions.map((action) => (
-            <Button
-              key={action.title}
-              asChild
-              variant="outline"
-              className="h-auto p-4 flex flex-col items-start space-y-2 hover:shadow-md transition-shadow bg-transparent"
-            >
-              <Link href={action.href}>
-                <div className="flex items-center justify-between w-full">
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${action.color}`}>
-                    <action.icon className="w-4 h-4 text-white" />
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-gray-400" />
-                </div>
-                <div className="text-left">
-                  <p className="font-medium text-gray-900">{action.title}</p>
-                  <p className="text-sm text-gray-600">{action.description}</p>
-                </div>
-              </Link>
-            </Button>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {quickActions.map((action) => (
+        <Link key={action.title} href={action.href}>
+          <Card className="border-0 shadow-lg h-full hover:shadow-xl transition-shadow duration-200 cursor-pointer group">
+            <div className="p-6 flex flex-col h-full">
+              <div className="flex items-center justify-between mb-4">
+                <span className={`w-12 h-12 rounded-lg flex items-center justify-center ${action.color}`}>
+                  <action.icon className="w-6 h-6 text-white" />
+                </span>
+                <span className="w-8 h-8 rounded-full flex items-center justify-center bg-gray-100 group-hover:bg-gray-200 transition-colors">
+                  <action.icon className="w-4 h-4 text-gray-600" />
+                </span>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">{action.title}</h3>
+                <p className="text-sm text-gray-600">{action.description}</p>
+              </div>
+            </div>
+          </Card>
+        </Link>
+      ))}
+    </div>
   )
 }

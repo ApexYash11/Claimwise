@@ -10,7 +10,25 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { signUp } from "@/lib/auth"
+import { signUp, signInWithProvider } from "@/lib/auth"
+import { Github, Globe } from "lucide-react"
+  const [socialLoading, setSocialLoading] = useState<string | null>(null)
+  const handleSocialSignup = async (provider: 'google' | 'github') => {
+    setSocialLoading(provider)
+    setError("")
+    try {
+      const { error: authError } = await signInWithProvider(provider)
+      if (authError) {
+        setError(authError.message)
+        setSocialLoading(null)
+        return
+      }
+      // On success, Supabase will redirect automatically to the dashboard
+    } catch (err) {
+      setError("An error occurred during social sign up. Please try again.")
+      setSocialLoading(null)
+    }
+  }
 import { Loader2, Shield, CheckCircle } from "lucide-react"
 
 export function SignupForm() {
@@ -92,6 +110,28 @@ export function SignupForm() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="flex flex-col gap-3 mb-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full flex items-center justify-center gap-2 border-gray-200"
+                onClick={() => handleSocialSignup('google')}
+                disabled={socialLoading === 'google' || loading}
+              >
+                <Globe className="w-5 h-5 text-blue-600" />
+                {socialLoading === 'google' ? 'Signing up with Google...' : 'Sign up with Google'}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full flex items-center justify-center gap-2 border-gray-200"
+                onClick={() => handleSocialSignup('github')}
+                disabled={socialLoading === 'github' || loading}
+              >
+                <Github className="w-5 h-5 text-gray-800" />
+                {socialLoading === 'github' ? 'Signing up with GitHub...' : 'Sign up with GitHub'}
+              </Button>
+            </div>
             {error && (
               <Alert variant="destructive">
                 <AlertDescription>{error}</AlertDescription>
