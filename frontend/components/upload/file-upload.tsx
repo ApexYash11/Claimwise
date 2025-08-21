@@ -47,7 +47,7 @@ export function FileUpload({ onFilesUploaded, maxFiles = 5, maxSize = 10 * 1024 
         id: Math.random().toString(36).substr(2, 9),
         status: "uploading" as const,
         progress: 0,
-        preview: file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined,
+  preview: file.type && file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined,
       }))
 
       setFiles((prev) => [...prev, ...newFiles])
@@ -149,7 +149,7 @@ export function FileUpload({ onFilesUploaded, maxFiles = 5, maxSize = 10 * 1024 
                   <div className="flex items-center space-x-4">
                     {/* File Icon */}
                     <div className="flex-shrink-0">
-                      {file.type.startsWith("image/") ? (
+                      {file.type && file.type.startsWith("image/") ? (
                         <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
                           <ImageIcon className="w-5 h-5 text-green-600" />
                         </div>

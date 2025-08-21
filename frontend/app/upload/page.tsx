@@ -1,6 +1,8 @@
 "use client"
 
 import { useState } from "react"
+import { supabase } from "@/lib/supabase"
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 import { useRouter } from "next/navigation"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { Header } from "@/components/layout/header"
@@ -9,6 +11,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ArrowLeft, Shield, FileText, BarChart3, MessageSquare } from "lucide-react"
 import Link from "next/link"
+
 
 interface FileWithPreview extends File {
   preview?: string
@@ -20,22 +23,65 @@ interface FileWithPreview extends File {
 
 export default function UploadPage() {
   const [uploadedFiles, setUploadedFiles] = useState<FileWithPreview[]>([])
+  const [policyId, setPolicyId] = useState<string | null>(null)
+  const [policyInfo, setPolicyInfo] = useState<any>(null)
+  const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState("")
   const router = useRouter()
 
-  const handleFilesUploaded = (files: FileWithPreview[]) => {
+  const handleFilesUploaded = async (files: FileWithPreview[]) => {
     setUploadedFiles(files)
-    // Here you would typically send files to your backend API
-    // For now, we'll simulate navigation to analysis page
-    setTimeout(() => {
-      router.push("/analyze")
-    }, 1000)
+    setUploading(true)
+    setError("")
+    try {
+      if (!files || files.length === 0 || !files[0]) {
+        setError("No file selected. Please upload a policy file.")
+        setUploading(false)
+        return
+      }
+      const formData = new FormData()
+      formData.append("policy_name", files[0].name)
+      formData.append("file", files[0])
+      // Get Supabase JWT
+      const session = await supabase.auth.getSession()
+      const token = session.data.session?.access_token
+      const response = await fetch(`${API_BASE_URL}/upload-policy`, {
+        method: "POST",
+        body: formData,
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      })
+      if (!response.ok) {
+        // Try to parse backend error message
+        let msg = `HTTP error! status: ${response.status}`
+        try {
+          const err = await response.json()
+          if (err && err.detail) msg = err.detail
+        } catch {}
+        throw new Error(msg)
+      }
+      const data = await response.json()
+      setPolicyId(data.policy_id)
+      setPolicyInfo(data)
+      // Store for analyze page if needed
+      if (typeof window !== "undefined") {
+        localStorage.setItem("claimwise_uploaded_policy_id", data.policy_id)
+        localStorage.setItem("claimwise_uploaded_policy_info", JSON.stringify(data))
+      }
+    } catch (e: any) {
+      setError(e.message || "Upload failed")
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const handleAnalyze = () => {
+    router.push("/analyze")
   }
 
   return (
     <ProtectedRoute>
       <div className="min-h-screen bg-gray-50">
         <Header />
-
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Back Button */}
           <div className="mb-6">
@@ -62,6 +108,19 @@ export default function UploadPage() {
           {/* Upload Component */}
           <div className="mb-8">
             <FileUpload onFilesUploaded={handleFilesUploaded} />
+            {uploading && <div className="text-blue-600 mt-4">Uploading...</div>}
+            {error && <div className="text-red-600 mt-4">{error}</div>}
+            {policyInfo && (
+              <div className="mt-4 p-4 bg-green-50 rounded">
+                <div className="font-semibold">Policy Uploaded!</div>
+                <div>Policy Name: {policyInfo.policy_name || uploadedFiles[0]?.name}</div>
+                <div>Policy ID: {policyId}</div>
+                {policyInfo.policy_number && <div>Policy Number: {policyInfo.policy_number}</div>}
+                <div className="mt-2">
+                  <Button onClick={handleAnalyze} className="bg-blue-600 hover:bg-blue-700">Analyze Policy</Button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* What Happens Next */}
@@ -117,3 +176,4 @@ export default function UploadPage() {
     </ProtectedRoute>
   )
 }
+

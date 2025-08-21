@@ -38,14 +38,19 @@ def decode_token(token: str) -> str:
         JWTError: if token is invalid or verification fails
     """
     try:
-        # Type assertion since we've already checked SUPABASE_JWT_SECRET is not None
+        # Debug logging for troubleshooting
+        print("[DEBUG] Using SUPABASE_JWT_SECRET:", SUPABASE_JWT_SECRET)
+        print("[DEBUG] Decoding token:", token)
         jwt_secret: str = SUPABASE_JWT_SECRET  # type: ignore
-        payload = jwt.decode(token, jwt_secret, algorithms=ALGORITHM)
+        payload = jwt.decode(token, jwt_secret, algorithms=ALGORITHM, options={"verify_aud": False})
+        print("[DEBUG] Decoded payload:", payload)
         user_id = payload.get("sub")
         if user_id is None:
+            print("[DEBUG] No 'sub' claim in payload!")
             raise JWTError("Invalid authentication credentials: missing 'sub' claim")
         return str(user_id)
-    except JWTError:
+    except JWTError as e:
+        print("[DEBUG] JWTError:", str(e))
         raise
     
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> str:

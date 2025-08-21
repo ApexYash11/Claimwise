@@ -1,5 +1,7 @@
 // API utilities for backend communication
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+import { supabase } from "./supabase"
+const 
+API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 
 export interface PolicyAnalysisRequest {
   files: File[]
@@ -31,16 +33,20 @@ export interface PolicySummary {
 
 export const uploadPolicies = async (files: File[], userId: string): Promise<PolicyAnalysisResponse> => {
   const formData = new FormData()
-
   files.forEach((file, index) => {
     formData.append(`file_${index}`, file)
   })
   formData.append("user_id", userId)
 
+  // Get Supabase JWT
+  const session = await supabase.auth.getSession()
+  const token = session.data.session?.access_token
+
   try {
-    const response = await fetch(`${API_BASE_URL}/api/analyze-policies`, {
+    const response = await fetch(`${API_BASE_URL}/analyze-policy`, {
       method: "POST",
       body: formData,
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     })
 
     if (!response.ok) {

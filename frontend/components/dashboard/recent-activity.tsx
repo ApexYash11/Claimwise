@@ -42,7 +42,7 @@ const mockActivities: ActivityItem[] = [
     id: "4",
     type: "comparison",
     title: "Compared Auto Insurance Policies",
-    description: "Identified potential savings of $200/year",
+  description: "Identified potential savings of ₹16,000/year",
     timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
     status: "completed",
   },

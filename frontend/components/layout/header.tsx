@@ -2,7 +2,8 @@
 
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Shield, Menu, X, LogOut } from "lucide-react"
+import { Shield, Menu, X, LogOut, Sun, Moon } from "lucide-react"
+import { useTheme } from "next-themes"
 import { useState } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { signOut } from "@/lib/auth"
@@ -20,6 +21,7 @@ export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const { user } = useAuth()
   const router = useRouter()
+  const { theme, setTheme, resolvedTheme } = useTheme()
 
   const handleSignOut = async () => {
     await signOut()
@@ -34,7 +36,7 @@ export function Header() {
     .toUpperCase()
 
   return (
-    <header className="bg-white/95 backdrop-blur-sm border-b border-gray-200 sticky top-0 z-50">
+  <header className="bg-white dark:bg-gray-900/90 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
@@ -80,8 +82,21 @@ export function Header() {
             </nav>
           )}
 
-          {/* Desktop Auth */}
+          {/* Desktop Auth & Theme Toggle */}
           <div className="hidden md:flex items-center space-x-4">
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Toggle theme"
+              onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+              className="rounded-full"
+            >
+              {resolvedTheme === "dark" ? (
+                <Sun className="w-5 h-5 text-yellow-400" />
+              ) : (
+                <Moon className="w-5 h-5 text-gray-700" />
+              )}
+            </Button>
             {user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -117,7 +132,25 @@ export function Header() {
             )}
           </div>
 
-          {/* Mobile Menu Button */}
+          {/* Mobile Menu Button & Theme Toggle */}
+          <div className="md:hidden flex items-center space-x-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Toggle theme"
+              onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+              className="rounded-full"
+            >
+              {resolvedTheme === "dark" ? (
+                <Sun className="w-5 h-5 text-yellow-400" />
+              ) : (
+                <Moon className="w-5 h-5 text-gray-700" />
+              )}
+            </Button>
+            <button className="p-2" onClick={() => setIsMenuOpen(!isMenuOpen)}>
+              {isMenuOpen ? <X className="w-6 h-6 text-gray-600" /> : <Menu className="w-6 h-6 text-gray-600" />}
+            </button>
+          </div>
           <button className="md:hidden p-2" onClick={() => setIsMenuOpen(!isMenuOpen)}>
             {isMenuOpen ? <X className="w-6 h-6 text-gray-600" /> : <Menu className="w-6 h-6 text-gray-600" />}
           </button>
