@@ -4,7 +4,7 @@ import { Inter, Merriweather } from "next/font/google"
 import "./globals.css"
 
 import { AuthProvider } from "@/hooks/use-auth"
-import { ThemeProvider } from "next-themes"
+import { ThemeProvider } from "@/components/theme-provider"
 
 const inter = Inter({
   subsets: ["latin"],

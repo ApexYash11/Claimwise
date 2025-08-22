@@ -1,9 +1,10 @@
 "use client"
 
+import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { FileText, Calendar, DollarSign, Shield, AlertTriangle, CheckCircle } from "lucide-react"
+import { FileText, Calendar, DollarSign, Shield, AlertTriangle, CheckCircle, ChevronDown, ChevronUp } from "lucide-react"
 import type { PolicySummary } from "@/lib/api"
 
 interface PolicyCardProps {
@@ -14,7 +15,26 @@ interface PolicyCardProps {
 }
 
 export function PolicyCard({ policy, onViewDetails, onCompare, isSelected }: PolicyCardProps) {
-  const getPolicyTypeColor = (type: string) => {
+  const [showAllFeatures, setShowAllFeatures] = useState(false)
+  
+  // Format currency in Indian format
+  const formatIndianCurrency = (amount: string) => {
+    if (!amount || amount === 'Not specified') return amount
+    
+    // Extract numeric value
+    const numericValue = amount.replace(/[^0-9.]/g, '')
+    if (!numericValue) return amount
+    
+    const number = parseFloat(numericValue)
+    if (isNaN(number)) return amount
+    
+    // Format in Indian numbering system
+    return `₹${number.toLocaleString('en-IN')}`
+  }
+  
+  const getPolicyTypeColor = (type: string | undefined | null) => {
+    if (!type) return "bg-gray-100 text-gray-800"
+    
     switch (type.toLowerCase()) {
       case "health":
         return "bg-green-100 text-green-800"
@@ -30,6 +50,8 @@ export function PolicyCard({ policy, onViewDetails, onCompare, isSelected }: Pol
   }
 
   const isExpiringSoon = () => {
+    if (!policy.expirationDate) return false
+    
     const expirationDate = new Date(policy.expirationDate)
     const today = new Date()
     const daysUntilExpiration = Math.ceil((expirationDate.getTime() - today.getTime()) / (1000 * 3600 * 24))
@@ -47,9 +69,9 @@ export function PolicyCard({ policy, onViewDetails, onCompare, isSelected }: Pol
               <FileText className="w-5 h-5 text-blue-600" />
             </div>
             <div>
-              <CardTitle className="text-lg font-semibold text-gray-900">{policy.fileName}</CardTitle>
+              <CardTitle className="text-lg font-semibold text-gray-900">{policy.fileName || 'Unknown Policy'}</CardTitle>
               <div className="flex items-center space-x-2 mt-1">
-                <Badge className={getPolicyTypeColor(policy.policyType)}>{policy.policyType}</Badge>
+                <Badge className={getPolicyTypeColor(policy.policyType)}>{policy.policyType || 'Unknown Type'}</Badge>
                 {isExpiringSoon() && (
                   <Badge variant="destructive" className="text-xs">
                     <AlertTriangle className="w-3 h-3 mr-1" />
@@ -67,11 +89,11 @@ export function PolicyCard({ policy, onViewDetails, onCompare, isSelected }: Pol
         <div className="grid grid-cols-2 gap-4">
           <div>
             <p className="text-sm text-gray-500">Provider</p>
-            <p className="font-medium text-gray-900">{policy.provider}</p>
+            <p className="font-medium text-gray-900">{policy.provider || 'Unknown Provider'}</p>
           </div>
           <div>
             <p className="text-sm text-gray-500">Coverage Amount</p>
-            <p className="font-medium text-gray-900">{policy.coverageAmount}</p>
+            <p className="font-medium text-gray-900">{formatIndianCurrency(policy.coverageAmount || 'Not specified')}</p>
           </div>
         </div>
 
@@ -81,14 +103,14 @@ export function PolicyCard({ policy, onViewDetails, onCompare, isSelected }: Pol
             <DollarSign className="w-4 h-4 text-green-600" />
             <div>
               <p className="text-sm text-gray-500">Premium</p>
-              <p className="font-medium text-gray-900">{policy.premium}</p>
+              <p className="font-medium text-gray-900">{formatIndianCurrency(policy.premium || 'Not specified')}</p>
             </div>
           </div>
           <div className="flex items-center space-x-2">
             <Shield className="w-4 h-4 text-blue-600" />
             <div>
               <p className="text-sm text-gray-500">Deductible</p>
-              <p className="font-medium text-gray-900">{policy.deductible}</p>
+              <p className="font-medium text-gray-900">{formatIndianCurrency(policy.deductible || 'Not specified')}</p>
             </div>
           </div>
         </div>
@@ -98,7 +120,9 @@ export function PolicyCard({ policy, onViewDetails, onCompare, isSelected }: Pol
           <Calendar className="w-4 h-4 text-gray-500" />
           <div>
             <p className="text-sm text-gray-500">Expires</p>
-            <p className="font-medium text-gray-900">{new Date(policy.expirationDate).toLocaleDateString()}</p>
+            <p className="font-medium text-gray-900">
+              {policy.expirationDate ? new Date(policy.expirationDate).toLocaleDateString() : 'Not specified'}
+            </p>
           </div>
         </div>
 
@@ -106,14 +130,29 @@ export function PolicyCard({ policy, onViewDetails, onCompare, isSelected }: Pol
         <div>
           <p className="text-sm text-gray-500 mb-2">Key Features</p>
           <div className="space-y-1">
-            {policy.keyFeatures.slice(0, 3).map((feature, index) => (
-              <div key={index} className="flex items-center space-x-2">
+            {(policy.keyFeatures || []).slice(0, showAllFeatures ? undefined : 3).map((feature, index) => (
+              <div key={`feature-${index}`} className="flex items-center space-x-2">
                 <CheckCircle className="w-3 h-3 text-green-600 flex-shrink-0" />
                 <p className="text-sm text-gray-700">{feature}</p>
               </div>
             ))}
-            {policy.keyFeatures.length > 3 && (
-              <p className="text-sm text-gray-500">+{policy.keyFeatures.length - 3} more features</p>
+            {(policy.keyFeatures || []).length > 3 && (
+              <button
+                onClick={() => setShowAllFeatures(!showAllFeatures)}
+                className="flex items-center space-x-1 text-sm text-blue-600 hover:text-blue-800 transition-colors mt-2"
+              >
+                {showAllFeatures ? (
+                  <>
+                    <ChevronUp className="w-3 h-3" />
+                    <span>Show less</span>
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="w-3 h-3" />
+                    <span>+{policy.keyFeatures.length - 3} more features</span>
+                  </>
+                )}
+              </button>
             )}
           </div>
         </div>

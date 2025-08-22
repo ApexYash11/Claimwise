@@ -42,13 +42,29 @@ export function FileUpload({ onFilesUploaded, maxFiles = 5, maxSize = 10 * 1024 
         return
       }
 
-      const newFiles: FileWithPreview[] = acceptedFiles.map((file) => ({
-        ...file,
-        id: Math.random().toString(36).substr(2, 9),
-        status: "uploading" as const,
-        progress: 0,
-  preview: file.type && file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined,
-      }))
+      const newFiles: FileWithPreview[] = acceptedFiles.map((file) => {
+        // Create a simple object with our custom properties and keep reference to original file
+        return {
+          // File properties (read-only)
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          lastModified: file.lastModified,
+          webkitRelativePath: file.webkitRelativePath || '',
+          // Keep reference to original file for upload
+          _originalFile: file,
+          // File methods - bind to original
+          arrayBuffer: () => file.arrayBuffer(),
+          slice: (start?: number, end?: number, contentType?: string) => file.slice(start, end, contentType),
+          stream: () => file.stream(),
+          text: () => file.text(),
+          // Our custom properties
+          id: Math.random().toString(36).substr(2, 9),
+          status: "uploading" as const,
+          progress: 0,
+          preview: file.type && file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined,
+        } as any
+      })
 
       setFiles((prev) => [...prev, ...newFiles])
 
@@ -61,11 +77,15 @@ export function FileUpload({ onFilesUploaded, maxFiles = 5, maxSize = 10 * 1024 
   )
 
   const simulateUpload = (file: FileWithPreview) => {
+    let progress = 0
     const interval = setInterval(() => {
       setFiles((prev) =>
         prev.map((f) => {
           if (f.id === file.id) {
-            const newProgress = Math.min(f.progress + Math.random() * 30, 100)
+            // More reliable progress increment that always reaches 100%
+            progress += Math.random() * 15 + 10 // 10-25% increment each time
+            const newProgress = Math.min(progress, 100)
+            
             if (newProgress >= 100) {
               clearInterval(interval)
               return { ...f, progress: 100, status: "success" as const }
@@ -75,7 +95,20 @@ export function FileUpload({ onFilesUploaded, maxFiles = 5, maxSize = 10 * 1024 
           return f
         }),
       )
-    }, 200)
+    }, 150) // Slightly faster intervals
+    
+    // Failsafe: ensure it completes within 5 seconds
+    setTimeout(() => {
+      clearInterval(interval)
+      setFiles((prev) =>
+        prev.map((f) => {
+          if (f.id === file.id && f.progress < 100) {
+            return { ...f, progress: 100, status: "success" as const }
+          }
+          return f
+        }),
+      )
+    }, 5000)
   }
 
   const removeFile = (fileId: string) => {

@@ -34,6 +34,23 @@ import { Loader2, Shield, CheckCircle } from "lucide-react"
 export function SignupForm() {
   const [fullName, setFullName] = useState("")
   const [email, setEmail] = useState("")
+        const [socialLoading, setSocialLoading] = useState<string | null>(null)
+        const handleSocialSignup = async (provider: 'google' | 'github') => {
+          setSocialLoading(provider)
+          setError("")
+          try {
+            const { error: authError } = await signInWithProvider(provider)
+            if (authError) {
+              setError(authError.message)
+              setSocialLoading(null)
+              return
+            }
+            // On success, Supabase will redirect automatically to the dashboard
+          } catch (err) {
+            setError("An error occurred during social sign up. Please try again.")
+            setSocialLoading(null)
+          }
+        }
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [loading, setLoading] = useState(false)

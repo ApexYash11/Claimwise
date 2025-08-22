@@ -39,9 +39,18 @@ export default function UploadPage() {
         setUploading(false)
         return
       }
+      
+      // Debug: log file details
+      console.log("File to upload:", files[0])
+      console.log("File name:", files[0].name)
+      console.log("File size:", files[0].size)
+      console.log("File type:", files[0].type)
+      
       const formData = new FormData()
       formData.append("policy_name", files[0].name)
-      formData.append("file", files[0])
+      // Use the original file stored in _originalFile
+      const originalFile = (files[0] as any)._originalFile || files[0]
+      formData.append("file", originalFile, files[0].name)
       // Get Supabase JWT
       const session = await supabase.auth.getSession()
       const token = session.data.session?.access_token
@@ -52,23 +61,64 @@ export default function UploadPage() {
       })
       if (!response.ok) {
         // Try to parse backend error message
-        let msg = `HTTP error! status: ${response.status}`
+        let errorMessage = `Upload failed with status ${response.status}`
         try {
-          const err = await response.json()
-          if (err && err.detail) msg = err.detail
-        } catch {}
-        throw new Error(msg)
+          const errorData = await response.json()
+          if (errorData && errorData.detail) {
+            errorMessage = errorData.detail
+          } else if (errorData && typeof errorData === 'object') {
+            errorMessage = JSON.stringify(errorData)
+          }
+        } catch (parseError) {
+          // If we can't parse the error, use the status text
+          errorMessage = `Upload failed: ${response.statusText || 'Unknown error'}`
+        }
+        throw new Error(errorMessage)
       }
       const data = await response.json()
       setPolicyId(data.policy_id)
       setPolicyInfo(data)
-      // Store for analyze page if needed
+      // Store for analyze page - maintain list of all uploaded policies
       if (typeof window !== "undefined") {
+        // Get existing policy IDs or create empty array
+        const existingPolicyIds = JSON.parse(localStorage.getItem("claimwise_uploaded_policy_ids") || "[]")
+        const existingPolicyInfos = JSON.parse(localStorage.getItem("claimwise_uploaded_policy_infos") || "[]")
+        
+        // Add new policy if not already exists
+        if (!existingPolicyIds.includes(data.policy_id)) {
+          existingPolicyIds.push(data.policy_id)
+          existingPolicyInfos.push(data)
+        }
+        
+        // Update localStorage with all policies
+        localStorage.setItem("claimwise_uploaded_policy_ids", JSON.stringify(existingPolicyIds))
+        localStorage.setItem("claimwise_uploaded_policy_infos", JSON.stringify(existingPolicyInfos))
+        
+        // Keep the latest policy for backward compatibility
         localStorage.setItem("claimwise_uploaded_policy_id", data.policy_id)
         localStorage.setItem("claimwise_uploaded_policy_info", JSON.stringify(data))
       }
-    } catch (e: any) {
-      setError(e.message || "Upload failed")
+    } catch (error: any) {
+      console.error("Upload error:", error)
+      let userFriendlyMessage = "Failed to upload policy. Please try again."
+      
+      if (error.message) {
+        const errorMsg = error.message.toLowerCase()
+        if (errorMsg.includes("duplicate") || errorMsg.includes("already exists")) {
+          userFriendlyMessage = "This file has already been uploaded. The system will create a unique copy."
+        } else if (errorMsg.includes("network") || errorMsg.includes("fetch")) {
+          userFriendlyMessage = "Network error. Please check your connection and try again."
+        } else if (errorMsg.includes("authentication") || errorMsg.includes("unauthorized")) {
+          userFriendlyMessage = "Authentication error. Please log in again."
+        } else if (errorMsg.includes("file size") || errorMsg.includes("too large")) {
+          userFriendlyMessage = "File is too large. Please upload a smaller file."
+        } else if (error.message.length > 0 && error.message.length < 200) {
+          // Show the actual error if it's not too long and seems user-friendly
+          userFriendlyMessage = error.message
+        }
+      }
+      
+      setError(userFriendlyMessage)
     } finally {
       setUploading(false)
     }
@@ -108,16 +158,56 @@ export default function UploadPage() {
           {/* Upload Component */}
           <div className="mb-8">
             <FileUpload onFilesUploaded={handleFilesUploaded} />
-            {uploading && <div className="text-blue-600 mt-4">Uploading...</div>}
-            {error && <div className="text-red-600 mt-4">{error}</div>}
+            {uploading && (
+              <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center space-x-3">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                  <div className="text-blue-700 font-medium">Uploading and analyzing your policy...</div>
+                </div>
+              </div>
+            )}
+            {error && (
+              <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <div className="flex items-start space-x-3">
+                  <div className="flex-shrink-0">
+                    <svg className="w-5 h-5 text-red-600 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-red-800 font-medium mb-1">Upload Error</div>
+                    <div className="text-red-700 text-sm">{error}</div>
+                    <button 
+                      onClick={() => setError("")}
+                      className="mt-2 text-sm text-red-600 hover:text-red-800 underline"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
             {policyInfo && (
-              <div className="mt-4 p-4 bg-green-50 rounded">
-                <div className="font-semibold">Policy Uploaded!</div>
-                <div>Policy Name: {policyInfo.policy_name || uploadedFiles[0]?.name}</div>
-                <div>Policy ID: {policyId}</div>
-                {policyInfo.policy_number && <div>Policy Number: {policyInfo.policy_number}</div>}
-                <div className="mt-2">
-                  <Button onClick={handleAnalyze} className="bg-blue-600 hover:bg-blue-700">Analyze Policy</Button>
+              <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                <div className="flex items-start space-x-3">
+                  <div className="flex-shrink-0">
+                    <svg className="w-5 h-5 text-green-600 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-green-800 font-medium mb-2">Policy Uploaded Successfully!</div>
+                    <div className="space-y-1 text-sm text-green-700">
+                      <div><strong>File:</strong> {policyInfo.policy_name || uploadedFiles[0]?.name}</div>
+                      <div><strong>Policy ID:</strong> {policyId}</div>
+                      {policyInfo.policy_number && <div><strong>Policy Number:</strong> {policyInfo.policy_number}</div>}
+                    </div>
+                    <div className="mt-3">
+                      <Button onClick={handleAnalyze} className="bg-green-600 hover:bg-green-700 text-white">
+                        Analyze Policy →
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}

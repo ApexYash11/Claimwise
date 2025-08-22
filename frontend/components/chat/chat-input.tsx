@@ -36,23 +36,26 @@ export function ChatInput({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex gap-2">
+    <form onSubmit={handleSubmit} className="flex gap-3">
       <div className="flex-1">
         <Textarea
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className="min-h-[60px] max-h-32 resize-none border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+          className="min-h-[60px] max-h-32 resize-none border-gray-200 focus:border-blue-400 focus:ring-blue-400 rounded-xl shadow-sm bg-white/80 backdrop-blur-sm text-[15px] leading-relaxed transition-colors"
           disabled={isLoading}
         />
       </div>
       <Button
         type="submit"
         disabled={!message.trim() || isLoading}
-        className="self-end bg-blue-600 hover:bg-blue-700 px-4 py-3"
+        className="self-end bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 shadow-lg rounded-xl px-5 py-3 transition-all duration-200 hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+        {isLoading ? 
+          <Loader2 className="w-4 h-4 animate-spin" /> : 
+          <Send className="w-4 h-4" />
+        }
       </Button>
     </form>
   )

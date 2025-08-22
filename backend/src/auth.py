@@ -67,8 +67,12 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> str:
     """
     try:
         user_id=decode_token(token)
+        print(f"[DEBUG] get_current_user: user_id={user_id}")
         return user_id
-    except JWTError:
+    except JWTError as e:
+        print(f"[DEBUG] JWTError in get_current_user: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication credentials",
