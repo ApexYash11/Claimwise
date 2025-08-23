@@ -6,6 +6,32 @@ from src.OCR import extract_text
 from src.llm_groq import analyze_policy, compare_policies, chat_with_policy, chat_with_multiple_policies, get_api_status
 from src.auth import get_current_user, refresh_token
 from fastapi.middleware.cors import CORSMiddleware
+import uuid
+from datetime import datetime
+
+from typing import Union, Dict
+def log_activity(user_id: str, activity_type: str, title: str, description: str, details: Union[Dict, None] = None):
+    """
+    Log user activity to the database for dynamic activity tracking.
+    """
+    try:
+        activity_data = {
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "type": activity_type,
+            "title": title,
+            "description": description,
+            "details": details or {},
+            "status": "completed",
+            "created_at": datetime.utcnow().isoformat(),
+        }
+        
+        result = supabase.table("activities").insert(activity_data).execute()
+        print(f"DEBUG: Activity logged: {activity_type} - {title}")
+        return result.data[0] if result.data else None
+    except Exception as e:
+        print(f"DEBUG: Error logging activity: {str(e)}")
+        return None
 
 load_dotenv()  # Load environment variables from .env
 app = FastAPI()
@@ -125,7 +151,22 @@ async def upload_policy(
             if not response.data:
                 raise HTTPException(status_code=500, detail="Failed to save policy.")
             
-            return {"policy_id": response.data[0]['id'], "extracted_text": extracted_text}
+            # Log the upload activity
+            policy_id = response.data[0]['id']
+            log_activity(
+                user_id=user_id,
+                activity_type="upload",
+                title=f"Uploaded {policy_name or 'Policy'}",
+                description=f"{policy_name or 'Policy document'} successfully uploaded and processed",
+                details={
+                    "policy_id": policy_id,
+                    "file_type": "file" if file else "text",
+                    "file_name": file.filename if file else None,
+                    "text_length": len(extracted_text)
+                }
+            )
+            
+            return {"policy_id": policy_id, "extracted_text": extracted_text}
         except Exception as db_error:
             print(f"DEBUG: Database Error: {str(db_error)}")
             raise HTTPException(status_code=500, detail=f"Database save failed: {str(db_error)}")
@@ -165,8 +206,23 @@ def analyze(policy_id: str = Form(...), user_id: str = Depends(get_current_user)
         dict: LLM analysis result.
     """
     try:
-        policy = supabase.table("policies").select("extracted_text", "policy_number").eq("id", policy_id).eq("user_id", user_id).execute().data[0]
+        policy = supabase.table("policies").select("extracted_text", "policy_number", "policy_name").eq("id", policy_id).eq("user_id", user_id).execute().data[0]
         analysis = analyze_policy(policy['extracted_text'])
+        
+        # Log the analysis activity
+        log_activity(
+            user_id=user_id,
+            activity_type="analysis", 
+            title="Policy Analysis Completed",
+            description=f"{policy.get('policy_name', 'Policy')} analyzed successfully",
+            details={
+                "policy_id": policy_id,
+                "policy_type": analysis.get('policy_type', 'Unknown'),
+                "provider": analysis.get('provider', 'Unknown'),
+                "analysis_score": analysis.get('claim_readiness_score', 0)
+            }
+        )
+        
         return {"analysis": analysis}
     except IndexError:
         raise HTTPException(status_code=404, detail="Policy not found for this user.")
@@ -189,8 +245,8 @@ def compare(policy_1_id: str, policy_2_id: str, user_id: str = Depends(get_curre
     try:
         print(f"DEBUG: Starting comparison for user {user_id}, policies {policy_1_id} vs {policy_2_id}")
         
-        pol1 = supabase.table("policies").select("extracted_text", "policy_number").eq("id", policy_1_id).eq("user_id", user_id).execute().data[0]
-        pol2 = supabase.table("policies").select("extracted_text", "policy_number").eq("id", policy_2_id).eq("user_id", user_id).execute().data[0]
+        pol1 = supabase.table("policies").select("extracted_text", "policy_number", "policy_name").eq("id", policy_1_id).eq("user_id", user_id).execute().data[0]
+        pol2 = supabase.table("policies").select("extracted_text", "policy_number", "policy_name").eq("id", policy_2_id).eq("user_id", user_id).execute().data[0]
         
         print(f"DEBUG: Retrieved policies successfully")
         
@@ -208,6 +264,20 @@ def compare(policy_1_id: str, policy_2_id: str, user_id: str = Depends(get_curre
         
         result = supabase.table("comparisons").insert(comparison_data).execute()
         print(f"DEBUG: Comparison stored successfully: {result}")
+        
+        # Log comparison activity
+        log_activity(
+            user_id=user_id,
+            activity_type="comparison",
+            title="Policy Comparison Completed", 
+            description=f"Compared {pol1.get('policy_name', 'Policy 1')} vs {pol2.get('policy_name', 'Policy 2')}",
+            details={
+                "policy_1_id": policy_1_id,
+                "policy_2_id": policy_2_id,
+                "policy_1_name": pol1.get('policy_name', 'Policy 1'),
+                "policy_2_name": pol2.get('policy_name', 'Policy 2')
+            }
+        )
         
         if result.data:
             comparison_id = result.data[0].get('id', 'unknown')
@@ -408,6 +478,19 @@ def chat(policy_id: str, question: str, user_id: str = Depends(get_current_user)
             return {"answer": f"This policy has limited content ({len(extracted_text)} characters). The OCR may not have extracted the full document properly. Please check the uploaded document quality."}
         
         answer = chat_with_policy(extracted_text, question, policy.get('policy_number'))
+        
+        # Log chat activity  
+        log_activity(
+            user_id=user_id,
+            activity_type="chat",
+            title=f"Asked about {policy.get('policy_name', 'Policy')}",
+            description=f"AI assistant answered question about policy coverage",
+            details={
+                "policy_id": policy_id,
+                "question": question[:100] + "..." if len(question) > 100 else question,
+                "chat_type": "single_policy"
+            }
+        )
         
         # Log successful chat
         supabase.table("chat_logs").insert({
@@ -624,6 +707,73 @@ def get_comprehensive_history(user_id: str = Depends(get_current_user)):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error fetching comprehensive history: {str(e)}")
+
+@app.get("/activities")
+def get_activities(user_id: str = Depends(get_current_user)):
+    """
+    Get dynamic user activities from the activities table.
+    
+    Returns:
+        dict: Recent activities with real data
+    """
+    try:
+        print(f"DEBUG: Fetching activities for user_id: {user_id}")
+        
+        # Use service role client to bypass RLS for activities
+        from src.db import supabase_storage
+        activities = supabase_storage.table("activities").select("*").eq("user_id", user_id).order("created_at", desc=True).limit(10).execute()
+        
+        print(f"DEBUG: Service role query result: {activities}")
+        print(f"DEBUG: Activities data: {activities.data if activities else 'None'}")
+        
+        if activities and activities.data:
+            print(f"DEBUG: Found {len(activities.data)} activities")
+            formatted_activities = []
+            for activity in activities.data:
+                # Convert to frontend format
+                formatted_activity = {
+                    "id": activity["id"],
+                    "type": activity["type"],
+                    "title": activity["title"],
+                    "description": activity["description"],
+                    "timestamp": activity["created_at"],
+                    "status": activity["status"],
+                    "details": activity.get("details", {})
+                }
+                formatted_activities.append(formatted_activity)
+            
+            return {
+                "activities": formatted_activities,
+                "total": len(formatted_activities),
+                "success": True
+            }
+        else:
+            print("DEBUG: No activities found, returning sample activity")
+            # Return sample activities if no real activities exist yet
+            return {
+                "activities": [
+                    {
+                        "id": "sample-1",
+                        "type": "upload", 
+                        "title": "Welcome to ClaimWise!",
+                        "description": "Upload your first policy to see activities here",
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "status": "completed",
+                        "details": {}
+                    }
+                ],
+                "total": 1,
+                "success": True
+            }
+            
+    except Exception as e:
+        print(f"DEBUG: Error fetching activities: {str(e)}")
+        return {
+            "activities": [],
+            "total": 0,
+            "success": False,
+            "error": str(e)
+        }
 
 
 @app.get("/dashboard/stats")

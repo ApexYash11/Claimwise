@@ -42,86 +42,82 @@ export function Header() {
     .toUpperCase()
 
   return (
-    <header className="bg-white dark:bg-gray-900/90 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800 sticky top-0 z-50">
+    <header className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-800/50 sticky top-0 z-50 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
-          <Link href={user ? "/dashboard" : "/"} className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <Shield className="w-5 h-5 text-white" />
+          <Link href={user ? "/dashboard" : "/"} className="flex items-center space-x-3 group">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform duration-200">
+              <Shield className="w-6 h-6 text-white" />
             </div>
-            <span className="text-xl font-bold text-gray-900">ClaimWise</span>
+            <span className="text-xl font-bold text-gray-900 dark:text-white">ClaimWise</span>
           </Link>
 
           {/* Desktop Navigation */}
           {user && (
-            <nav className="hidden md:flex items-center space-x-8">
-              <Link href="/dashboard" className="text-gray-600 hover:text-blue-600 transition-colors">
+            <nav className="hidden md:flex items-center space-x-1">
+              <Link href="/dashboard" className="px-4 py-2 rounded-xl text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/20 transition-all duration-200 font-medium">
                 Dashboard
               </Link>
-              <Link href="/upload" className="text-gray-600 hover:text-blue-600 transition-colors">
+              <Link href="/upload" className="px-4 py-2 rounded-xl text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/20 transition-all duration-200 font-medium">
                 Upload
               </Link>
-              <Link href="/analyze" className="text-gray-600 hover:text-blue-600 transition-colors">
+              <Link href="/analyze" className="px-4 py-2 rounded-xl text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/20 transition-all duration-200 font-medium">
                 Analyze
               </Link>
-              <Link href="/chat" className="text-gray-600 hover:text-blue-600 transition-colors">
+              <Link href="/chat" className="px-4 py-2 rounded-xl text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/20 transition-all duration-200 font-medium">
                 Chat
               </Link>
-              
             </nav>
           )}
 
           {!user && (
-            <nav className="hidden md:flex items-center space-x-8">
-              <Link href="#features" className="text-gray-600 hover:text-blue-600 transition-colors">
+            <nav className="hidden md:flex items-center space-x-1">
+              <Link href="#features" className="px-4 py-2 rounded-xl text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/20 transition-all duration-200 font-medium">
                 Features
               </Link>
-              <Link href="#how-it-works" className="text-gray-600 hover:text-blue-600 transition-colors">
+              <Link href="#demo" className="px-4 py-2 rounded-xl text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/20 transition-all duration-200 font-medium">
                 How it Works
-              </Link>
-              <Link href="#pricing" className="text-gray-600 hover:text-blue-600 transition-colors">
-                Pricing
               </Link>
             </nav>
           )}
 
           {/* Desktop Auth & Theme Toggle */}
-          <div className="hidden md:flex items-center space-x-4">
+          <div className="hidden md:flex items-center space-x-3">
             <Button
               variant="ghost"
               size="icon"
               aria-label="Toggle theme"
               onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-              className="rounded-full"
+              className="rounded-xl w-10 h-10 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200"
             >
               {!mounted ? (
                 // Show a neutral icon during hydration
                 <div className="w-5 h-5" />
               ) : resolvedTheme === "dark" ? (
-                <Sun className="w-5 h-5 text-yellow-400" />
+                <Sun className="w-5 h-5 text-yellow-500" />
               ) : (
-                <Moon className="w-5 h-5 text-gray-700" />
+                <Moon className="w-5 h-5 text-gray-600" />
               )}
             </Button>
             {user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                  <Button variant="ghost" className="relative h-10 w-10 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200">
                     <Avatar className="h-8 w-8">
-                      <AvatarFallback className="bg-blue-600 text-white text-sm">{userInitials}</AvatarFallback>
+                      <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white text-sm font-semibold">{userInitials}</AvatarFallback>
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56" align="end" forceMount>
-                  <div className="flex items-center justify-start gap-2 p-2">
+                <DropdownMenuContent className="w-56 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-gray-200/50 dark:border-gray-800/50 shadow-xl" align="end" forceMount>
+                  <div className="flex items-center justify-start gap-2 p-3">
                     <div className="flex flex-col space-y-1 leading-none">
-                      <p className="font-medium">{userName}</p>
-                      <p className="w-[200px] truncate text-sm text-muted-foreground">{user.email}</p>
+                      <p className="font-semibold text-gray-900 dark:text-white">{userName}</p>
+                      <p className="w-[200px] truncate text-sm text-gray-500 dark:text-gray-400">{user.email}</p>
                     </div>
                   </div>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleSignOut}>
+                  <DropdownMenuSeparator className="bg-gray-200/50 dark:bg-gray-700/50" />
+                  <DropdownMenuItem onClick={handleSignOut} className="hover:bg-red-50 dark:hover:bg-red-950/20 text-red-600 dark:text-red-400 focus:bg-red-50 dark:focus:bg-red-950/20">
                     <LogOut className="mr-2 h-4 w-4" />
                     <span>Sign out</span>
                   </DropdownMenuItem>
@@ -129,10 +125,10 @@ export function Header() {
               </DropdownMenu>
             ) : (
               <>
-                <Button variant="ghost" asChild>
+                <Button variant="ghost" asChild className="rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200">
                   <Link href="/login">Sign in</Link>
                 </Button>
-                <Button asChild className="bg-blue-600 hover:bg-blue-700">
+                <Button asChild className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl px-6 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105">
                   <Link href="/signup">Get Started</Link>
                 </Button>
               </>

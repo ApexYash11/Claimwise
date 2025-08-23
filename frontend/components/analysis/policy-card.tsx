@@ -64,13 +64,15 @@ export function PolicyCard({ policy, onViewDetails, onCompare, isSelected }: Pol
     >
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+          <div className="flex items-start space-x-3 min-w-0 flex-1">
+            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
               <FileText className="w-5 h-5 text-blue-600" />
             </div>
-            <div>
-              <CardTitle className="text-lg font-semibold text-gray-900">{policy.fileName || 'Unknown Policy'}</CardTitle>
-              <div className="flex items-center space-x-2 mt-1">
+            <div className="min-w-0 flex-1">
+              <CardTitle className="text-lg font-semibold text-gray-900 break-words hyphens-auto leading-tight mb-2" style={{ wordBreak: 'break-word' }}>
+                {policy.fileName || 'Unknown Policy'}
+              </CardTitle>
+              <div className="flex flex-wrap items-center gap-2">
                 <Badge className={getPolicyTypeColor(policy.policyType)}>{policy.policyType || 'Unknown Type'}</Badge>
                 {isExpiringSoon() && (
                   <Badge variant="destructive" className="text-xs">
@@ -87,40 +89,48 @@ export function PolicyCard({ policy, onViewDetails, onCompare, isSelected }: Pol
       <CardContent className="space-y-4">
         {/* Provider and Coverage */}
         <div className="grid grid-cols-2 gap-4">
-          <div>
+          <div className="min-w-0">
             <p className="text-sm text-gray-500">Provider</p>
-            <p className="font-medium text-gray-900">{policy.provider || 'Unknown Provider'}</p>
+            <p className="font-medium text-gray-900 break-words text-sm leading-tight" style={{ wordBreak: 'break-word' }}>
+              {policy.provider || 'Unknown Provider'}
+            </p>
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="text-sm text-gray-500">Coverage Amount</p>
-            <p className="font-medium text-gray-900">{formatIndianCurrency(policy.coverageAmount || 'Not specified')}</p>
+            <p className="font-medium text-gray-900 break-words text-sm leading-tight" style={{ wordBreak: 'break-word' }}>
+              {formatIndianCurrency(policy.coverageAmount || 'Not specified')}
+            </p>
           </div>
         </div>
 
         {/* Premium and Deductible */}
         <div className="grid grid-cols-2 gap-4">
-          <div className="flex items-center space-x-2">
-            <DollarSign className="w-4 h-4 text-green-600" />
-            <div>
+          <div className="flex items-start space-x-2 min-w-0">
+            <DollarSign className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
+            <div className="min-w-0 flex-1">
               <p className="text-sm text-gray-500">Premium</p>
-              <p className="font-medium text-gray-900">{formatIndianCurrency(policy.premium || 'Not specified')}</p>
+              <p className="font-medium text-gray-900 break-words text-sm leading-tight" style={{ wordBreak: 'break-word' }}>
+                {formatIndianCurrency(policy.premium || 'Not specified')}
+              </p>
             </div>
           </div>
-          <div className="flex items-center space-x-2">
-            <Shield className="w-4 h-4 text-blue-600" />
-            <div>
+          <div className="flex items-start space-x-2 min-w-0">
+            <Shield className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+            <div className="min-w-0 flex-1">
               <p className="text-sm text-gray-500">Deductible</p>
-              <p className="font-medium text-gray-900">{formatIndianCurrency(policy.deductible || 'Not specified')}</p>
+              <p className="font-medium text-gray-900 break-words text-sm leading-tight" style={{ wordBreak: 'break-word' }}>
+                {formatIndianCurrency(policy.deductible || 'Not specified')}
+              </p>
             </div>
           </div>
         </div>
 
         {/* Expiration Date */}
-        <div className="flex items-center space-x-2">
-          <Calendar className="w-4 h-4 text-gray-500" />
-          <div>
+        <div className="flex items-start space-x-2">
+          <Calendar className="w-4 h-4 text-gray-500 flex-shrink-0 mt-0.5" />
+          <div className="min-w-0 flex-1">
             <p className="text-sm text-gray-500">Expires</p>
-            <p className="font-medium text-gray-900">
+            <p className="font-medium text-gray-900 break-words text-sm leading-tight">
               {policy.expirationDate ? new Date(policy.expirationDate).toLocaleDateString() : 'Not specified'}
             </p>
           </div>
@@ -131,9 +141,11 @@ export function PolicyCard({ policy, onViewDetails, onCompare, isSelected }: Pol
           <p className="text-sm text-gray-500 mb-2">Key Features</p>
           <div className="space-y-1">
             {(policy.keyFeatures || []).slice(0, showAllFeatures ? undefined : 3).map((feature, index) => (
-              <div key={`feature-${index}`} className="flex items-center space-x-2">
-                <CheckCircle className="w-3 h-3 text-green-600 flex-shrink-0" />
-                <p className="text-sm text-gray-700">{feature}</p>
+              <div key={`feature-${index}`} className="flex items-start space-x-2">
+                <CheckCircle className="w-3 h-3 text-green-600 flex-shrink-0 mt-1" />
+                <p className="text-sm text-gray-700 break-words leading-relaxed flex-1" style={{ wordBreak: 'break-word' }}>
+                  {feature}
+                </p>
               </div>
             ))}
             {(policy.keyFeatures || []).length > 3 && (

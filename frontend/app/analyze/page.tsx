@@ -467,13 +467,13 @@ export default function AnalyzePage() {
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 dark:from-gray-950 dark:to-blue-950">
         <Header />
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           {/* Back Button */}
-          <div className="mb-6">
-            <Button variant="ghost" asChild className="text-gray-600 hover:text-gray-900">
+          <div className="mb-8">
+            <Button variant="ghost" asChild className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200">
               <Link href="/dashboard">
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back to Dashboard
@@ -482,11 +482,20 @@ export default function AnalyzePage() {
           </div>
 
           {/* Header with Policy Selector */}
-          <div className="mb-8">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+          <div className="mb-12">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 mb-6">
               <div>
-                <h1 className="text-3xl font-bold text-gray-900 mb-2">Policy Analysis</h1>
-                <p className="text-lg text-gray-600">
+                <div className="inline-flex items-center px-4 py-2 rounded-full bg-purple-50 border border-purple-200 text-purple-700 text-sm font-medium mb-4 dark:bg-purple-900/20 dark:border-purple-800 dark:text-purple-400">
+                  <BarChart3 className="w-4 h-4 mr-2" />
+                  AI Analysis
+                </div>
+                <h1 className="text-4xl lg:text-5xl font-bold text-gray-900 dark:text-white mb-4 tracking-tight">
+                  Policy
+                  <span className="text-transparent bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text block lg:inline lg:ml-3">
+                    Analysis
+                  </span>
+                </h1>
+                <p className="text-xl text-gray-600 dark:text-gray-300 leading-relaxed">
                   Review your insurance policies, compare coverage, and get AI-powered insights.
                 </p>
               </div>
@@ -494,16 +503,16 @@ export default function AnalyzePage() {
               {/* Policy Selector - Show only when there are multiple policies */}
               {policies.length > 1 && (
                 <div className="flex flex-col sm:items-end">
-                  <label className="text-sm font-medium text-gray-700 mb-2">Select Policy to Analyze:</label>
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Select Policy to Analyze:</label>
                   <Select value={selectedPolicyId} onValueChange={setSelectedPolicyId}>
-                    <SelectTrigger className="w-full sm:w-64">
+                    <SelectTrigger className="w-full sm:w-64 rounded-xl bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-gray-200 dark:border-gray-700">
                       <SelectValue placeholder="Select a policy..." />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="rounded-xl bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-gray-200/50 dark:border-gray-700/50">
                       {policies.map((policy, index) => (
                         <SelectItem key={policy.id} value={policy.id}>
                           <div className="flex items-center space-x-2">
-                            <Badge variant="outline" className="text-xs">
+                            <Badge variant="outline" className="text-xs bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20 border-blue-200 dark:border-blue-800">
                               {policy.policyType}
                             </Badge>
                             <span>{policy.fileName}</span>

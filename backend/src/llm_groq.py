@@ -118,6 +118,8 @@ def analyze_policy(text: str) -> dict:
 
     try:
         response = make_llm_request(prompt)
+        if response is None:
+            raise Exception("LLM returned no response")
         output_text = response.strip()
 
         # Remove code block formatting if present
@@ -189,7 +191,7 @@ def compare_policies(text1: str, text2: str, policy_number1: Optional[str] = Non
     """
     try:
         response = make_llm_request(prompt)
-        return response
+        return response if response is not None else "No response received from LLM service"
     except Exception as e:
         return f"Error comparing policies: {str(e)}"
     
@@ -198,20 +200,32 @@ def chat_with_policy(text: str, question: str, policy_number: Optional[str] = No
     Chat with the policy text using Groq LLM with Gemini fallback.
     """
     prompt = f"""
-    You are an insurance expert. Answer the following question based on the provided policy text:
+    You are an insurance expert and helpful advisor. Answer the following question using the provided policy information and your expertise:
 
     Policy Text: {text}
     Question: {question}
     Policy Number: {policy_number if policy_number else "N/A"}
     
-    Provide a clear, concise answer based only on the policy information provided. 
-    If the policy doesn't contain information to answer the question, say "This information is not available in this policy."
-    Format monetary amounts in Indian Rupees (₹) when applicable.
+    Instructions:
+    1. First, check if the policy contains direct information to answer the question
+    2. If the policy has the information, provide it clearly with specific details
+    3. If the policy doesn't have specific information but you can provide general helpful guidance based on what's in the policy, do so
+    4. For questions about comparisons, industry averages, or general advice, provide helpful context even if not explicitly in the policy
+    5. Always be helpful - if you can't find exact data, provide relevant guidance or typical ranges
+    6. Format monetary amounts in Indian Rupees (₹) when applicable
+    7. Reference the specific policy when you have information from it
+    
+    Example approaches:
+    - If asked about premium comparison: Extract the premium from policy, then provide typical industry ranges for context
+    - If asked about coverage gaps: Analyze what's covered and suggest common additional coverages
+    - If asked about claim process but it's not detailed: Provide general best practices while noting policy limitations
+    
+    Always be helpful and informative, not just say "information not available."
     """
 
     try:
         response = make_llm_request(prompt)
-        return response
+        return response if response is not None else "No response received from LLM service"
 
     except Exception as e:
         error_str = str(e)
@@ -244,7 +258,7 @@ def chat_with_multiple_policies(policies_data: List[dict], question: str) -> str
         policies_text += f"\n--- POLICY {i} ({policy_number}) ---\n{policy_text}\n"
     
     prompt = f"""
-    You are an insurance expert. Answer the following question based on the provided multiple insurance policies:
+    You are an insurance expert and helpful advisor. Answer the following question using the provided multiple insurance policies and your expertise:
 
     POLICIES INFORMATION:
     {policies_text}
@@ -253,18 +267,26 @@ def chat_with_multiple_policies(policies_data: List[dict], question: str) -> str
     
     Instructions:
     1. Analyze all provided policies to give a comprehensive answer
-    2. If the answer varies by policy, explain the differences clearly
-    3. Reference specific policies when mentioning coverage details
-    4. If no policy contains relevant information, state that clearly
-    5. Format monetary amounts in Indian Rupees (₹) when applicable
-    6. Provide actionable insights when possible
+    2. Extract specific information from policies when available
+    3. If exact information isn't in policies but you can provide helpful guidance, do so
+    4. For comparisons, industry averages, or general advice, provide useful context
+    5. Reference specific policies when mentioning details from them
+    6. Be helpful and informative - don't just say information isn't available
+    7. Format monetary amounts in Indian Rupees (₹) when applicable
+    8. Provide actionable insights and recommendations when possible
     
-    Provide a well-structured response that addresses the question using information from all relevant policies.
+    Example approaches:
+    - For premium comparisons: Show what each policy costs, then provide typical market ranges for context
+    - For coverage gaps: Analyze what each policy covers and identify potential gaps or overlaps  
+    - For claim processes: Compare how each policy handles claims and provide best practices
+    - For general advice: Use policy details as context to give relevant recommendations
+    
+    Always strive to be maximally helpful, using both policy data and general insurance expertise.
     """
 
     try:
         response = make_llm_request(prompt)
-        return response
+        return response if response is not None else "No response received from LLM service"
 
     except Exception as e:
         return f"Error answering question across multiple policies: {str(e)}"
@@ -277,19 +299,3 @@ def get_api_status():
         "groq": {"available": bool(groq_client), "primary": True},
         "gemini": {"available": gemini_available, "fallback": True}
     }
-    
-    # Test Groq
-    if groq_client:
-        try:
-            test_response = groq_client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[{"role": "user", "content": "Say 'OK'"}],
-                max_tokens=10
-            )
-            status["groq"]["status"] = "healthy"
-            status["groq"]["test_response"] = test_response.choices[0].message.content
-        except Exception as e:
-            status["groq"]["status"] = "error"
-            status["groq"]["error"] = str(e)
-    
-    return status
