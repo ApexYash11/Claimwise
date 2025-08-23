@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ClaimWise Debug</title>
+</head>
+<body>
+    <h1>ClaimWise Debug</h1>
+    
+    <h2>LocalStorage Contents:</h2>
+    <div id="localStorage"></div>
+    
+    <h2>Test API Call:</h2>
+    <button onclick="testAPI()">Test User Policies API</button>
+    <div id="apiResult"></div>
+    
+    <script>
+        // Display localStorage contents
+        const localStorageDiv = document.getElementById('localStorage');
+        const keys = [
+            'claimwise_uploaded_policy_ids',
+            'claimwise_uploaded_policy_infos', 
+            'claimwise_uploaded_policy_id',
+            'claimwise_uploaded_policy_info'
+        ];
+        
+        keys.forEach(key => {
+            const value = localStorage.getItem(key);
+            localStorageDiv.innerHTML += `<p><strong>${key}:</strong> ${value || 'null'}</p>`;
+        });
+        
+        async function testAPI() {
+            try {
+                const response = await fetch('http://localhost:8000/debug/user-policies', {
+                    headers: {
+                        'Authorization': 'Bearer ' + 'YOUR_TOKEN_HERE' // You'll need to get this from your auth
+                    }
+                });
+                const data = await response.json();
+                document.getElementById('apiResult').innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                document.getElementById('apiResult').innerHTML = `<p>Error: ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -68,9 +68,7 @@ export function Header() {
               <Link href="/chat" className="text-gray-600 hover:text-blue-600 transition-colors">
                 Chat
               </Link>
-              <Link href="/history" className="text-gray-600 hover:text-blue-600 transition-colors">
-                History
-              </Link>
+              
             </nav>
           )}
 
@@ -199,13 +197,7 @@ export function Header() {
                   >
                     Chat
                   </Link>
-                  <Link
-                    href="/history"
-                    className="text-gray-600 hover:text-blue-600 transition-colors"
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    History
-                  </Link>
+                  
                 </>
               ) : (
                 <>

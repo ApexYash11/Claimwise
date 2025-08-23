@@ -1,11 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { CheckCircle, X, AlertTriangle, TrendingUp, TrendingDown, DollarSign, Shield, BarChart3, ChevronUp, ChevronDown } from "lucide-react"
 import type { PolicySummary } from "@/lib/api"
+import { supabase } from "@/lib/supabase"
 
 interface PolicyComparisonProps {
   policies: PolicySummary[]
@@ -14,6 +15,47 @@ interface PolicyComparisonProps {
 
 export function PolicyComparison({ policies, onRemovePolicy }: PolicyComparisonProps) {
   const [expandedFeatures, setExpandedFeatures] = useState<{ [key: string]: boolean }>({})
+  const [comparisonPerformed, setComparisonPerformed] = useState(false)
+
+  // Call backend comparison API when policies are compared
+  useEffect(() => {
+    if (policies.length >= 2 && !comparisonPerformed) {
+      performComparison()
+    }
+  }, [policies, comparisonPerformed])
+
+  const performComparison = async () => {
+    try {
+      // Call backend to store comparison
+      const session = await supabase.auth.getSession()
+      const token = session.data.session?.access_token
+      
+      if (token && policies.length >= 2) {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/compare-policies`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Authorization": `Bearer ${token}`
+          },
+          body: new URLSearchParams({
+            policy_1_id: policies[0].id,
+            policy_2_id: policies[1].id
+          })
+        })
+        
+        if (response.ok) {
+          console.log("Comparison stored successfully")
+          setComparisonPerformed(true)
+          // Trigger dashboard stats refresh
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new Event("stats:refresh"))
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error performing comparison:", error)
+    }
+  }
 
   // Format currency in Indian format
   const formatIndianCurrency = (amount: string) => {

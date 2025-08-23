@@ -2,6 +2,7 @@ import google.generativeai as genai
 import os
 import json
 import re
+import time
 from typing import Optional, List
 
 # Get API key from environment
@@ -12,8 +13,33 @@ if not api_key:
 # Configure Gemini API
 genai.configure(api_key=api_key)
 
-# Creating a model instance
-model = genai.GenerativeModel("gemini-1.5-flash")
+# Creating a model instance - Using Gemini Pro for higher rate limits
+model = genai.GenerativeModel("gemini-1.5-pro")
+
+# Rate limiting for API calls (Gemini Pro allows much higher rates)
+def make_gemini_request(prompt: str, max_retries: int = 3, delay: float = 1.0):
+    """
+    Make a Gemini API request with retry logic for rate limiting.
+    """
+    for attempt in range(max_retries):
+        try:
+            response = model.generate_content(prompt)
+            return response
+        except Exception as e:
+            error_str = str(e)
+            
+            # If it's a rate limit error, wait and retry
+            if "429" in error_str or "rate" in error_str.lower():
+                if attempt < max_retries - 1:  # Don't sleep on last attempt
+                    print(f"Rate limit hit, waiting {delay} seconds before retry {attempt + 1}/{max_retries}")
+                    time.sleep(delay)
+                    delay *= 2  # Exponential backoff
+                    continue
+            
+            # For other errors or final attempt, raise the exception
+            raise e
+    
+    raise Exception("Max retries exceeded")
 
 def analyze_policy(text: str) -> dict:
     """
@@ -43,7 +69,7 @@ def analyze_policy(text: str) -> dict:
     """
 
     try:
-        response = model.generate_content(prompt)
+        response = make_gemini_request(prompt)
         output_text = response.text.strip()
 
         # Remove code block formatting if present
@@ -116,14 +142,72 @@ def compare_policies(text1: str, text2: str, policy_number1: Optional[str] = Non
     Ensure the output is a valid Markdown table.
     """
     try:
-        response = model.generate_content(prompt)
+        response = make_gemini_request(prompt)
         return response.text
     except Exception as e:
         return f"Error comparing policies: {str(e)}"
     
+def get_basic_policy_answer(text: str, question: str, policy_number: Optional[str] = None) -> str:
+    """
+    Basic pattern matching for common insurance questions when API is unavailable.
+    """
+    text_lower = text.lower()
+    question_lower = question.lower()
+    
+    # Extract basic info from policy text using pattern matching
+    policy_info = {
+        "policy_number": policy_number or "Not specified",
+        "text_length": len(text),
+        "contains_premium": "premium" in text_lower,
+        "contains_coverage": "coverage" in text_lower or "cover" in text_lower,
+        "contains_deductible": "deductible" in text_lower,
+        "contains_claim": "claim" in text_lower,
+    }
+    
+    # Common question patterns
+    if any(word in question_lower for word in ["premium", "cost", "price", "pay"]):
+        if policy_info["contains_premium"]:
+            return f"Based on policy {policy_info['policy_number']}, premium information is mentioned in your policy document. Please review the document directly for specific premium amounts as the AI service is temporarily unavailable."
+        else:
+            return "Premium information is not clearly mentioned in this policy text."
+    
+    elif any(word in question_lower for word in ["coverage", "cover", "covered", "benefit"]):
+        if policy_info["contains_coverage"]:
+            return f"Your policy {policy_info['policy_number']} contains coverage information. Please review the document directly for detailed coverage terms as the AI service is temporarily unavailable."
+        else:
+            return "Coverage information is not clearly mentioned in this policy text."
+    
+    elif any(word in question_lower for word in ["claim", "filing", "process"]):
+        if policy_info["contains_claim"]:
+            return f"Your policy {policy_info['policy_number']} contains claim process information. Please review the document directly for claim procedures as the AI service is temporarily unavailable."
+        else:
+            return "Claim process information is not clearly mentioned in this policy text."
+    
+    elif any(word in question_lower for word in ["deductible", "excess"]):
+        if policy_info["contains_deductible"]:
+            return f"Your policy {policy_info['policy_number']} mentions deductible information. Please review the document directly for deductible amounts as the AI service is temporarily unavailable."
+        else:
+            return "Deductible information is not clearly mentioned in this policy text."
+    
+    else:
+        return f"""I apologize, but the AI service is temporarily unavailable due to quota limits. 
+
+**Your policy {policy_info['policy_number']} contains {policy_info['text_length']} characters of text.**
+
+**For immediate answers:**
+• Review your policy document directly
+• Contact your insurance provider
+• Try again in 24 hours when quota resets
+
+**Policy contains references to:**
+{' • Premium information' if policy_info['contains_premium'] else ''}
+{' • Coverage details' if policy_info['contains_coverage'] else ''}
+{' • Claim procedures' if policy_info['contains_claim'] else ''}
+{' • Deductible terms' if policy_info['contains_deductible'] else ''}"""
+
 def chat_with_policy(text: str, question: str, policy_number: Optional[str] = None) -> str:
     """
-    Chat with the policy text using Gemini LLM.
+    Chat with the policy text using Gemini LLM with quota management.
     
     Args:
         text (str): The policy text.
@@ -133,24 +217,34 @@ def chat_with_policy(text: str, question: str, policy_number: Optional[str] = No
     Returns:
         str: The response from the LLM.
     """
-    prompt = f"""
-    You are an insurance expert. Answer the following question based on the provided policy text:
-
-    Policy Text: {text}
-    Question: {question}
-    Policy Number: {policy_number if policy_number else "N/A"}
     
-    Provide a clear, concise answer based only on the policy information provided. 
-    If the policy doesn't contain information to answer the question, say "This information is not available in this policy."
-    Format monetary amounts in Indian Rupees (₹) when applicable.
-    """
-
+    # Check for quota exceeded error patterns
     try:
-        response = model.generate_content(prompt)
+        prompt = f"""
+        You are an insurance expert. Answer the following question based on the provided policy text:
+
+        Policy Text: {text}
+        Question: {question}
+        Policy Number: {policy_number if policy_number else "N/A"}
+        
+        Provide a clear, concise answer based only on the policy information provided. 
+        If the policy doesn't contain information to answer the question, say "This information is not available in this policy."
+        Format monetary amounts in Indian Rupees (₹) when applicable.
+        """
+
+        response = make_gemini_request(prompt)
         return response.text
 
     except Exception as e:
-        return f"Error answering Question: {str(e)}"
+        error_str = str(e)
+        
+        # Handle quota exceeded errors specifically
+        if "429" in error_str or "quota" in error_str.lower() or "exceeded" in error_str.lower():
+            # Use basic pattern matching as fallback
+            return get_basic_policy_answer(text, question, policy_number)
+        
+        # Handle other API errors
+        return f"Service temporarily unavailable. Please try again later. (Error: {error_str[:100]})"
 
 def chat_with_multiple_policies(policies_data: List[dict], question: str) -> str:
     """
@@ -191,7 +285,7 @@ def chat_with_multiple_policies(policies_data: List[dict], question: str) -> str
     """
 
     try:
-        response = model.generate_content(prompt)
+        response = make_gemini_request(prompt)
         return response.text
 
     except Exception as e:

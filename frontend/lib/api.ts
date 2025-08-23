@@ -1,7 +1,7 @@
 // API utilities for backend communication
 import { supabase } from "./supabase"
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8002"
 
 export interface PolicyAnalysisRequest {
   files: File[]

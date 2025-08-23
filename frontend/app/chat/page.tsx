@@ -49,24 +49,53 @@ export default function ChatPage() {
   useEffect(() => {
     const loadPoliciesAndHistory = async () => {
       try {
-        // Load policies
-        let policyIds: string[] = []
-        if (typeof window !== "undefined") {
-          const storedIds = localStorage.getItem("claimwise_uploaded_policy_ids")
-          if (storedIds) {
-            policyIds = JSON.parse(storedIds)
-          }
+        // Load policies directly from database
+        const session = await supabase.auth.getSession()
+        const token = session.data.session?.access_token
+        const user = session.data.session?.user
+
+        if (!user) {
+          setError("Please log in to access your policies")
+          setLoadingPolicies(false)
+          return
         }
 
-        if (policyIds.length > 0) {
-          const session = await supabase.auth.getSession()
-          const token = session.data.session?.access_token
+        // Fetch policies from database
+        const { data: dbPolicies, error: dbError } = await supabase
+          .from("policies")
+          .select("id, policy_name, policy_number, created_at, extracted_text")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false })
+
+        if (dbError) {
+          console.error("Database error:", dbError)
+          setError("Failed to load policies from database")
+          setLoadingPolicies(false)
+          return
+        }
+
+        console.log(`Found ${dbPolicies.length} policies in database`)
+
+        if (dbPolicies.length > 0) {
+          // Check if we have real policy content or just test data
+          const hasRealContent = dbPolicies.some(p => {
+            const text = p.extracted_text || ""
+            return text.length > 100 && !text.includes("test insurance policy for automated testing")
+          })
+
+          if (!hasRealContent) {
+            console.warn("All policies appear to be test data with minimal content")
+            setError("Your policies contain minimal content. Please upload actual insurance policy documents for meaningful chat interactions.")
+            setPolicies([])
+            setLoadingPolicies(false)
+            return
+          }
 
           // Analyze policies to get details
-          const policyPromises = policyIds.map(async (policyId) => {
+          const policyPromises = dbPolicies.map(async (policy) => {
             try {
               const formData = new FormData()
-              formData.append("policy_id", policyId)
+              formData.append("policy_id", policy.id)
               const response = await fetch(`${API_BASE_URL}/analyze-policy`, {
                 method: "POST",
                 headers: token ? { Authorization: `Bearer ${token}` } : undefined,
@@ -76,8 +105,8 @@ export default function ChatPage() {
               if (response.ok) {
                 const data = await response.json()
                 return {
-                  id: policyId,
-                  fileName: data.analysis.policy_number ? `Policy ${data.analysis.policy_number}` : `Policy ${policyId.slice(-8)}`,
+                  id: policy.id,
+                  fileName: policy.policy_name || (data.analysis.policy_number ? `Policy ${data.analysis.policy_number}` : `Policy ${policy.id.slice(-8)}`),
                   policyType: data.analysis.policy_type || "Unknown",
                   provider: data.analysis.provider || "Unknown Provider",
                   premium: data.analysis.premium || "Not specified",
@@ -90,7 +119,7 @@ export default function ChatPage() {
               }
               return null
             } catch (e) {
-              console.error(`Error loading policy ${policyId}:`, e)
+              console.error(`Error loading policy ${policy.id}:`, e)
               return null
             }
           })
@@ -225,7 +254,7 @@ export default function ChatPage() {
         const validResponses = allPolicyResponses.filter(Boolean)
         
         if (validResponses.length === 0) {
-          throw new Error("No policies could answer your question")
+          throw new Error("No policies contain enough information to answer your question. Please ensure you have uploaded complete insurance policy documents.")
         }
 
         // Combine responses intelligently
@@ -233,14 +262,18 @@ export default function ChatPage() {
         const policyRefs: string[] = []
         
         validResponses.forEach((resp, index) => {
-          if (resp && resp.answer && !resp.answer.includes("Error") && resp.answer.length > 50) {
+          if (resp && resp.answer && 
+              !resp.answer.includes("Error") && 
+              !resp.answer.includes("This information is not available") &&
+              !resp.answer.includes("Error answering Question") &&
+              resp.answer.length > 50) {
             combinedAnswer += `**${resp.policyName} (${resp.policyType}):**\n${resp.answer}\n\n`
             policyRefs.push(`${resp.policyName}`)
           }
         })
 
         if (policyRefs.length === 0) {
-          throw new Error("No relevant information found in your policies")
+          throw new Error("The uploaded policies don't contain sufficient information to answer this question. This may be because the policies are test documents or the OCR extraction didn't capture the relevant details.")
         }
 
         assistantMessage = {
@@ -421,9 +454,22 @@ export default function ChatPage() {
 
               {/* Error Alert */}
               {error && (
-                <Alert variant="destructive">
+                <Alert variant="destructive" className="mb-4">
                   <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
+                  <AlertDescription>
+                    {error}
+                    {(error.includes("quota") || error.includes("429")) && (
+                      <div className="mt-2 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                        <h4 className="font-semibold text-orange-800 mb-2">API Quota Exceeded - Solutions:</h4>
+                        <ul className="text-sm text-orange-700 space-y-1">
+                          <li>• Wait 24 hours for quota to reset</li>
+                          <li>• Review policy documents directly from the analyze page</li>
+                          <li>• Use the policy comparison feature instead</li>
+                          <li>• Basic answers will be provided using pattern matching</li>
+                        </ul>
+                      </div>
+                    )}
+                  </AlertDescription>
                 </Alert>
               )}
 

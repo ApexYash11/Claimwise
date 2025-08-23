@@ -54,6 +54,22 @@ export default function UploadPage() {
       // Get Supabase JWT
       const session = await supabase.auth.getSession()
       const token = session.data.session?.access_token
+      
+      // Check if policy already exists
+      if (session.data.session?.user?.id) {
+        const { data: existingPolicies } = await supabase
+          .from('policies')
+          .select('policy_name')
+          .eq('user_id', session.data.session.user.id)
+          .eq('policy_name', files[0].name)
+        
+        if (existingPolicies && existingPolicies.length > 0) {
+          setError(`A policy with the name "${files[0].name}" already exists. Please rename your file or delete the existing policy first.`)
+          setUploading(false)
+          return
+        }
+      }
+      
       const response = await fetch(`${API_BASE_URL}/upload-policy`, {
         method: "POST",
         body: formData,
@@ -98,6 +114,10 @@ export default function UploadPage() {
         localStorage.setItem("claimwise_uploaded_policy_id", data.policy_id)
         localStorage.setItem("claimwise_uploaded_policy_info", JSON.stringify(data))
       }
+      // Notify other parts of app to refresh dashboard stats
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("stats:refresh"))
+      }
     } catch (error: any) {
       console.error("Upload error:", error)
       let userFriendlyMessage = "Failed to upload policy. Please try again."
@@ -125,7 +145,13 @@ export default function UploadPage() {
   }
 
   const handleAnalyze = () => {
+    // navigate to analyze and trigger a stats refresh when returning
     router.push("/analyze")
+    try {
+      window.dispatchEvent(new Event("stats:refresh"))
+    } catch (e) {
+      // noop
+    }
   }
 
   return (

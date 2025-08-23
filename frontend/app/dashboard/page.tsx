@@ -22,8 +22,13 @@ export default function DashboardPage() {
   const { user } = useAuth()
   const userName = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User"
 
-  const [policies, setPolicies] = useState<PolicySummary[]>([])
   const [loading, setLoading] = useState(true)
+  const [stats, setStats] = useState<{
+    uploadedDocuments: number
+    documentsProcessed: number
+    analysesCompleted: number
+    comparisonsRun: number
+  } | null>(null)
 
   // Helper: Format money in Indian lakhs/crores
   const formatINR = (amount: number) => {
@@ -43,38 +48,65 @@ export default function DashboardPage() {
     return Number(cleaned) || 0
   }
 
-  // Fetch policies for the user
-  const fetchPolicies = useCallback(async () => {
+  // Fetch dashboard stats
+  const fetchStats = useCallback(async () => {
     if (!user) return
     setLoading(true)
     try {
-      // Replace with real API call
-      const res = await getPolicies(user.id)
-      setPolicies(res || [])
+      const session = await (await import("@/lib/supabase")).supabase.auth.getSession()
+      const token = session.data.session?.access_token
+
+      // First try the authenticated stats endpoint
+      let res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/dashboard/stats`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      })
+
+      // If the authenticated endpoint is not available or returns 404/401, fall back to the dev endpoint
+      if (!res.ok) {
+        console.warn("/dashboard/stats failed, trying /dashboard/stats-dev", res.status)
+        res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/dashboard/stats-dev`)
+      }
+
+      if (!res.ok) throw new Error("Failed to fetch stats from both endpoints")
+      const data = await res.json()
+      setStats({
+        uploadedDocuments: data.uploadedDocuments || 0,
+        documentsProcessed: data.documentsProcessed || 0,
+        analysesCompleted: data.analysesCompleted || 0,
+        comparisonsRun: data.comparisonsRun || 0,
+      })
     } catch (e) {
-      setPolicies([])
+      console.error("fetchStats error:", e)
+      // try dev endpoint as last resort
+      try {
+        const devRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/dashboard/stats-dev`)
+        if (devRes.ok) {
+          const d = await devRes.json()
+          setStats({ uploadedDocuments: d.uploadedDocuments || 0, documentsProcessed: d.documentsProcessed || 0, analysesCompleted: d.analysesCompleted || 0, comparisonsRun: d.comparisonsRun || 0 })
+        } else {
+          setStats({ uploadedDocuments: 0, documentsProcessed: 0, analysesCompleted: 0, comparisonsRun: 0 })
+        }
+      } catch (err) {
+        setStats({ uploadedDocuments: 0, documentsProcessed: 0, analysesCompleted: 0, comparisonsRun: 0 })
+      }
     } finally {
       setLoading(false)
     }
   }, [user])
 
   useEffect(() => {
-    fetchPolicies()
-  }, [fetchPolicies])
+    fetchStats()
+  }, [fetchStats])
+
+  // Allow other parts of the app to request a stats refresh (e.g., after upload)
+  useEffect(() => {
+    const handler = () => fetchStats()
+    window.addEventListener("stats:refresh", handler)
+    return () => window.removeEventListener("stats:refresh", handler)
+  }, [fetchStats])
 
   // Calculate stats
-  const totalPolicies = policies.length
-  const totalPremium = policies.reduce((sum, p) => sum + parseAmount(p.premium), 0)
-  const totalCoverage = policies.reduce((sum, p) => sum + parseAmount(p.coverageAmount), 0)
-  // Find next renewal (soonest expirationDate in future)
-  const now = new Date()
-  const nextRenewal = policies
-    .map(p => p.expirationDate)
-    .filter(date => date)
-    .map(date => new Date(date))
-    .filter(date => date > now)
-    .sort((a, b) => a.getTime() - b.getTime())[0]
-  const daysToNextRenewal = nextRenewal ? Math.ceil((nextRenewal.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : null
+  const totalPolicies = 0
 
   return (
     <ProtectedRoute>
@@ -87,34 +119,35 @@ export default function DashboardPage() {
             <p className="text-lg text-gray-700 dark:text-gray-300">Here's an overview of your insurance portfolio and recent activity.</p>
           </div>
 
-          {/* Stats Grid */}
+          {/* Stats Grid - Analysis focused */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <StatsCard
-              title="Total Policies"
-              value={loading ? "--" : totalPolicies}
-              description="Across health, auto, and home"
+              title="Documents Uploaded"
+              value={loading ? "--" : stats?.uploadedDocuments ?? 0}
+              description="Policy documents added"
               icon={FileText}
             />
             <StatsCard
-              title="Annual Premiums"
-              value={loading ? "--" : formatINR(totalPremium)}
-              description="Total yearly cost"
-              icon={IndianRupee}
-              // Optionally, you can add trend calculation here
+              title="Documents Processed"
+              value={loading ? "--" : stats?.documentsProcessed ?? 0}
+              description="OCR & parsing completed"
+              icon={TrendingUp}
             />
             <StatsCard
-              title="Coverage Amount"
-              value={loading ? "--" : formatINR(totalCoverage)}
-              description="Total protection value"
+              title="Analyses Completed"
+              value={loading ? "--" : stats?.analysesCompleted ?? 0}
+              description="AI analyses generated"
+              icon={CheckCircle}
+            />
+            <StatsCard
+              title="Comparisons Run"
+              value={loading ? "--" : stats?.comparisonsRun ?? 0}
+              description="Policy comparisons performed"
               icon={Shield}
             />
-            <StatsCard
-              title="Next Renewal"
-              value={loading ? "--" : (daysToNextRenewal !== null ? `${daysToNextRenewal} days` : "N/A")}
-              description={loading ? "" : (daysToNextRenewal !== null ? `${policies.find(p => p.expirationDate && new Date(p.expirationDate).getTime() === nextRenewal?.getTime())?.policyType || "Policy"} expires` : "No upcoming renewals")}
-              icon={Calendar}
-            />
           </div>
+
+          {/* No manual refresh — dashboard updates automatically after uploads/analyses */}
 
           {/* Quick Actions Grid */}
           <div className="mb-8">
