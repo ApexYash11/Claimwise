@@ -2,7 +2,6 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Depends
 from dotenv import load_dotenv
 import os
 from src.db import supabase, supabase_storage
-from src.OCR import extract_text
 from src.llm_groq import analyze_policy, compare_policies, chat_with_policy, chat_with_multiple_policies, get_api_status
 from src.auth import get_current_user, refresh_token
 from fastapi.middleware.cors import CORSMiddleware
@@ -49,6 +48,12 @@ app.add_middleware(
 def root():
     return {"message": "ClaimWise Backend"}
 
+
+@app.get("/healthz")
+def healthz():
+    """Simple health endpoint for load balancers and platform health checks."""
+    return {"status": "ok"}
+
 @app.post("/upload-policy")
 async def upload_policy(
     user_id: str = Depends(get_current_user),
@@ -90,8 +95,21 @@ async def upload_policy(
             file_type = file.filename.split('.')[-1].lower()
             print(f"DEBUG: Extracting text from {file_type} file...")
             try:
+                # Import OCR helper lazily so the app can start even if system OCR
+                # binaries (tesseract/poppler) are not installed on the host.
+                try:
+                    from src.OCR import extract_text
+                except Exception as import_err:
+                    print(f"DEBUG: OCR import failed: {import_err}")
+                    raise HTTPException(status_code=500, detail=(
+                        "OCR functionality is not available on this server. "
+                        "Install system packages (tesseract, poppler) or deploy on an environment that provides them."
+                    ))
+
                 extracted_text = extract_text(file_bytes, file_type)
                 print(f"DEBUG: Extracted text length: {len(extracted_text) if extracted_text else 0}")
+            except HTTPException:
+                raise
             except Exception as ocr_error:
                 print(f"DEBUG: OCR Error: {str(ocr_error)}")
                 raise HTTPException(status_code=500, detail=f"OCR processing failed: {str(ocr_error)}")
