@@ -363,7 +363,7 @@ export default function ChatPage() {
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 dark:from-gray-950 dark:to-blue-950">
+  <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 dark:from-gray-950 dark:to-blue-950">
         <Header />
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -491,7 +491,7 @@ export default function ChatPage() {
 
               {/* Messages */}
               <Card className="min-h-[500px] bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200/50 dark:border-gray-700/50 shadow-xl rounded-2xl">
-                <CardContent className="p-8">
+                <CardContent className="p-8 text-gray-900 dark:text-gray-100">
                   {loadingPolicies ? (
                     <div className="text-center py-12">
                       <div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4"></div>
@@ -545,15 +545,15 @@ export default function ChatPage() {
                           <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-blue-500 rounded-full flex items-center justify-center shadow-lg">
                             <Bot className="w-4 h-4 text-white" />
                           </div>
-                          <Card className="bg-white/90 border-gray-200/50 shadow-lg rounded-2xl max-w-xs">
-                            <CardContent className="p-4">
+                          <Card className="bg-white/90 dark:bg-gray-900/90 border-gray-200/50 dark:border-gray-700/50 shadow-lg rounded-2xl max-w-xs">
+                            <CardContent className="p-4 text-gray-900 dark:text-gray-100">
                               <div className="flex items-center space-x-3">
                                 <div className="flex space-x-1">
                                   <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" />
                                   <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce delay-100" />
                                   <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce delay-200" />
                                 </div>
-                                <span className="text-sm text-gray-600 font-medium">
+                                <span className="text-sm text-gray-600 dark:text-gray-300 font-medium">
                                   {selectedPolicyId === "all" ? "Analyzing all policies..." : "AI is thinking..."}
                                 </span>
                               </div>

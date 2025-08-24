@@ -65,11 +65,11 @@ export function PolicyCard({ policy, onViewDetails, onCompare, isSelected }: Pol
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <div className="flex items-start space-x-3 min-w-0 flex-1">
-            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-              <FileText className="w-5 h-5 text-blue-600" />
+            <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center flex-shrink-0">
+              <FileText className="w-5 h-5 text-blue-600 dark:text-blue-300" />
             </div>
             <div className="min-w-0 flex-1">
-              <CardTitle className="text-lg font-semibold text-gray-900 break-words hyphens-auto leading-tight mb-2" style={{ wordBreak: 'break-word' }}>
+              <CardTitle className="text-lg font-semibold text-gray-900 dark:text-gray-100 break-words hyphens-auto leading-tight mb-2" style={{ wordBreak: 'break-word' }}>
                 {policy.fileName || 'Unknown Policy'}
               </CardTitle>
               <div className="flex flex-wrap items-center gap-2">
@@ -90,14 +90,14 @@ export function PolicyCard({ policy, onViewDetails, onCompare, isSelected }: Pol
         {/* Provider and Coverage */}
         <div className="grid grid-cols-2 gap-4">
           <div className="min-w-0">
-            <p className="text-sm text-gray-500">Provider</p>
-            <p className="font-medium text-gray-900 break-words text-sm leading-tight" style={{ wordBreak: 'break-word' }}>
+            <p className="text-sm text-gray-500 dark:text-gray-300">Provider</p>
+            <p className="font-medium text-gray-900 dark:text-gray-100 break-words text-sm leading-tight" style={{ wordBreak: 'break-word' }}>
               {policy.provider || 'Unknown Provider'}
             </p>
           </div>
           <div className="min-w-0">
-            <p className="text-sm text-gray-500">Coverage Amount</p>
-            <p className="font-medium text-gray-900 break-words text-sm leading-tight" style={{ wordBreak: 'break-word' }}>
+            <p className="text-sm text-gray-500 dark:text-gray-300">Coverage Amount</p>
+            <p className="font-medium text-gray-900 dark:text-gray-100 break-words text-sm leading-tight" style={{ wordBreak: 'break-word' }}>
               {formatIndianCurrency(policy.coverageAmount || 'Not specified')}
             </p>
           </div>
@@ -106,19 +106,19 @@ export function PolicyCard({ policy, onViewDetails, onCompare, isSelected }: Pol
         {/* Premium and Deductible */}
         <div className="grid grid-cols-2 gap-4">
           <div className="flex items-start space-x-2 min-w-0">
-            <DollarSign className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
+            <DollarSign className="w-4 h-4 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
             <div className="min-w-0 flex-1">
-              <p className="text-sm text-gray-500">Premium</p>
-              <p className="font-medium text-gray-900 break-words text-sm leading-tight" style={{ wordBreak: 'break-word' }}>
+              <p className="text-sm text-gray-500 dark:text-gray-300">Premium</p>
+              <p className="font-medium text-gray-900 dark:text-gray-100 break-words text-sm leading-tight" style={{ wordBreak: 'break-word' }}>
                 {formatIndianCurrency(policy.premium || 'Not specified')}
               </p>
             </div>
           </div>
           <div className="flex items-start space-x-2 min-w-0">
-            <Shield className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+            <Shield className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
             <div className="min-w-0 flex-1">
-              <p className="text-sm text-gray-500">Deductible</p>
-              <p className="font-medium text-gray-900 break-words text-sm leading-tight" style={{ wordBreak: 'break-word' }}>
+              <p className="text-sm text-gray-500 dark:text-gray-300">Deductible</p>
+              <p className="font-medium text-gray-900 dark:text-gray-100 break-words text-sm leading-tight" style={{ wordBreak: 'break-word' }}>
                 {formatIndianCurrency(policy.deductible || 'Not specified')}
               </p>
             </div>
@@ -127,10 +127,10 @@ export function PolicyCard({ policy, onViewDetails, onCompare, isSelected }: Pol
 
         {/* Expiration Date */}
         <div className="flex items-start space-x-2">
-          <Calendar className="w-4 h-4 text-gray-500 flex-shrink-0 mt-0.5" />
+          <Calendar className="w-4 h-4 text-gray-500 dark:text-gray-300 flex-shrink-0 mt-0.5" />
           <div className="min-w-0 flex-1">
-            <p className="text-sm text-gray-500">Expires</p>
-            <p className="font-medium text-gray-900 break-words text-sm leading-tight">
+            <p className="text-sm text-gray-500 dark:text-gray-300">Expires</p>
+            <p className="font-medium text-gray-900 dark:text-gray-100 break-words text-sm leading-tight">
               {policy.expirationDate ? new Date(policy.expirationDate).toLocaleDateString() : 'Not specified'}
             </p>
           </div>
@@ -138,12 +138,12 @@ export function PolicyCard({ policy, onViewDetails, onCompare, isSelected }: Pol
 
         {/* Key Features */}
         <div>
-          <p className="text-sm text-gray-500 mb-2">Key Features</p>
+          <p className="text-sm text-gray-500 dark:text-gray-300 mb-2">Key Features</p>
           <div className="space-y-1">
             {(policy.keyFeatures || []).slice(0, showAllFeatures ? undefined : 3).map((feature, index) => (
               <div key={`feature-${index}`} className="flex items-start space-x-2">
-                <CheckCircle className="w-3 h-3 text-green-600 flex-shrink-0 mt-1" />
-                <p className="text-sm text-gray-700 break-words leading-relaxed flex-1" style={{ wordBreak: 'break-word' }}>
+                <CheckCircle className="w-3 h-3 text-green-600 dark:text-green-400 flex-shrink-0 mt-1" />
+                <p className="text-sm text-gray-700 dark:text-gray-200 break-words leading-relaxed flex-1" style={{ wordBreak: 'break-word' }}>
                   {feature}
                 </p>
               </div>
@@ -151,7 +151,7 @@ export function PolicyCard({ policy, onViewDetails, onCompare, isSelected }: Pol
             {(policy.keyFeatures || []).length > 3 && (
               <button
                 onClick={() => setShowAllFeatures(!showAllFeatures)}
-                className="flex items-center space-x-1 text-sm text-blue-600 hover:text-blue-800 transition-colors mt-2"
+                className="flex items-center space-x-1 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors mt-2"
               >
                 {showAllFeatures ? (
                   <>
@@ -171,10 +171,10 @@ export function PolicyCard({ policy, onViewDetails, onCompare, isSelected }: Pol
 
         {/* Action Buttons */}
         <div className="flex space-x-2 pt-2">
-          <Button variant="outline" onClick={onViewDetails} className="flex-1 bg-transparent">
+          <Button variant="outline" onClick={onViewDetails} className="flex-1 bg-transparent border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800">
             View Details
           </Button>
-          <Button onClick={onCompare} className="flex-1 bg-blue-600 hover:bg-blue-700">
+          <Button onClick={onCompare} className="flex-1 bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 text-white">
             {isSelected ? "Remove from Compare" : "Compare"}
           </Button>
         </div>

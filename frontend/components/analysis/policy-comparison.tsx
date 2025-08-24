@@ -122,16 +122,16 @@ export function PolicyComparison({ policies, onRemovePolicy }: PolicyComparisonP
     <div className="space-y-6">
       {/* Comparison Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-900">Policy Comparison</h2>
-        <p className="text-gray-600">Comparing {policies.length} policies</p>
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Policy Comparison</h2>
+        <p className="text-gray-600 dark:text-gray-300">Comparing {policies.length} policies</p>
       </div>
 
       {/* Enhanced Comparison Content */}
       <div className="space-y-8">
         {/* Quick Comparison Summary */}
-        <Card className="bg-gradient-to-r from-indigo-50 to-blue-50 border-indigo-200">
+        <Card className="bg-gradient-to-r from-indigo-50 to-blue-50 border-indigo-200 dark:from-gray-900 dark:to-gray-950 dark:border-gray-700">
           <CardHeader>
-            <CardTitle className="text-xl text-indigo-900 flex items-center">
+            <CardTitle className="text-xl text-indigo-900 dark:text-indigo-200 flex items-center">
               <BarChart3 className="w-6 h-6 mr-2" />
               Quick Comparison Overview
             </CardTitle>
@@ -139,9 +139,9 @@ export function PolicyComparison({ policies, onRemovePolicy }: PolicyComparisonP
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {/* Best Premium */}
-              <div className="text-center p-4 bg-white rounded-lg border border-green-200">
-                <div className="text-sm text-gray-600 mb-1">Best Premium</div>
-                <div className="text-xl font-bold text-green-600">
+              <div className="text-center p-4 bg-white rounded-lg border border-green-200 dark:bg-gray-900 dark:border-green-900">
+                <div className="text-sm text-gray-600 dark:text-gray-300 mb-1">Best Premium</div>
+                <div className="text-xl font-bold text-green-600 dark:text-green-400">
                   {(() => {
                     const validPremiums = policies.map(p => ({ 
                       policy: p, 
@@ -152,7 +152,7 @@ export function PolicyComparison({ policies, onRemovePolicy }: PolicyComparisonP
                     return formatIndianCurrency(lowest.amount.toString())
                   })()}
                 </div>
-                <div className="text-xs text-gray-500">
+                <div className="text-xs text-gray-500 dark:text-gray-400">
                   {(() => {
                     const validPremiums = policies.map(p => ({ 
                       policy: p, 
@@ -166,9 +166,9 @@ export function PolicyComparison({ policies, onRemovePolicy }: PolicyComparisonP
               </div>
               
               {/* Highest Coverage */}
-              <div className="text-center p-4 bg-white rounded-lg border border-blue-200">
-                <div className="text-sm text-gray-600 mb-1">Highest Coverage</div>
-                <div className="text-xl font-bold text-blue-600">
+              <div className="text-center p-4 bg-white rounded-lg border border-blue-200 dark:bg-gray-900 dark:border-blue-900">
+                <div className="text-sm text-gray-600 dark:text-gray-300 mb-1">Highest Coverage</div>
+                <div className="text-xl font-bold text-blue-600 dark:text-blue-400">
                   {(() => {
                     const validCoverage = policies.map(p => ({ 
                       policy: p, 
@@ -179,7 +179,7 @@ export function PolicyComparison({ policies, onRemovePolicy }: PolicyComparisonP
                     return `₹${(highest.amount / 100000).toFixed(1)}L`
                   })()}
                 </div>
-                <div className="text-xs text-gray-500">
+                <div className="text-xs text-gray-500 dark:text-gray-400">
                   {(() => {
                     const validCoverage = policies.map(p => ({ 
                       policy: p, 
@@ -193,9 +193,9 @@ export function PolicyComparison({ policies, onRemovePolicy }: PolicyComparisonP
               </div>
 
               {/* Best Value */}
-              <div className="text-center p-4 bg-white rounded-lg border border-purple-200">
-                <div className="text-sm text-gray-600 mb-1">Best Value Score</div>
-                <div className="text-xl font-bold text-purple-600">
+              <div className="text-center p-4 bg-white rounded-lg border border-purple-200 dark:bg-gray-900 dark:border-purple-900">
+                <div className="text-sm text-gray-600 dark:text-gray-300 mb-1">Best Value Score</div>
+                <div className="text-xl font-bold text-purple-600 dark:text-purple-400">
                   {(() => {
                     // Calculate value score (coverage/premium ratio)
                     const scores = policies.map(p => {
@@ -209,33 +209,33 @@ export function PolicyComparison({ policies, onRemovePolicy }: PolicyComparisonP
                     return `${(best.score).toFixed(0)}x`
                   })()}
                 </div>
-                <div className="text-xs text-gray-500">Coverage/Premium Ratio</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">Coverage/Premium Ratio</div>
               </div>
             </div>
           </CardContent>
         </Card>
 
         {/* Detailed Side-by-Side Comparison */}
-        <Card>
+        <Card className="dark:bg-gray-900 dark:border-gray-700">
           <CardHeader>
-            <CardTitle className="text-lg text-gray-900">Detailed Policy Comparison</CardTitle>
+            <CardTitle className="text-lg text-gray-900 dark:text-gray-100">Detailed Policy Comparison</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50">
+                <thead className="bg-gray-50 dark:bg-gray-800">
                   <tr>
-                    <th className="text-left p-4 font-medium text-gray-900 border-b">Feature</th>
+                    <th className="text-left p-4 font-medium text-gray-900 dark:text-gray-100 border-b dark:border-gray-700">Feature</th>
                     {policies.map((policy) => (
-                      <th key={policy.id} className="text-center p-4 font-medium text-gray-900 border-b min-w-[200px]">
+                      <th key={policy.id} className="text-center p-4 font-medium text-gray-900 dark:text-gray-100 border-b dark:border-gray-700 min-w-[200px]">
                         <div className="space-y-2">
                           <div className="font-semibold">{policy.fileName}</div>
-                          <Badge className="bg-blue-100 text-blue-800">{policy.policyType}</Badge>
+                          <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">{policy.policyType}</Badge>
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => onRemovePolicy(policy.id)}
-                            className="text-gray-400 hover:text-red-600 ml-2"
+                            className="text-gray-400 hover:text-red-600 dark:hover:text-red-400 ml-2"
                           >
                             <X className="w-3 h-3" />
                           </Button>
@@ -246,32 +246,32 @@ export function PolicyComparison({ policies, onRemovePolicy }: PolicyComparisonP
                 </thead>
                 <tbody>
                   {/* Provider Row */}
-                  <tr className="border-b bg-white">
-                    <td className="p-4 font-medium text-gray-900 bg-gray-50">Provider</td>
+                  <tr className="border-b bg-white dark:bg-gray-900 dark:border-gray-700">
+                    <td className="p-4 font-medium text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-gray-800">Provider</td>
                     {policies.map((policy) => (
                       <td key={`${policy.id}-provider`} className="p-4 text-center">
-                        <div className="font-semibold text-gray-900">{policy.provider}</div>
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">{policy.provider}</div>
                       </td>
                     ))}
                   </tr>
 
                   {/* Premium Row with Comparison */}
-                  <tr className="border-b bg-gray-25">
-                    <td className="p-4 font-medium text-gray-900 bg-gray-50">Annual Premium</td>
+                  <tr className="border-b bg-gray-25 dark:bg-gray-800 dark:border-gray-700">
+                    <td className="p-4 font-medium text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-gray-800">Annual Premium</td>
                     {policies.map((policy) => {
                       const comparison = getPremiumComparison(policy.premium, policies.map((p) => p.premium))
                       return (
                         <td key={`${policy.id}-premium`} className="p-4 text-center">
                           <div className="space-y-2">
-                            <div className="text-lg font-bold text-gray-900">{formatIndianCurrency(policy.premium)}</div>
+                            <div className="text-lg font-bold text-gray-900 dark:text-gray-100">{formatIndianCurrency(policy.premium)}</div>
                             {comparison === "lowest" && (
-                              <Badge className="bg-green-100 text-green-800">
+                              <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
                                 <TrendingDown className="w-3 h-3 mr-1" />
                                 Best Price
                               </Badge>
                             )}
                             {comparison === "highest" && (
-                              <Badge className="bg-red-100 text-red-800">
+                              <Badge className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
                                 <TrendingUp className="w-3 h-3 mr-1" />
                                 Highest
                               </Badge>
@@ -283,32 +283,32 @@ export function PolicyComparison({ policies, onRemovePolicy }: PolicyComparisonP
                   </tr>
 
                   {/* Coverage Amount Row */}
-                  <tr className="border-b bg-white">
-                    <td className="p-4 font-medium text-gray-900 bg-gray-50">Coverage Amount</td>
+                  <tr className="border-b bg-white dark:bg-gray-900 dark:border-gray-700">
+                    <td className="p-4 font-medium text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-gray-800">Coverage Amount</td>
                     {policies.map((policy) => (
                       <td key={`${policy.id}-coverage`} className="p-4 text-center">
-                        <div className="text-lg font-bold text-blue-600">{formatIndianCurrency(policy.coverageAmount)}</div>
+                        <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{formatIndianCurrency(policy.coverageAmount)}</div>
                       </td>
                     ))}
                   </tr>
 
                   {/* Deductible Row */}
-                  <tr className="border-b bg-gray-25">
-                    <td className="p-4 font-medium text-gray-900 bg-gray-50">Deductible</td>
+                  <tr className="border-b bg-gray-25 dark:bg-gray-800 dark:border-gray-700">
+                    <td className="p-4 font-medium text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-gray-800">Deductible</td>
                     {policies.map((policy) => (
                       <td key={`${policy.id}-deductible`} className="p-4 text-center">
-                        <div className="text-lg font-semibold text-gray-900">{formatIndianCurrency(policy.deductible)}</div>
+                        <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{formatIndianCurrency(policy.deductible)}</div>
                       </td>
                     ))}
                   </tr>
 
                   {/* Expiration Row */}
-                  <tr className="border-b bg-white">
-                    <td className="p-4 font-medium text-gray-900 bg-gray-50">Expiration Date</td>
+                  <tr className="border-b bg-white dark:bg-gray-900 dark:border-gray-700">
+                    <td className="p-4 font-medium text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-gray-800">Expiration Date</td>
                     {policies.map((policy) => (
                       <td key={`${policy.id}-expiration`} className="p-4 text-center">
                         <div className="space-y-2">
-                          <div className="font-medium text-gray-900">
+                          <div className="font-medium text-gray-900 dark:text-gray-100">
                             {new Date(policy.expirationDate).toLocaleDateString('en-IN')}
                           </div>
                           {(() => {
@@ -323,7 +323,7 @@ export function PolicyComparison({ policies, onRemovePolicy }: PolicyComparisonP
                                 </Badge>
                               )
                             }
-                            return <div className="text-xs text-gray-500">{daysUntilExpiration} days left</div>
+                            return <div className="text-xs text-gray-500 dark:text-gray-400">{daysUntilExpiration} days left</div>
                           })()}
                         </div>
                       </td>
@@ -331,21 +331,21 @@ export function PolicyComparison({ policies, onRemovePolicy }: PolicyComparisonP
                   </tr>
 
                   {/* Key Features Comparison */}
-                  <tr className="border-b bg-gray-25">
-                    <td className="p-4 font-medium text-gray-900 bg-gray-50 align-top">Key Features</td>
+                  <tr className="border-b bg-gray-25 dark:bg-gray-800 dark:border-gray-700">
+                    <td className="p-4 font-medium text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-gray-800 align-top">Key Features</td>
                     {policies.map((policy) => (
                       <td key={`${policy.id}-features`} className="p-4 align-top">
                         <div className="space-y-2">
                           {policy.keyFeatures.slice(0, expandedFeatures[policy.id] ? undefined : 4).map((feature, index) => (
                             <div key={index} className="flex items-start space-x-2">
                               <CheckCircle className="w-3 h-3 text-green-600 flex-shrink-0 mt-1" />
-                              <span className="text-sm text-gray-700">{feature}</span>
+                              <span className="text-sm text-gray-700 dark:text-gray-200">{feature}</span>
                             </div>
                           ))}
                           {policy.keyFeatures.length > 4 && (
                             <button
                               onClick={() => toggleFeatures(policy.id)}
-                              className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center space-x-1"
+                              className="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200 font-medium flex items-center space-x-1"
                             >
                               {expandedFeatures[policy.id] ? (
                                 <>
@@ -371,9 +371,9 @@ export function PolicyComparison({ policies, onRemovePolicy }: PolicyComparisonP
         </Card>
 
         {/* Value Comparison Chart */}
-        <Card>
+        <Card className="dark:bg-gray-900 dark:border-gray-700">
           <CardHeader>
-            <CardTitle className="text-lg text-gray-900 flex items-center">
+            <CardTitle className="text-lg text-gray-900 dark:text-gray-100 flex items-center">
               <BarChart3 className="w-5 h-5 mr-2" />
               Value Analysis
             </CardTitle>
@@ -394,10 +394,10 @@ export function PolicyComparison({ policies, onRemovePolicy }: PolicyComparisonP
                 return (
                   <div key={policy.id} className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <div className="font-medium text-gray-900">{policy.fileName}</div>
-                      <div className="text-sm text-gray-600">Score: {valueScore.toFixed(1)}x</div>
+                      <div className="font-medium text-gray-900 dark:text-gray-100">{policy.fileName}</div>
+                      <div className="text-sm text-gray-600 dark:text-gray-300">Score: {valueScore.toFixed(1)}x</div>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-3">
+                    <div className="w-full bg-gray-200 dark:bg-gray-800 rounded-full h-3">
                       <div
                         className={`h-3 rounded-full transition-all duration-1000 ${
                           index === 0 ? 'bg-blue-500' : 
@@ -417,9 +417,9 @@ export function PolicyComparison({ policies, onRemovePolicy }: PolicyComparisonP
 
       {/* Comparison Insights */}
       {policies.length >= 2 && (
-        <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
+        <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200 dark:from-gray-900 dark:to-gray-950 dark:border-gray-700">
           <CardHeader>
-            <CardTitle className="text-lg text-blue-900 flex items-center">
+            <CardTitle className="text-lg text-blue-900 dark:text-blue-200 flex items-center">
               <TrendingUp className="w-5 h-5 mr-2" />
               Smart Comparison Insights
             </CardTitle>
@@ -437,22 +437,22 @@ export function PolicyComparison({ policies, onRemovePolicy }: PolicyComparisonP
                   const lowestPolicy = policies[premiums.indexOf(minPremium)]
                   
                   return (
-                    <div className="bg-white p-4 rounded-lg border border-blue-200">
-                      <h4 className="font-semibold text-blue-900 mb-2 flex items-center">
+                    <div className="bg-white p-4 rounded-lg border border-blue-200 dark:bg-gray-900 dark:border-blue-900">
+                      <h4 className="font-semibold text-blue-900 dark:text-blue-200 mb-2 flex items-center">
                         <DollarSign className="w-4 h-4 mr-1" />
                         Premium Analysis
                       </h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                         <div className="flex items-center space-x-2">
-                          <TrendingDown className="w-4 h-4 text-green-600" />
+                          <TrendingDown className="w-4 h-4 text-green-600 dark:text-green-400" />
                           <span>
                             <strong>{lowestPolicy.fileName}</strong> offers the lowest premium at <strong>{formatIndianCurrency(lowestPolicy.premium)}</strong>
                           </span>
                         </div>
                         <div className="flex items-center space-x-2">
-                          <TrendingUp className="w-4 h-4 text-red-600" />
+                          <TrendingUp className="w-4 h-4 text-red-600 dark:text-red-400" />
                           <span>
-                            Potential annual savings: <strong className="text-green-600">{formatIndianCurrency(savings.toString())}</strong>
+                            Potential annual savings: <strong className="text-green-600 dark:text-green-400">{formatIndianCurrency(savings.toString())}</strong>
                           </span>
                         </div>
                       </div>
@@ -463,8 +463,8 @@ export function PolicyComparison({ policies, onRemovePolicy }: PolicyComparisonP
               })()}
 
               {/* Coverage Comparison */}
-              <div className="bg-white p-4 rounded-lg border border-blue-200">
-                <h4 className="font-semibold text-blue-900 mb-2 flex items-center">
+              <div className="bg-white p-4 rounded-lg border border-blue-200 dark:bg-gray-900 dark:border-blue-900">
+                <h4 className="font-semibold text-blue-900 dark:text-blue-200 mb-2 flex items-center">
                   <Shield className="w-4 h-4 mr-1" />
                   Coverage Analysis
                 </h4>
@@ -476,7 +476,7 @@ export function PolicyComparison({ policies, onRemovePolicy }: PolicyComparisonP
                     return (
                       <>
                         <div className="flex items-center space-x-2">
-                          <CheckCircle className="w-4 h-4 text-blue-600" />
+                          <CheckCircle className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                           <span>
                             Comparing <strong>{policies.length} policies</strong> from <strong>{providers.length} provider{providers.length !== 1 ? 's' : ''}</strong>
                             {providers.length > 1 ? ` (${providers.join(', ')})` : ` (${providers[0]})`}
@@ -484,7 +484,7 @@ export function PolicyComparison({ policies, onRemovePolicy }: PolicyComparisonP
                         </div>
                         {policyTypes.length > 1 && (
                           <div className="flex items-center space-x-2">
-                            <AlertTriangle className="w-4 h-4 text-orange-600" />
+                            <AlertTriangle className="w-4 h-4 text-orange-600 dark:text-orange-400" />
                             <span>
                               Note: Comparing different policy types ({policyTypes.join(', ')}) - ensure coverage needs align
                             </span>
@@ -507,12 +507,12 @@ export function PolicyComparison({ policies, onRemovePolicy }: PolicyComparisonP
                 
                 if (expiringSoon.length > 0) {
                   return (
-                    <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
-                      <h4 className="font-semibold text-orange-900 mb-2 flex items-center">
+                    <div className="bg-orange-50 p-4 rounded-lg border border-orange-200 dark:bg-orange-950 dark:border-orange-900">
+                      <h4 className="font-semibold text-orange-900 dark:text-orange-200 mb-2 flex items-center">
                         <AlertTriangle className="w-4 h-4 mr-1" />
                         Renewal Timeline
                       </h4>
-                      <p className="text-sm text-orange-800">
+                      <p className="text-sm text-orange-800 dark:text-orange-200">
                         {expiringSoon.length === 1 
                           ? `${expiringSoon[0].fileName} expires soon` 
                           : `${expiringSoon.length} policies expire within 60 days`
