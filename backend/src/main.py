@@ -36,9 +36,11 @@ load_dotenv()  # Load environment variables from .env
 app = FastAPI()
 
 # CORS middleware to allow cross-origin requests
+# Get allowed origins from environment variable or use localhost for development
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:3001").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001"],  # Added port 3001
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
