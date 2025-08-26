@@ -36,11 +36,15 @@ load_dotenv()  # Load environment variables from .env
 app = FastAPI()
 
 # CORS middleware to allow cross-origin requests
-# Get allowed origins from environment variable or use localhost for development
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:3001").split(",")
+origins = [
+    "https://claimwise-fht9.vercel.app",
+    "http://localhost:3000",
+    "http://localhost:3001"
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
