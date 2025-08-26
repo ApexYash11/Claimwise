@@ -29,30 +29,35 @@ export function RecentActivity() {
   useEffect(() => {
     const fetchActivities = async () => {
       try {
-        const session = await supabase.auth.getSession()
-        const token = session.data.session?.access_token
+        // Wait for Supabase session to load, and refresh if needed
+        let sessionResult = await supabase.auth.getSession()
+        let session = sessionResult.data.session
+        let token = session?.access_token
+        // Optionally log the JWT for debugging
+        console.log("[DEBUG] Supabase JWT:", token)
 
+        // If no token, try to refresh
         if (!token) {
-          console.log("No auth token for activities")
-          setLoading(false)
-          return
+          const { data: refreshed } = await supabase.auth.refreshSession()
+          session = refreshed.session
+          token = session?.access_token
+          console.log("[DEBUG] Refreshed JWT:", token)
         }
 
-        const response = await fetch(`${API_BASE_URL}/activities`, {
-          headers: {
-            "Authorization": `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        })
-
-        if (response.ok) {
+        let response;
+        if (token) {
+          response = await fetch(`${API_BASE_URL}/activities`, {
+            headers: {
+              "Authorization": `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          })
+        }
+        if (response && response.ok) {
           const data = await response.json()
-          console.log("Activities data:", data)
-          
           if (data.success && data.activities) {
             setActivities(data.activities)
           } else {
-            // Use minimal sample data if no activities
             setActivities([
               {
                 id: "welcome",
@@ -65,15 +70,32 @@ export function RecentActivity() {
             ])
           }
         } else {
-          console.error("Failed to fetch activities")
+          setActivities([
+            {
+              id: "welcome",
+              type: "upload",
+              title: "Welcome to ClaimWise!",
+              description: "Sign in to see your recent activities.",
+              timestamp: new Date().toISOString(),
+              status: "completed"
+            }
+          ])
         }
       } catch (error) {
-        console.error("Error fetching activities:", error)
+        setActivities([
+          {
+            id: "welcome",
+            type: "upload",
+            title: "Welcome to ClaimWise!",
+            description: "Sign in to see your recent activities.",
+            timestamp: new Date().toISOString(),
+            status: "completed"
+          }
+        ])
       } finally {
         setLoading(false)
       }
     }
-
     fetchActivities()
   }, [])
 

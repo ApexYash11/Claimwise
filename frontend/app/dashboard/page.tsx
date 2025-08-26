@@ -50,23 +50,36 @@ export default function DashboardPage() {
 
   // Fetch dashboard stats
   const fetchStats = useCallback(async () => {
-    if (!user) return
     setLoading(true)
     try {
-      const session = await (await import("@/lib/supabase")).supabase.auth.getSession()
-      const token = session.data.session?.access_token
+      // Wait for Supabase session to load, and refresh if needed
+      let sessionResult = await (await import("@/lib/supabase")).supabase.auth.getSession()
+      let session = sessionResult.data.session
+      let token = session?.access_token
+      // Optionally log the JWT for debugging
+      console.log("[DEBUG] Supabase JWT:", token)
 
-      // First try the authenticated stats endpoint
-      let res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/dashboard/stats`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      })
-
-      // If the authenticated endpoint is not available or returns 404/401, fall back to the dev endpoint
-      if (!res.ok) {
-        console.warn("/dashboard/stats failed, trying /dashboard/stats-dev", res.status)
-        res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/dashboard/stats-dev`)
+      // If no token, try to refresh
+      if (!token) {
+        const { data: refreshed } = await (await import("@/lib/supabase")).supabase.auth.refreshSession()
+        session = refreshed.session
+        token = session?.access_token
+        console.log("[DEBUG] Refreshed JWT:", token)
       }
 
+      let res;
+      if (token) {
+        res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/dashboard/stats`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        // If unauthorized or not found, fall back to dev endpoint
+        if (res.status === 401 || res.status === 404) {
+          res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/dashboard/stats-dev`)
+        }
+      } else {
+        // No token, use dev endpoint
+        res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/dashboard/stats-dev`)
+      }
       if (!res.ok) throw new Error("Failed to fetch stats from both endpoints")
       const data = await res.json()
       setStats({
@@ -77,18 +90,7 @@ export default function DashboardPage() {
       })
     } catch (e) {
       console.error("fetchStats error:", e)
-      // try dev endpoint as last resort
-      try {
-        const devRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/dashboard/stats-dev`)
-        if (devRes.ok) {
-          const d = await devRes.json()
-          setStats({ uploadedDocuments: d.uploadedDocuments || 0, documentsProcessed: d.documentsProcessed || 0, analysesCompleted: d.analysesCompleted || 0, comparisonsRun: d.comparisonsRun || 0 })
-        } else {
-          setStats({ uploadedDocuments: 0, documentsProcessed: 0, analysesCompleted: 0, comparisonsRun: 0 })
-        }
-      } catch (err) {
-        setStats({ uploadedDocuments: 0, documentsProcessed: 0, analysesCompleted: 0, comparisonsRun: 0 })
-      }
+      setStats({ uploadedDocuments: 0, documentsProcessed: 0, analysesCompleted: 0, comparisonsRun: 0 })
     } finally {
       setLoading(false)
     }
