@@ -7,6 +7,7 @@ from src.auth import get_current_user, refresh_token
 from fastapi.middleware.cors import CORSMiddleware
 import uuid
 from datetime import datetime
+import tempfile
 
 from typing import Union, Dict
 def log_activity(user_id: str, activity_type: str, title: str, description: str, details: Union[Dict, None] = None):
@@ -995,3 +996,39 @@ async def refresh(token: str = Form(...)):
         dict: New access and refresh tokens.
     """
     return await refresh_token(token)
+
+
+from fastapi import APIRouter, UploadFile, HTTPException
+from .gemini_files import upload_pdf, poll_file_status, extract_text
+
+router = APIRouter()
+
+@router.post("/test-gemini")
+async def test_gemini(file: UploadFile):
+    """
+    Test endpoint for Gemini Files API integration.
+    """
+    try:
+        # Save the uploaded file temporarily
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{file.filename}") as temp_file:
+            temp_file.write(await file.read())
+            temp_file_path = temp_file.name
+
+        # Step 1: Upload the file
+        file_id = upload_pdf(temp_file_path)
+
+        # Step 2: Poll the file status
+        status = poll_file_status(file_id)
+        if status != "ACTIVE":
+            raise HTTPException(status_code=500, detail="File did not become ACTIVE")
+
+        # Step 3: Extract text
+        extracted_text = extract_text(file_id)
+
+        return {"file_id": file_id, "status": status, "extracted_text": extracted_text}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Include the router for the /test-gemini endpoint
+app.include_router(router)
