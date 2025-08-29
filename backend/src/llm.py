@@ -1,20 +1,39 @@
-import google.generativeai as genai
 import os
 import json
 import re
 import time
+import logging
 from typing import Optional, List
+import importlib
 
 # Get API key from environment
 api_key = os.getenv("GEMINI_API_KEY")
 if not api_key:
     raise ValueError("GEMINI_API_KEY environment variable must be set")
 
-# Configure Gemini API
-genai.configure(api_key=api_key)
-
-# Creating a model instance - Using Gemini Pro for higher rate limits
-model = genai.GenerativeModel("gemini-1.5-pro")
+# Dynamically import google.generativeai and attempt to use a client-based approach.
+genai = None
+model = None
+try:
+    genai = importlib.import_module('google.generativeai')
+    ClientCtor = getattr(genai, 'Client', None)
+    if ClientCtor:
+        try:
+            client = ClientCtor(api_key=api_key)
+            model = getattr(client, 'models', None)
+        except Exception:
+            model = None
+    else:
+        # Fallback: try top-level helpers (some SDKs expose GenerativeModel)
+        GenerativeModel = getattr(genai, 'GenerativeModel', None)
+        if GenerativeModel:
+            try:
+                model = GenerativeModel('gemini-1.5-pro')
+            except Exception:
+                model = None
+except Exception:
+    genai = None
+    model = None
 
 # Rate limiting for API calls (Gemini Pro allows much higher rates)
 def make_gemini_request(prompt: str, max_retries: int = 3, delay: float = 1.0):
@@ -23,22 +42,24 @@ def make_gemini_request(prompt: str, max_retries: int = 3, delay: float = 1.0):
     """
     for attempt in range(max_retries):
         try:
+            if model is None:
+                raise Exception("Gemini model not initialized")
             response = model.generate_content(prompt)
             return response
         except Exception as e:
             error_str = str(e)
-            
+
             # If it's a rate limit error, wait and retry
             if "429" in error_str or "rate" in error_str.lower():
                 if attempt < max_retries - 1:  # Don't sleep on last attempt
-                    print(f"Rate limit hit, waiting {delay} seconds before retry {attempt + 1}/{max_retries}")
+                    logging.warning("Rate limit hit, waiting %s seconds before retry %d/%d", delay, attempt + 1, max_retries)
                     time.sleep(delay)
                     delay *= 2  # Exponential backoff
                     continue
-            
+
             # For other errors or final attempt, raise the exception
             raise e
-    
+
     raise Exception("Max retries exceeded")
 
 def analyze_policy(text: str) -> dict:
@@ -79,7 +100,7 @@ def analyze_policy(text: str) -> dict:
         return json.loads(output_text)
 
     except json.JSONDecodeError as e:
-        print(f"JSON parsing error: {e}")
+        logging.error("JSON parsing error: %s", e)
         return {
             "policy_type": "Unknown",
             "provider": "Unknown Provider",
@@ -95,7 +116,7 @@ def analyze_policy(text: str) -> dict:
             "claim_readiness_score": 0
         }
     except Exception as e:
-        print(f"LLM Analysis error: {e}")
+        logging.exception("LLM Analysis error: %s", e)
         return {
             "policy_type": "Unknown",
             "provider": "Unknown Provider", 

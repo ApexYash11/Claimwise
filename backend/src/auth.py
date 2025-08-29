@@ -4,6 +4,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from functools import lru_cache
+import logging
 
 # intialzing supbasae client
 supabase_url = os.getenv("SUPABASE_URL")
@@ -38,19 +39,19 @@ def decode_token(token: str) -> str:
         JWTError: if token is invalid or verification fails
     """
     try:
-        # Debug logging for troubleshooting
-        print("[DEBUG] Using SUPABASE_JWT_SECRET:", SUPABASE_JWT_SECRET)
-        print("[DEBUG] Decoding token:", token)
+        # Debug logging for troubleshooting - don't log secrets
+        logger = logging.getLogger(__name__)
+        logger.debug("Decoding token")
         jwt_secret: str = SUPABASE_JWT_SECRET  # type: ignore
         payload = jwt.decode(token, jwt_secret, algorithms=ALGORITHM, options={"verify_aud": False})
-        print("[DEBUG] Decoded payload:", payload)
+        logger.debug("Decoded payload keys: %s", list(payload.keys()))
         user_id = payload.get("sub")
         if user_id is None:
-            print("[DEBUG] No 'sub' claim in payload!")
+            logger.debug("No 'sub' claim in payload")
             raise JWTError("Invalid authentication credentials: missing 'sub' claim")
         return str(user_id)
     except JWTError as e:
-        print("[DEBUG] JWTError:", str(e))
+        logging.getLogger(__name__).exception("JWTError: %s", str(e))
         raise
     
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> str:
@@ -67,10 +68,10 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> str:
     """
     try:
         user_id=decode_token(token)
-        print(f"[DEBUG] get_current_user: user_id={user_id}")
+        logging.getLogger(__name__).debug("get_current_user: user_id=%s", user_id)
         return user_id
     except JWTError as e:
-        print(f"[DEBUG] JWTError in get_current_user: {e}")
+        logging.getLogger(__name__).exception("JWTError in get_current_user: %s", e)
         import traceback
         traceback.print_exc()
         raise HTTPException(

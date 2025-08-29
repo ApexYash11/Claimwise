@@ -1,6 +1,9 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Depends
 from dotenv import load_dotenv
 import os
+# Load environment variables early so db.py can use them on import
+load_dotenv()
+STORAGE_BUCKET = os.getenv("SUPABASE_STORAGE_BUCKET", "proeject")
 from src.db import supabase, supabase_storage
 from src.llm_groq import analyze_policy, compare_policies, chat_with_policy, chat_with_multiple_policies, get_api_status
 from src.auth import get_current_user, refresh_token
@@ -8,8 +11,12 @@ from fastapi.middleware.cors import CORSMiddleware
 import uuid
 from datetime import datetime
 import tempfile
+import logging
 
 from typing import Union, Dict
+from fastapi import BackgroundTasks
+
+
 def log_activity(user_id: str, activity_type: str, title: str, description: str, details: Union[Dict, None] = None):
     """
     Log user activity to the database for dynamic activity tracking.
@@ -27,14 +34,16 @@ def log_activity(user_id: str, activity_type: str, title: str, description: str,
         }
         
         result = supabase.table("activities").insert(activity_data).execute()
-        print(f"DEBUG: Activity logged: {activity_type} - {title}")
+        logging.debug("Activity logged: %s - %s", activity_type, title)
         return result.data[0] if result.data else None
     except Exception as e:
-        print(f"DEBUG: Error logging activity: {str(e)}")
+        logging.exception("Error logging activity: %s", e)
         return None
 
-load_dotenv()  # Load environment variables from .env
 app = FastAPI()
+
+# Basic logging configuration (adjust level in production via environment or hosting platform)
+logging.basicConfig(level=logging.INFO)
 
 # CORS middleware to allow cross-origin requests
 origins = [
@@ -63,11 +72,12 @@ def healthz():
 
 @app.post("/upload-policy")
 async def upload_policy(
+    background_tasks: BackgroundTasks,
     user_id: str = Depends(get_current_user),
     policy_name: str = Form(None),
     policy_number: str = Form(None),
     file: UploadFile = File(None),
-    text_input: str = Form(None)
+    text_input: str = Form(None),
 ):
     """
     Upload a policy file or text, extract/process text, and store in Supabase.
@@ -82,9 +92,9 @@ async def upload_policy(
     Returns:
         dict: Policy ID and processed text.
     """
-    print(f"DEBUG: file={file}, policy_name={policy_name}, policy_number={policy_number}, text_input={text_input}")
+    logging.debug("file=%s, policy_name=%s, policy_number=%s, text_input=%s", file, policy_name, policy_number, text_input)
     if file:
-        print(f"DEBUG: file.filename={file.filename}, file.content_type={file.content_type}")
+        logging.debug("file.filename=%s, file.content_type=%s", file.filename, file.content_type)
     try:
         if file and text_input:
             raise HTTPException(status_code=400, detail="Provide either a file or text, not both.")
@@ -94,46 +104,68 @@ async def upload_policy(
         extracted_text = None
         file_bytes = None
         if file:
-            print("DEBUG: Reading file bytes...")
+            logging.debug("Reading file bytes...")
             file_bytes = await file.read()
-            print(f"DEBUG: Read {len(file_bytes)} bytes from file")
+            logging.debug("Read %d bytes from file", len(file_bytes))
             if not file.filename:
                 raise HTTPException(status_code=400, detail="File must have a valid filename")
             file_type = file.filename.split('.')[-1].lower()
-            print(f"DEBUG: Extracting text from {file_type} file...")
-            try:
-                # Import OCR helper lazily so the app can start even if system OCR
-                # binaries (tesseract/poppler) are not installed on the host.
-                try:
-                    from src.OCR import extract_text
-                except Exception as import_err:
-                    print(f"DEBUG: OCR import failed: {import_err}")
-                    raise HTTPException(status_code=500, detail=(
-                        "OCR functionality is not available on this server. "
-                        "Install system packages (tesseract, poppler) or deploy on an environment that provides them."
-                    ))
+            logging.debug("Processing %s file via Gemini Files API...", file_type)
 
-                extracted_text = extract_text(file_bytes, file_type)
-                print(f"DEBUG: Extracted text length: {len(extracted_text) if extracted_text else 0}")
-            except HTTPException:
-                raise
-            except Exception as ocr_error:
-                print(f"DEBUG: OCR Error: {str(ocr_error)}")
-                raise HTTPException(status_code=500, detail=f"OCR processing failed: {str(ocr_error)}")
-            if not extracted_text:
-                raise HTTPException(status_code=400, detail="No text extracted from file.")
+            # Save to a temporary file so the Gemini SDK can upload it
+            temp_file_path = None
+            try:
+                with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{file.filename}") as temp_file:
+                    temp_file.write(file_bytes)
+                    temp_file_path = temp_file.name
+
+                # Upload to Gemini Files API using wrapper (returns file_id, file_uri)
+                try:
+                    from src.gemini_files import upload_pdf, poll_file_status, extract_text
+                except Exception as import_err:
+                    logging.exception("Failed to import gemini_files: %s", import_err)
+                    raise HTTPException(status_code=500, detail="Server misconfiguration: gemini integration not available")
+
+                file_id, file_uri = upload_pdf(temp_file_path)
+                logging.debug("Uploaded to Gemini, file_id=%s, uri=%s", file_id, file_uri)
+
+                status = poll_file_status(file_id)
+                logging.debug("Gemini file status: %s", status)
+                if status != "ACTIVE":
+                    raise HTTPException(status_code=500, detail="File processing failed or did not become ACTIVE")
+
+                # Prefer local temporary file for extraction (avoid model fetching external URLs)
+                if temp_file_path and os.path.exists(temp_file_path):
+                    extracted_text = extract_text(temp_file_path)
+                else:
+                    reference = file_uri or file_id
+                    extracted_text = extract_text(reference)
+                logging.debug("Extracted text length: %d", len(extracted_text) if extracted_text else 0)
+
+                if not extracted_text:
+                    raise HTTPException(status_code=400, detail="No text extracted from file.")
+
+            finally:
+                # Ensure temporary file is cleaned up
+                try:
+                    if temp_file_path and os.path.exists(temp_file_path):
+                        os.unlink(temp_file_path)
+                except Exception:
+                    pass
         else:
             extracted_text = text_input
 
-        print("DEBUG: Uploading to Supabase storage...")
+        # Upload to Supabase storage (if we have a file)
+        logging.debug("Uploading to Supabase storage...")
+        file_url = None
         if file and file_bytes:
             storage_path = f"policies/{user_id}/{file.filename}"
             try:
                 # Try to upload, if duplicate exists, generate unique name
                 try:
-                    supabase_storage.storage.from_("proeject").upload(storage_path, file_bytes)
-                    file_url = supabase_storage.storage.from_("proeject").get_public_url(storage_path)
-                    print(f"DEBUG: File uploaded to: {file_url}")
+                    supabase_storage.storage.from_(STORAGE_BUCKET).upload(storage_path, file_bytes)
+                    file_url = supabase_storage.storage.from_(STORAGE_BUCKET).get_public_url(storage_path)
+                    logging.debug("File uploaded to: %s", file_url)
                 except Exception as upload_error:
                     error_str = str(upload_error)
                     if "Duplicate" in error_str or "already exists" in error_str:
@@ -148,21 +180,19 @@ async def upload_policy(
                                 unique_filename = f"{file.filename}_{timestamp}"
                         else:
                             unique_filename = f"uploaded_file_{timestamp}"
-                        
+
                         storage_path = f"policies/{user_id}/{unique_filename}"
-                        print(f"DEBUG: File exists, trying with unique name: {unique_filename}")
-                        supabase_storage.storage.from_("proeject").upload(storage_path, file_bytes)
-                        file_url = supabase_storage.storage.from_("proeject").get_public_url(storage_path)
-                        print(f"DEBUG: File uploaded with unique name to: {file_url}")
+                        logging.debug("File exists, trying with unique name: %s", unique_filename)
+                        supabase_storage.storage.from_(STORAGE_BUCKET).upload(storage_path, file_bytes)
+                        file_url = supabase_storage.storage.from_(STORAGE_BUCKET).get_public_url(storage_path)
+                        logging.debug("File uploaded with unique name to: %s", file_url)
                     else:
                         raise upload_error
             except Exception as storage_error:
-                print(f"DEBUG: Storage Error: {str(storage_error)}")
+                logging.exception("Storage Error: %s", storage_error)
                 raise HTTPException(status_code=500, detail=f"File storage failed: {str(storage_error)}")
-        else:
-            file_url = None
 
-        print("DEBUG: Saving to database...")
+        logging.debug("Saving to database...")
         data = {
             "user_id": user_id,
             "policy_name": policy_name,
@@ -171,13 +201,22 @@ async def upload_policy(
             "uploaded_file_url": file_url
         }
         try:
-            response = supabase.table("policies").insert(data).execute()
-            print(f"DEBUG: Database response: {response}")
-            if not response.data:
+            # Use service-role client for writes if available
+            svc = supabase_storage or supabase
+            response = svc.table("policies").insert(data).execute()
+            if not (response and getattr(response, "data", None)):
                 raise HTTPException(status_code=500, detail="Failed to save policy.")
-            
-            # Log the upload activity
+
             policy_id = response.data[0]['id']
+
+            # schedule indexing in background (non-blocking)
+            try:
+                from src.rag import index_documents
+                background_tasks.add_task(index_documents, extracted_text, policy_id)
+            except Exception as e:
+                logging.exception("Failed to schedule background indexing: %s", e)
+
+            # Log activity
             log_activity(
                 user_id=user_id,
                 activity_type="upload",
@@ -190,17 +229,14 @@ async def upload_policy(
                     "text_length": len(extracted_text)
                 }
             )
-            
-            return {"policy_id": policy_id, "extracted_text": extracted_text}
+
+            return {"policy_id": policy_id, "extracted_text": extracted_text, "status": "indexing_started"}
         except Exception as db_error:
-            print(f"DEBUG: Database Error: {str(db_error)}")
             raise HTTPException(status_code=500, detail=f"Database save failed: {str(db_error)}")
     except HTTPException:
         raise
     except Exception as e:
-        print(f"DEBUG: Unexpected Error: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        logging.exception("Unexpected Error while processing upload_policy: %s", e)
         raise HTTPException(status_code=500, detail=f"Error processing input: {str(e)}")
 
 from fastapi import Form
@@ -268,33 +304,32 @@ def compare(policy_1_id: str, policy_2_id: str, user_id: str = Depends(get_curre
         dict: Comparison result.
     """
     try:
-        print(f"DEBUG: Starting comparison for user {user_id}, policies {policy_1_id} vs {policy_2_id}")
-        
+        logging.debug("Starting comparison for user %s, policies %s vs %s", user_id, policy_1_id, policy_2_id)
+
         pol1 = supabase.table("policies").select("extracted_text", "policy_number", "policy_name").eq("id", policy_1_id).eq("user_id", user_id).execute().data[0]
         pol2 = supabase.table("policies").select("extracted_text", "policy_number", "policy_name").eq("id", policy_2_id).eq("user_id", user_id).execute().data[0]
-        
-        print(f"DEBUG: Retrieved policies successfully")
-        
-        comparison = compare_policies(pol1['extracted_text'], pol2['extracted_text'], pol1.get('policy_number'), pol2.get('policy_number'))
-        
-        print(f"DEBUG: LLM comparison completed, storing result...")
-        
+
+        logging.debug("Retrieved policies successfully")
+
+        comparison_result_text = compare_policies(pol1['extracted_text'], pol2['extracted_text'], pol1.get('policy_number'), pol2.get('policy_number'))
+        logging.debug("LLM comparison completed, storing result...")
+
         # Store comparison result
         comparison_data = {
             "user_id": user_id,
             "policy_1_id": policy_1_id,
             "policy_2_id": policy_2_id,
-            "comparison_result": comparison
+            "comparison_result": comparison_result_text
         }
-        
+
         result = supabase.table("comparisons").insert(comparison_data).execute()
-        print(f"DEBUG: Comparison stored successfully: {result}")
-        
+        logging.debug("Comparison stored successfully: %s", result)
+
         # Log comparison activity
         log_activity(
             user_id=user_id,
             activity_type="comparison",
-            title="Policy Comparison Completed", 
+            title="Policy Comparison Completed",
             description=f"Compared {pol1.get('policy_name', 'Policy 1')} vs {pol2.get('policy_name', 'Policy 2')}",
             details={
                 "policy_1_id": policy_1_id,
@@ -303,20 +338,20 @@ def compare(policy_1_id: str, policy_2_id: str, user_id: str = Depends(get_curre
                 "policy_2_name": pol2.get('policy_name', 'Policy 2')
             }
         )
-        
+
         if result.data:
             comparison_id = result.data[0].get('id', 'unknown')
-            print(f"DEBUG: Comparison record created with ID: {comparison_id}")
+            logging.debug("Comparison record created with ID: %s", comparison_id)
         else:
-            print(f"DEBUG: Warning - comparison insert returned no data")
-        
-        return {"comparison": comparison, "comparison_id": result.data[0].get('id') if result.data else None}
-        
+            logging.warning("Warning - comparison insert returned no data")
+
+        return {"comparison": comparison_result_text, "comparison_id": result.data[0].get('id') if result.data else None}
+
     except IndexError:
-        print(f"DEBUG: Policy not found - policy_1_id: {policy_1_id}, policy_2_id: {policy_2_id}, user_id: {user_id}")
+        logging.debug("Policy not found - policy_1_id: %s, policy_2_id: %s, user_id: %s", policy_1_id, policy_2_id, user_id)
         raise HTTPException(status_code=404, detail="One or both policies not found for this user.")
     except Exception as e:
-        print(f"DEBUG: Error in compare-policies: {str(e)}")
+        logging.exception("Error in compare-policies: %s", str(e))
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error comparing policies: {str(e)}")
@@ -464,7 +499,7 @@ def debug_policy_content(policy_id: str, user_id: str = Depends(get_current_user
             "text_preview": extracted_text[:200] + ("..." if text_length > 200 else ""),
             "recommendations": [
                 "Upload actual policy documents instead of test files" if is_test_data else None,
-                "Ensure OCR extracted the document properly" if text_length < 100 else None,
+                "Ensure extraction extracted the document properly" if text_length < 100 else None,
                 "Policy content looks good for chat" if has_sufficient_content else None
             ]
         }
@@ -491,20 +526,57 @@ def chat(policy_id: str, question: str, user_id: str = Depends(get_current_user)
         policy = supabase.table("policies").select("extracted_text", "policy_number", "policy_name").eq("id", policy_id).eq("user_id", user_id).execute().data[0]
         
         extracted_text = policy.get('extracted_text', '')
-        
-        # Check if the policy has sufficient content for chat
+
+        # If little or no extracted text, short-circuit
         if not extracted_text or len(extracted_text) < 50:
-            return {"answer": "This policy appears to have no extracted text. Please try re-uploading the policy document."}
-        
-        if "test insurance policy for automated testing" in extracted_text.lower():
-            return {"answer": "This appears to be a test policy without real insurance details. Please upload an actual insurance policy document for meaningful chat interactions."}
-        
-        if len(extracted_text) < 200:
-            return {"answer": f"This policy has limited content ({len(extracted_text)} characters). The OCR may not have extracted the full document properly. Please check the uploaded document quality."}
-        
-        answer = chat_with_policy(extracted_text, question, policy.get('policy_number'))
-        
-        # Log chat activity  
+            return {"answer": "This policy appears to have no extracted text. Please try re-uploading the policy document.", "citations": []}
+
+        # Use retrieve_top_k from rag to get context chunks (RAG)
+        try:
+            from src.rag import retrieve_top_k
+        except Exception as e:
+            logging.exception("Failed to import rag.retrieve_top_k: %s", e)
+            return {"answer": "Server misconfiguration: retrieval not available", "citations": []}
+
+        # Retrieve top chunks for the question
+        top = []
+        try:
+            top = retrieve_top_k(question, k=5)
+        except Exception as e:
+            logging.exception("retrieve_top_k failed: %s", e)
+
+        # Build prompt with retrieved chunks as context with simple citations
+        prompt_parts = []
+        citations = []
+        for idx, content, score in top:
+            # idx is chunk id in DB; include short excerpt as citation
+            excerpt = (content[:400] + '...') if content and len(content) > 400 else (content or '')
+            prompt_parts.append(excerpt)
+            citations.append({"id": idx, "excerpt": excerpt, "score": score})
+
+        # If no retrieval results, fall back to using full extracted_text (but keep short)
+        if not prompt_parts:
+            context_str = extracted_text[:2000]
+        else:
+            context_str = "\n\n".join(prompt_parts)
+
+        final_prompt = f"You are an insurance expert. Use the provided context to answer the question. Context:\n{context_str}\n\nQuestion: {question}\n\nAnswer succinctly and cite chunks by id when referenced."
+
+        # Call Gemini (via llm.make_gemini_request) if available, otherwise fallback
+        try:
+            from src.llm import make_gemini_request
+            resp = make_gemini_request(final_prompt)
+            answer = getattr(resp, 'text', str(resp))
+        except Exception as e:
+            logging.exception("Gemini generation failed, using fallback chat_with_policy: %s", e)
+            try:
+                from src.llm_groq import chat_with_policy as fallback_chat
+                answer = fallback_chat(extracted_text, question, policy.get('policy_number'))
+            except Exception as e2:
+                logging.exception("Fallback chat failed: %s", e2)
+                answer = "Service temporarily unavailable. Please try again later."
+
+        # Log chat activity
         log_activity(
             user_id=user_id,
             activity_type="chat",
@@ -516,7 +588,7 @@ def chat(policy_id: str, question: str, user_id: str = Depends(get_current_user)
                 "chat_type": "single_policy"
             }
         )
-        
+
         # Log successful chat
         supabase.table("chat_logs").insert({
             "user_id": user_id,
@@ -524,12 +596,12 @@ def chat(policy_id: str, question: str, user_id: str = Depends(get_current_user)
             "question": question,
             "answer": answer
         }).execute()
-        
-        return {"answer": answer}
+
+        return {"answer": answer, "citations": citations}
     except IndexError:
         raise HTTPException(status_code=404, detail="Policy not found for this user.")
     except Exception as e:
-        print(f"Chat error for policy {policy_id}: {str(e)}")
+        logging.exception("Chat error for policy %s: %s", policy_id, str(e))
         raise HTTPException(status_code=500, detail=f"Error processing chat: {str(e)}")
 
 @app.post("/chat-multiple")
@@ -595,36 +667,36 @@ def get_comprehensive_history(user_id: str = Depends(get_current_user)):
         dict: Comprehensive activity history with detailed metadata.
     """
     try:
-        print(f"DEBUG: Fetching history for user_id: {user_id}")
-        
+        logging.debug("Fetching history for user_id: %s", user_id)
+
         # Get policy uploads
         try:
             policies = supabase.table("policies").select(
                 "id", "policy_name", "policy_number", "created_at", "uploaded_file_url"
             ).eq("user_id", user_id).order("created_at", desc=True).execute().data
-            print(f"DEBUG: Found {len(policies)} policies")
+            logging.debug("Found %d policies", len(policies) if policies else 0)
         except Exception as e:
-            print(f"DEBUG: Error fetching policies: {str(e)}")
+            logging.exception("Error fetching policies: %s", e)
             policies = []
-        
+
         # Get chat logs
         try:
             chat_logs = supabase.table("chat_logs").select(
                 "id", "policy_id", "question", "answer", "created_at", "chat_type"
             ).eq("user_id", user_id).order("created_at", desc=True).execute().data
-            print(f"DEBUG: Found {len(chat_logs)} chat logs")
+            logging.debug("Found %d chat logs", len(chat_logs) if chat_logs else 0)
         except Exception as e:
-            print(f"DEBUG: Error fetching chat logs: {str(e)}")
+            logging.exception("Error fetching chat logs: %s", e)
             chat_logs = []
-        
+
         # Get comparisons
         try:
             comparisons = supabase.table("comparisons").select(
                 "id", "policy_1_id", "policy_2_id", "created_at", "comparison_result"
             ).eq("user_id", user_id).order("created_at", desc=True).execute().data
-            print(f"DEBUG: Found {len(comparisons)} comparisons")
+            logging.debug("Found %d comparisons", len(comparisons) if comparisons else 0)
         except Exception as e:
-            print(f"DEBUG: Error fetching comparisons: {str(e)}")
+            logging.exception("Error fetching comparisons: %s", e)
             comparisons = []
         
         # Build activity timeline
@@ -717,18 +789,17 @@ def get_comprehensive_history(user_id: str = Depends(get_current_user)):
             "comparisons": len([a for a in all_activities if a['type'] == 'comparison']),
             "totalPolicies": len(policies)
         }
-        
-        print(f"DEBUG: Returning {len(all_activities)} activities with stats: {stats}")
-        
+
+        logging.debug("Returning %d activities with stats: %s", len(all_activities), stats)
+
         return {
             "activities": all_activities,
             "stats": stats,
             "policies": policies,
             "success": True
         }
-        
     except Exception as e:
-        print(f"DEBUG: Exception in get_comprehensive_history: {str(e)}")
+        logging.exception("Exception in get_comprehensive_history: %s", str(e))
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error fetching comprehensive history: {str(e)}")
@@ -742,17 +813,17 @@ def get_activities(user_id: str = Depends(get_current_user)):
         dict: Recent activities with real data
     """
     try:
-        print(f"DEBUG: Fetching activities for user_id: {user_id}")
-        
+        logging.debug("Fetching activities for user_id: %s", user_id)
+
         # Use service role client to bypass RLS for activities
         from src.db import supabase_storage
         activities = supabase_storage.table("activities").select("*").eq("user_id", user_id).order("created_at", desc=True).limit(10).execute()
-        
-        print(f"DEBUG: Service role query result: {activities}")
-        print(f"DEBUG: Activities data: {activities.data if activities else 'None'}")
-        
+
+        logging.debug("Service role query result: %s", activities)
+        logging.debug("Activities data: %s", activities.data if activities else None)
+
         if activities and activities.data:
-            print(f"DEBUG: Found {len(activities.data)} activities")
+            logging.debug("Found %d activities", len(activities.data))
             formatted_activities = []
             for activity in activities.data:
                 # Convert to frontend format
@@ -766,20 +837,20 @@ def get_activities(user_id: str = Depends(get_current_user)):
                     "details": activity.get("details", {})
                 }
                 formatted_activities.append(formatted_activity)
-            
+
             return {
                 "activities": formatted_activities,
                 "total": len(formatted_activities),
                 "success": True
             }
         else:
-            print("DEBUG: No activities found, returning sample activity")
+            logging.debug("No activities found, returning sample activity")
             # Return sample activities if no real activities exist yet
             return {
                 "activities": [
                     {
                         "id": "sample-1",
-                        "type": "upload", 
+                        "type": "upload",
                         "title": "Welcome to ClaimWise!",
                         "description": "Upload your first policy to see activities here",
                         "timestamp": datetime.utcnow().isoformat(),
@@ -790,9 +861,9 @@ def get_activities(user_id: str = Depends(get_current_user)):
                 "total": 1,
                 "success": True
             }
-            
+
     except Exception as e:
-        print(f"DEBUG: Error fetching activities: {str(e)}")
+        logging.exception("Error fetching activities: %s", str(e))
         return {
             "activities": [],
             "total": 0,
@@ -815,7 +886,7 @@ def dashboard_stats(user_id: str = Depends(get_current_user)):
             policies = supabase.table("policies").select("*").eq("user_id", user_id).execute()
             uploaded_count = len(policies.data) if policies and policies.data is not None else 0
         except Exception as e:
-            print(f"DEBUG: Error counting policies: {e}")
+            logging.exception("Error counting policies: %s", e)
             uploaded_count = 0
 
         # For documents processed, we consider policies with non-empty extracted_text
@@ -823,7 +894,7 @@ def dashboard_stats(user_id: str = Depends(get_current_user)):
             all_policies = supabase.table("policies").select("id", "extracted_text").eq("user_id", user_id).execute().data
             documents_processed = len([p for p in all_policies if p.get("extracted_text") and p["extracted_text"].strip()]) if all_policies else 0
         except Exception as e:
-            print(f"DEBUG: Error counting processed documents: {e}")
+            logging.exception("Error counting processed documents: %s", e)
             documents_processed = uploaded_count  # fallback: assume all uploaded docs are processed
 
         # Analyses completed - count policies that have been uploaded (since each upload gets analyzed)
@@ -837,13 +908,12 @@ def dashboard_stats(user_id: str = Depends(get_current_user)):
         try:
             comparisons = supabase.table("comparisons").select("id").eq("user_id", user_id).execute().data
             comparisons_run = len(comparisons) if comparisons else 0
-            print(f"DEBUG: Found {comparisons_run} comparisons for user {user_id}")
+            logging.debug("Found %d comparisons for user %s", comparisons_run, user_id)
         except Exception as e:
-            print(f"DEBUG: Error counting comparisons: {e}")
+            logging.exception("Error counting comparisons: %s", e)
             comparisons_run = 0
-
-        print(f"DEBUG: dashboard_stats called for user_id: {user_id}")
-        print(f"DEBUG: Final counts - uploaded: {uploaded_count}, processed: {documents_processed}, analyses: {analyses_completed}, comparisons: {comparisons_run}")
+        logging.debug("dashboard_stats called for user_id: %s", user_id)
+        logging.debug("Final counts - uploaded: %d, processed: %d, analyses: %d, comparisons: %d", uploaded_count, documents_processed, analyses_completed, comparisons_run)
         
         return {
             "uploadedDocuments": uploaded_count,
@@ -852,7 +922,7 @@ def dashboard_stats(user_id: str = Depends(get_current_user)):
             "comparisonsRun": comparisons_run,
         }
     except Exception as e:
-        print(f"DEBUG: Exception in dashboard_stats: {str(e)}")
+        logging.exception("Exception in dashboard_stats: %s", str(e))
         raise HTTPException(status_code=500, detail=f"Error fetching dashboard stats: {str(e)}")
 
 
@@ -875,7 +945,7 @@ def dashboard_stats_dev():
             uploaded_count = len(policies)
             documents_processed = len([p for p in policies if p.get("extracted_text")])
         except Exception as e:
-            print(f"DEBUG: /dashboard/stats-dev - policies query failed: {e}")
+            logging.exception("/dashboard/stats-dev - policies query failed: %s", e)
 
         try:
             analyses_res = supabase.table("analyses").select("id").execute()
@@ -886,9 +956,9 @@ def dashboard_stats_dev():
         try:
             comparisons_res = supabase.table("comparisons").select("id").execute()
             comparisons_run = len(comparisons_res.data) if comparisons_res and comparisons_res.data else 0
-            print(f"DEBUG: /dashboard/stats-dev - found {comparisons_run} total comparisons")
+            logging.debug("/dashboard/stats-dev - found %d total comparisons", comparisons_run)
         except Exception as e:
-            print(f"DEBUG: /dashboard/stats-dev - comparisons query failed: {e}")
+            logging.exception("/dashboard/stats-dev - comparisons query failed: %s", e)
             comparisons_run = 0
 
         # If no data found, return a small sample so frontend shows something
@@ -902,7 +972,7 @@ def dashboard_stats_dev():
             "comparisonsRun": comparisons_run,
         }
     except Exception as e:
-        print(f"DEBUG: Exception in dashboard_stats_dev: {str(e)}")
+        logging.exception("Exception in dashboard_stats_dev: %s", str(e))
         return {"uploadedDocuments": 2, "documentsProcessed": 2, "analysesCompleted": 2, "comparisonsRun": 1}
 
 
@@ -922,7 +992,7 @@ def create_test_comparison(user_id: str = Depends(get_current_user)):
                 "policy_2_id": policies[1]['id'],
                 "comparison_result": "Test comparison created for dashboard testing"
             }).execute()
-            print(f"DEBUG: Test comparison created: {result}")
+            logging.debug("Test comparison created: %s", result)
             return {"success": True, "message": "Test comparison created", "comparison_id": result.data[0].get('id') if result.data else None}
         else:
             # Create comparison with placeholder IDs
@@ -932,10 +1002,10 @@ def create_test_comparison(user_id: str = Depends(get_current_user)):
                 "policy_2_id": "test_policy_2", 
                 "comparison_result": "Test comparison created for dashboard testing"
             }).execute()
-            print(f"DEBUG: Test comparison created with placeholders: {result}")
+            logging.debug("Test comparison created with placeholders: %s", result)
             return {"success": True, "message": "Test comparison created with placeholder IDs", "comparison_id": result.data[0].get('id') if result.data else None}
     except Exception as e:
-        print(f"DEBUG: Error creating test comparison: {e}")
+        logging.exception("Error creating test comparison: %s", e)
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error creating test comparison: {str(e)}")
@@ -949,15 +1019,15 @@ def test_comparisons_table():
     try:
         # Try to read from comparisons table
         result = supabase.table("comparisons").select("*").limit(10).execute()
-        print(f"DEBUG: Comparisons table query result: {result}")
-        
+        logging.debug("Comparisons table query result: %s", result)
+
         return {
             "success": True,
             "total_comparisons": len(result.data) if result.data else 0,
             "sample_data": result.data[:5] if result.data else []
         }
     except Exception as e:
-        print(f"DEBUG: Error querying comparisons table: {e}")
+        logging.exception("Error querying comparisons table: %s", e)
         import traceback
         traceback.print_exc()
         return {
@@ -1008,27 +1078,39 @@ async def test_gemini(file: UploadFile):
     """
     Test endpoint for Gemini Files API integration.
     """
+    temp_file_path = None
     try:
         # Save the uploaded file temporarily
         with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{file.filename}") as temp_file:
-            temp_file.write(await file.read())
+            content = await file.read()
+            temp_file.write(content)
             temp_file_path = temp_file.name
 
-        # Step 1: Upload the file
-        file_id = upload_pdf(temp_file_path)
+        # Step 1: Upload the file (now returns file_id, file_uri)
+        file_id, file_uri = upload_pdf(temp_file_path)
 
         # Step 2: Poll the file status
         status = poll_file_status(file_id)
         if status != "ACTIVE":
             raise HTTPException(status_code=500, detail="File did not become ACTIVE")
 
-        # Step 3: Extract text
-        extracted_text = extract_text(file_id)
+        # Step 3: Extract text (prefer URI if available)
+        # Prefer using the temporary local file rather than the uploaded URI so extraction runs locally
+        extracted_text = extract_text(temp_file_path) if temp_file_path and os.path.exists(temp_file_path) else extract_text(file_uri or file_id)
 
-        return {"file_id": file_id, "status": status, "extracted_text": extracted_text}
+        return {"file_id": file_id, "file_uri": file_uri, "status": status, "extracted_text": extracted_text}
 
     except Exception as e:
+        logging.exception("/test-gemini failed")
         raise HTTPException(status_code=500, detail=str(e))
+
+    finally:
+        # Ensure temporary file is cleaned up
+        try:
+            if temp_file_path and os.path.exists(temp_file_path):
+                os.unlink(temp_file_path)
+        except Exception:
+            pass
 
 # Include the router for the /test-gemini endpoint
 app.include_router(router)

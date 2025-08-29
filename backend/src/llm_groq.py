@@ -2,8 +2,16 @@ import os
 import json
 import re
 import time
+import logging
 from typing import Optional, List
-from openai import OpenAI
+try:
+    from openai import OpenAI
+except Exception:
+    # openai package is optional for local development. If it's not installed
+    # we keep OpenAI = None and allow the app to continue starting. The
+    # code using groq_client already checks for its presence.
+    OpenAI = None
+
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -14,23 +22,49 @@ groq_api_key = os.getenv("GROQ_API_KEY")
 gemini_api_key = os.getenv("GEMINI_API_KEY")
 
 # Primary: Groq client
+# Initialize Groq/OpenAI-compatible client only if the OpenAI SDK is available
 groq_client = None
-if groq_api_key:
-    groq_client = OpenAI(
-        base_url="https://api.groq.com/openai/v1",
-        api_key=groq_api_key
-    )
+if OpenAI is not None and groq_api_key:
+    try:
+        groq_client = OpenAI(
+            base_url="https://api.groq.com/openai/v1",
+            api_key=groq_api_key
+        )
+    except Exception as e:
+        # Fail gracefully and leave groq_client as None so the app can
+        # fallback to Gemini or continue running for local dev.
+        logging.getLogger(__name__).warning("failed to initialize Groq/OpenAI client: %s", e)
+        groq_client = None
 
 # Fallback: Gemini client
+genai = None
+gemini_client = None
 gemini_available = False
 if gemini_api_key:
     try:
         import google.generativeai as genai
-        genai.configure(api_key=gemini_api_key)
-        gemini_model = genai.GenerativeModel("gemini-1.5-flash")
-        gemini_available = True
+        # Prefer client-based usage: instantiate Client if available and use its models proxy.
+        gemini_client = None
+        gemini_model = None
+        try:
+            ClientCtor = getattr(genai, 'Client', None)
+            if ClientCtor:
+                try:
+                    gemini_client = ClientCtor(api_key=gemini_api_key)
+                    gemini_model = getattr(gemini_client, 'models', None)
+                except Exception:
+                    gemini_client = None
+                    gemini_model = None
+            else:
+                # Fall back to using top-level SDK helpers if present
+                gemini_model = getattr(genai, 'GenerativeModel', None)
+        except Exception:
+            gemini_client = None
+            gemini_model = None
+
+        gemini_available = True if (gemini_client or gemini_model) else False
     except ImportError:
-        print("Warning: google-generativeai not available for fallback")
+        logging.getLogger(__name__).warning("google-generativeai not available for fallback")
 
 def make_llm_request(prompt: str, max_retries: int = 3, delay: float = 1.0):
     """
@@ -49,23 +83,42 @@ def make_llm_request(prompt: str, max_retries: int = 3, delay: float = 1.0):
                 return response.choices[0].message.content
             except Exception as e:
                 error_str = str(e)
-                print(f"Groq attempt {attempt + 1} failed: {error_str}")
+                import logging
+                logging.getLogger(__name__).debug("Groq attempt %d failed: %s", attempt + 1, error_str)
                 
                 if "rate" in error_str.lower() and attempt < max_retries - 1:
                     time.sleep(delay)
                     delay *= 2
                     continue
                 elif attempt == max_retries - 1:
-                    print("Groq failed, trying Gemini fallback...")
+                    import logging
+                    logging.getLogger(__name__).warning("Groq failed after retries, trying Gemini fallback...")
                     break
     
     # Fallback to Gemini
-    if gemini_available:
+    if gemini_available and gemini_model is not None:
         try:
-            response = gemini_model.generate_content(prompt)
-            return response.text
+            # gemini_model might be a model object with generate_content or a client.models proxy
+            if hasattr(gemini_model, 'generate_content'):
+                response = gemini_model.generate_content(prompt)
+                return getattr(response, 'text', str(response))
+            elif hasattr(gemini_model, 'generate'):
+                resp = gemini_model.generate(prompt)
+                return getattr(resp, 'text', str(resp))
+            else:
+                # try client-based model invocation if present
+                try:
+                    client = getattr(genai, 'Client', None)
+                    if client:
+                        c = client(api_key=gemini_api_key)
+                        if hasattr(c, 'models') and hasattr(c.models, 'generate_content'):
+                            r = c.models.generate_content(prompt)
+                            return getattr(r, 'text', str(r))
+                except Exception:
+                    pass
         except Exception as e:
-            print(f"Gemini fallback failed: {str(e)}")
+            import logging
+            logging.getLogger(__name__).warning("Gemini fallback failed: %s", str(e))
     
     raise Exception("Both Groq and Gemini APIs failed")
 
@@ -137,7 +190,7 @@ def analyze_policy(text: str) -> dict:
         return result
 
     except json.JSONDecodeError as e:
-        print(f"JSON parsing error: {e}")
+        logging.getLogger(__name__).error("JSON parsing error: %s", e)
         return {
             "policy_type": "Unknown",
             "provider": "Unknown Provider",
@@ -153,7 +206,7 @@ def analyze_policy(text: str) -> dict:
             "claim_readiness_score": 0
         }
     except Exception as e:
-        print(f"LLM Analysis error: {e}")
+        logging.getLogger(__name__).exception("LLM Analysis error: %s", e)
         return {
             "policy_type": "Unknown",
             "provider": "Unknown Provider", 
