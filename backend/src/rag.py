@@ -3,7 +3,8 @@ import os
 import logging
 
 from src.db import supabase, supabase_storage
-from src.embeddings import embed_texts
+from src.embeddings import embed_texts_with_cache
+from src.content_filters import filter_boilerplate_content, deduplicate_chunks, should_embed_chunk
 
 
 logger = logging.getLogger(__name__)
@@ -28,9 +29,16 @@ def chunk_texts(texts: List[str], chunk_size: int = 500, overlap: int = 50) -> L
   while i < len(words):
     j = min(i + chunk_size, len(words))
     chunks.append(" ".join(words[i:j]))
-    i = j - overlap
-    if i < 0:
-      i = 0
+    
+    # Move forward by chunk_size - overlap, but ensure we make progress
+    step = max(1, chunk_size - overlap)  # Always move at least 1 word forward
+    i += step
+    
+    # Safety check to prevent infinite loops
+    if len(chunks) > 10000:  # Reasonable upper limit
+      logger.warning(f"Stopping chunking at {len(chunks)} chunks to prevent memory issues")
+      break
+      
   return chunks
 
 
@@ -38,30 +46,48 @@ def index_documents(text: str, document_id: str, chunk_size: int = 500, overlap:
   """
   Chunk the provided text, obtain embeddings for each chunk, and insert them into
   the `document_chunks` table in Supabase. Uses service-role client when available.
+  
+  Includes content filtering to optimize embedding quality and reduce API costs.
 
   Returns a list of (chunk_text, embedding) for the successfully inserted chunks.
   """
-  chunks = chunk_texts([text], chunk_size, overlap)
+  # Step 1: Filter boilerplate content to improve embedding quality
+  logger.info(f"Original text length: {len(text)} characters")
+  filtered_text = filter_boilerplate_content(text)
+  logger.info(f"Filtered text length: {len(filtered_text)} characters (saved {len(text) - len(filtered_text)} chars)")
+  
+  # Step 2: Create chunks
+  chunks = chunk_texts([filtered_text], chunk_size, overlap)
+  logger.info(f"Created {len(chunks)} initial chunks")
+  
+  # Step 3: Deduplicate chunks to reduce API calls
+  unique_chunks = deduplicate_chunks(chunks)
+  logger.info(f"After deduplication: {len(unique_chunks)} unique chunks (saved {len(chunks) - len(unique_chunks)} duplicates)")
+  
+  # Step 4: Filter chunks worth embedding
+  quality_chunks = [chunk for chunk in unique_chunks if should_embed_chunk(chunk)]
+  logger.info(f"After quality filtering: {len(quality_chunks)} chunks worth embedding (filtered out {len(unique_chunks) - len(quality_chunks)} low-quality chunks)")
+  
   result: List[Tuple[str, Optional[List[float]]]] = []
 
-  # Attempt to embed chunks; if embeddings fail for any reason, fall back to
+  # Step 5: Attempt to embed quality chunks; if embeddings fail for any reason, fall back to
   # storing chunks without embeddings (so retrieval can still be performed
   # later once embeddings are available).
   try:
-    embs = embed_texts(chunks)
+    embs = embed_texts_with_cache(quality_chunks)
   except Exception as e:
     logger.warning("Embedding call failed or GEMINI_API_KEY missing: %s", e)
-    embs = [None] * len(chunks)
+    embs = [None] * len(quality_chunks)
 
   # Normalize embeddings list length
   if embs is None:
-    embs = [None] * len(chunks)
-  elif len(embs) < len(chunks):
-    embs = list(embs) + [None] * (len(chunks) - len(embs))
+    embs = [None] * len(quality_chunks)
+  elif len(embs) < len(quality_chunks):
+    embs = list(embs) + [None] * (len(quality_chunks) - len(embs))
 
   service_client = supabase_storage or supabase
 
-  for idx, chunk in enumerate(chunks):
+  for idx, chunk in enumerate(quality_chunks):
     emb = embs[idx] if idx < len(embs) else None
 
     # Validate embedding dimensionality if present
@@ -104,7 +130,7 @@ def retrieve_top_k(query: str, k: int = 5) -> List[Tuple[int, str, float]]:
 
   Embeds the query and calls the Supabase RPC `vector_search_document_chunks`.
   """
-  q_embs = embed_texts([query])
+  q_embs = embed_texts_with_cache([query])
   if not q_embs:
     return []
   q_emb = q_embs[0]

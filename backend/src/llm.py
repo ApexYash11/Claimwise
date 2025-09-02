@@ -35,7 +35,105 @@ except Exception:
     genai = None
     model = None
 
-# Rate limiting for API calls (Gemini Pro allows much higher rates)
+# Rate limiting for API calls and preferred provider configuration
+PREFER_GROQ = os.getenv("PREFER_GROQ", "true").lower() == "true"  # Use Groq as primary LLM
+
+def make_llm_request(prompt: str, max_retries: int = 3, delay: float = 1.0, prefer_groq: Optional[bool] = None):
+    """
+    Make an LLM request with intelligent provider selection and comprehensive fallbacks.
+    
+    Priority chain: Groq → Gemini → Pattern Matching
+    
+    Args:
+        prompt: Text prompt for the LLM
+        max_retries: Number of retry attempts per provider
+        delay: Initial delay for retries  
+        prefer_groq: Override global preference (None = use PREFER_GROQ setting)
+        
+    Returns:
+        Response text from the LLM or fallback
+    """
+    if prefer_groq is None:
+        prefer_groq = PREFER_GROQ
+    
+    # Log the attempt
+    logging.info(f"LLM request initiated, prefer_groq={prefer_groq}, prompt_length={len(prompt)}")
+    
+    # Chain 1: Try Groq first if preferred (usually faster and cheaper)
+    if prefer_groq:
+        try:
+            from src.llm_groq import make_llm_request as groq_make_request
+            logging.info("Trying Groq API (primary choice)")
+            response = groq_make_request(prompt)
+            if response and not response.startswith("Error") and len(response) > 10:
+                logging.info(f"Groq success: {len(response)} chars")
+                return response
+            logging.warning("Groq returned empty/error response, falling back to Gemini")
+        except Exception as e:
+            logging.warning(f"Groq request failed: {e}, falling back to Gemini")
+    
+    # Chain 2: Try Gemini (fallback or if Gemini is preferred)
+    try:
+        logging.info("Trying Gemini API")
+        response = make_gemini_request(prompt, max_retries, delay)
+        text_response = response.text if hasattr(response, 'text') else str(response)
+        if text_response and len(text_response) > 10:
+            logging.info(f"Gemini success: {len(text_response)} chars")
+            return text_response
+        logging.warning("Gemini returned empty response")
+    except Exception as e:
+        logging.warning(f"Gemini request failed: {e}")
+        
+        # If Gemini was preferred and failed, try Groq as fallback
+        if not prefer_groq:
+            try:
+                from src.llm_groq import make_llm_request as groq_make_request
+                logging.info("Trying Groq API (fallback from Gemini)")
+                response = groq_make_request(prompt)
+                if response and not response.startswith("Error") and len(response) > 10:
+                    logging.info(f"Groq fallback success: {len(response)} chars")
+                    return response
+            except Exception as groq_e:
+                logging.warning(f"Groq fallback also failed: {groq_e}")
+    
+        # Chain 3: Pattern matching fallback for basic queries
+        logging.warning("All LLM providers failed, using pattern matching fallback")
+        return _pattern_matching_fallback(prompt)
+
+
+def _pattern_matching_fallback(prompt: str) -> str:
+    """
+    Basic pattern matching fallback when all LLM providers fail.
+    Provides simple responses for common insurance queries.
+    """
+    prompt_lower = prompt.lower()
+    
+    # Common insurance questions and basic responses
+    if any(word in prompt_lower for word in ['sum insured', 'coverage amount', 'insured amount']):
+        return "Based on the policy document, please check the 'Sum Insured' section for coverage amounts. This information is typically listed in the policy schedule."
+    
+    elif any(word in prompt_lower for word in ['premium', 'cost', 'price']):
+        return "Premium information can be found in the policy schedule section. The amount may vary based on coverage type and duration."
+    
+    elif any(word in prompt_lower for word in ['claim', 'how to claim']):
+        return "To file a claim, contact the insurance company's claim department. Required documents typically include policy details, medical bills, and claim forms."
+    
+    elif any(word in prompt_lower for word in ['maturity', 'tenure', 'duration']):
+        return "Policy tenure and maturity details are specified in the policy terms section. Please refer to the policy schedule for specific dates."
+    
+    elif any(word in prompt_lower for word in ['exclusion', 'not covered', 'excluded']):
+        return "Policy exclusions are listed in the exclusions section of the policy document. Please review this section carefully for items not covered."
+    
+    elif any(word in prompt_lower for word in ['deductible', 'copay', 'co-payment']):
+        return "Deductible and co-payment information is specified in the policy terms. Check the 'Terms and Conditions' section for exact amounts."
+    
+    elif any(word in prompt_lower for word in ['renewal', 'renew']):
+        return "Policy renewal information and procedures are outlined in the renewal section of your policy document."
+    
+    else:
+        return "I apologize, but I cannot provide a detailed response at the moment due to service limitations. Please refer to your policy document or contact your insurance provider directly for specific information."
+
+
 def make_gemini_request(prompt: str, max_retries: int = 3, delay: float = 1.0):
     """
     Make a Gemini API request with retry logic for rate limiting.

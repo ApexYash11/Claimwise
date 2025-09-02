@@ -54,31 +54,24 @@ def _file_state_to_str(state) -> Optional[str]:
     return str(state).upper().strip("'\" ")
 
 
+# NOTE: These functions are kept for backward compatibility but are NOT used
+# for text extraction in the current implementation. Text extraction is LOCAL-ONLY.
+
 def upload_pdf(file_path: str) -> Tuple[str, Optional[str]]:
     """
-    Uploads a PDF file to the Gemini Files API using the official library.
-
-    Args:
-        file_path (str): Path to the PDF file.
-
-    Returns:
-        Tuple[str, Optional[str]]: (file_id, file_uri)
-            - file_id: e.g. "files/hb000h035qxm"
-            - file_uri: full file resource URI if available (may require auth to download)
-
-    Raises:
-        FileNotFoundError: If the file does not exist.
-        Exception: If the upload fails.
+    DEPRECATED: This function uploads to Gemini Files API but is no longer used
+    for text extraction. Text extraction is now LOCAL-ONLY via PyPDF2.
+    
+    Kept for backward compatibility and potential future use cases.
     """
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"File not found: {file_path}")
 
-    logging.info("Uploading PDF to Gemini Files API: %s", file_path)
+    logging.info("Note: Gemini upload requested but text extraction is LOCAL-ONLY")
 
-    # If the Gemini client isn't configured, fall back to local-only mode.
+    # If the Gemini client isn't configured, return local sentinel
     if client is None:
-        logging.info("Gemini client not configured; skipping remote upload and returning local sentinel")
-        # Return a sentinel file_id so callers can continue and prefer local extraction
+        logging.info("Gemini client not configured; returning local sentinel")
         return "local", None
 
     try:
@@ -94,19 +87,10 @@ def upload_pdf(file_path: str) -> Tuple[str, Optional[str]]:
 
 def poll_file_status(file_id: str, timeout: int = 300, interval: int = 5) -> str:
     """
-    Polls the file status using the SDK until it becomes ACTIVE.
-
-    Args:
-        file_id (str): ID of the uploaded file (e.g. "files/hb..." or the name returned by upload)
-        timeout (int): Maximum time to wait in seconds
-        interval (int): Time between polls in seconds
-
-    Returns:
-        str: Final status of the file.
-
-    Raises:
-        RuntimeError: If the file processing fails.
-        TimeoutError: If polling times out.
+    DEPRECATED: This function polls Gemini file status but is no longer used
+    for text extraction. Text extraction is now LOCAL-ONLY via PyPDF2.
+    
+    Kept for backward compatibility and potential future use cases.
     """
     # Defensive: if user passed the full object accidentally, try to extract .name
     if not isinstance(file_id, str):
@@ -143,29 +127,54 @@ def poll_file_status(file_id: str, timeout: int = 300, interval: int = 5) -> str
     raise TimeoutError("Polling timed out before file became ACTIVE")
 
 
-def extract_text(file_reference: str) -> str:
+def extract_text(file_path: str) -> str:
     """
-    Extracts normalized text from a local PDF file or a Gemini Files reference.
     Extract text strictly from a local PDF using PyPDF2.
-    This function intentionally does NOT call the Gemini model for extraction to
-    keep extraction deterministic and local.
+    
+    This function is LOCAL-ONLY and does NOT make any API calls.
+    It only accepts local file paths and uses PyPDF2 for extraction.
+    
+    Args:
+        file_path (str): Path to local PDF file
+        
+    Returns:
+        str: Extracted text content
+        
+    Raises:
+        FileNotFoundError: If the local file doesn't exist
+        RuntimeError: If PyPDF2 is not available
     """
-    logging.info("Extracting text from local file: %s", file_reference)
-    if not os.path.exists(file_reference):
-        raise FileNotFoundError(f"File not found: {file_reference}")
+    logging.info("Extracting text from local file: %s", file_path)
+    
+    # Ensure we only work with local files
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"Local file not found: {file_path}")
 
+    # Ensure PyPDF2 is available
     if PdfReader is None:
         logging.error("PyPDF2 is not installed; cannot perform local extraction. Please install PyPDF2.")
         raise RuntimeError("PyPDF2 not available for local PDF extraction")
 
-    reader = PdfReader(file_reference)
-    texts = []
-    for page in reader.pages:
-        try:
-            texts.append(page.extract_text() or "")
-        except Exception:
-            texts.append("")
-    full_text = "\n".join(texts)
-    logging.info("Local PDF extraction completed. Length: %d characters", len(full_text))
-    return full_text
+    # Extract text using PyPDF2 only
+    try:
+        reader = PdfReader(file_path)
+        texts = []
+        
+        for page_num, page in enumerate(reader.pages):
+            try:
+                page_text = page.extract_text() or ""
+                texts.append(page_text)
+                logging.debug("Extracted %d characters from page %d", len(page_text), page_num + 1)
+            except Exception as e:
+                logging.warning("Failed to extract text from page %d: %s", page_num + 1, e)
+                texts.append("")
+        
+        full_text = "\n".join(texts)
+        logging.info("Local PDF extraction completed. Total length: %d characters from %d pages", 
+                    len(full_text), len(reader.pages))
+        return full_text
+        
+    except Exception as e:
+        logging.error("PyPDF2 extraction failed: %s", e)
+        raise RuntimeError(f"PDF extraction failed: {e}")
 

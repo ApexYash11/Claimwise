@@ -13,6 +13,7 @@ from datetime import datetime
 import tempfile
 import logging
 
+from src.models import UploadResponse, ChatRequest, ChatResponse, PolicyAnalysisResponse, ComparisonResponse
 from typing import Union, Dict
 from fastapi import BackgroundTasks
 
@@ -70,7 +71,7 @@ def healthz():
     """Simple health endpoint for load balancers and platform health checks."""
     return {"status": "ok"}
 
-@app.post("/upload-policy")
+@app.post("/upload-policy", response_model=UploadResponse)
 async def upload_policy(
     background_tasks: BackgroundTasks,
     user_id: str = Depends(get_current_user),
@@ -78,6 +79,7 @@ async def upload_policy(
     policy_number: str = Form(None),
     file: UploadFile = File(None),
     text_input: str = Form(None),
+    sync_indexing: bool = Form(False),  # Dev-mode option for immediate indexing
 ):
     """
     Upload a policy file or text, extract/process text, and store in Supabase.
@@ -119,27 +121,16 @@ async def upload_policy(
                     temp_file.write(file_bytes)
                     temp_file_path = temp_file.name
 
-                # Upload to Gemini Files API using wrapper (returns file_id, file_uri)
+                # Extract text locally using PyPDF2 ONLY (no API usage for extraction)
                 try:
-                    from src.gemini_files import upload_pdf, poll_file_status, extract_text
+                    from src.gemini_files import extract_text
                 except Exception as import_err:
                     logging.exception("Failed to import gemini_files: %s", import_err)
-                    raise HTTPException(status_code=500, detail="Server misconfiguration: gemini integration not available")
+                    raise HTTPException(status_code=500, detail="Server misconfiguration: PDF extraction module not available")
 
-                file_id, file_uri = upload_pdf(temp_file_path)
-                logging.debug("Uploaded to Gemini, file_id=%s, uri=%s", file_id, file_uri)
-
-                status = poll_file_status(file_id)
-                logging.debug("Gemini file status: %s", status)
-                if status != "ACTIVE":
-                    raise HTTPException(status_code=500, detail="File processing failed or did not become ACTIVE")
-
-                # Prefer local temporary file for extraction (avoid model fetching external URLs)
-                if temp_file_path and os.path.exists(temp_file_path):
-                    extracted_text = extract_text(temp_file_path)
-                else:
-                    reference = file_uri or file_id
-                    extracted_text = extract_text(reference)
+                # Always use local file for extraction - NO API calls
+                extracted_text = extract_text(temp_file_path)
+                logging.debug("Local PDF extraction completed. Text length: %d", len(extracted_text) if extracted_text else 0)
                 logging.debug("Extracted text length: %d", len(extracted_text) if extracted_text else 0)
 
                 if not extracted_text:
@@ -209,12 +200,24 @@ async def upload_policy(
 
             policy_id = response.data[0]['id']
 
-            # schedule indexing in background (non-blocking)
-            try:
-                from src.rag import index_documents
-                background_tasks.add_task(index_documents, extracted_text, policy_id)
-            except Exception as e:
-                logging.exception("Failed to schedule background indexing: %s", e)
+            # Choose indexing mode based on sync_indexing parameter
+            indexing_mode = "synchronous" if sync_indexing else "background"
+            
+            if sync_indexing:
+                # Synchronous indexing for dev-mode (immediate feedback)
+                try:
+                    from src.rag import index_documents
+                    indexed_chunks = index_documents(extracted_text, policy_id)
+                    logging.info("Synchronous indexing completed: %d chunks indexed", len(indexed_chunks))
+                except Exception as e:
+                    logging.exception("Synchronous indexing failed: %s", e)
+            else:
+                # schedule indexing in background (non-blocking)
+                try:
+                    from src.rag import index_documents
+                    background_tasks.add_task(index_documents, extracted_text, policy_id)
+                except Exception as e:
+                    logging.exception("Failed to schedule background indexing: %s", e)
 
             # Log activity
             log_activity(
@@ -230,7 +233,12 @@ async def upload_policy(
                 }
             )
 
-            return {"policy_id": policy_id, "extracted_text": extracted_text, "status": "indexing_started"}
+            return UploadResponse(
+                policy_id=policy_id, 
+                extracted_text=extracted_text, 
+                status="indexing_started",
+                indexing_mode=indexing_mode
+            )
         except Exception as db_error:
             raise HTTPException(status_code=500, detail=f"Database save failed: {str(db_error)}")
     except HTTPException:
@@ -362,7 +370,7 @@ def debug_gemini_config():
     Check Gemini API configuration and model access.
     """
     try:
-        from src.llm import make_gemini_request
+        from src.llm import make_llm_request
         import os
         
         # Get API key status (don't expose the actual key)
@@ -375,14 +383,14 @@ def debug_gemini_config():
         
         # Test with a simple prompt
         test_prompt = "Respond with exactly: 'Gemini Pro API working correctly'"
-        response = make_gemini_request(test_prompt)
+        response = make_llm_request(test_prompt)
         
         return {
             "status": "success",
             "model": "gemini-1.5-pro",
             "api_key_status": key_status,
-            "test_response": response.text[:100] + "..." if len(response.text) > 100 else response.text,
-            "response_length": len(response.text),
+            "test_response": response[:100] + "..." if len(response) > 100 else response,
+            "response_length": len(response),
             "message": "Gemini Pro API is working correctly with your student account!"
         }
         
@@ -509,8 +517,8 @@ def debug_policy_content(policy_id: str, user_id: str = Depends(get_current_user
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Debug error: {str(e)}")
 
-@app.post("/chat")
-def chat(policy_id: str, question: str, user_id: str = Depends(get_current_user)):
+@app.post("/chat", response_model=ChatResponse)
+def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
     """
     Answer a question based on a specific policy text.
     
@@ -523,20 +531,23 @@ def chat(policy_id: str, question: str, user_id: str = Depends(get_current_user)
         dict: Chat response.
     """
     try:
+        policy_id = request.policy_id
+        question = request.question
+        
         policy = supabase.table("policies").select("extracted_text", "policy_number", "policy_name").eq("id", policy_id).eq("user_id", user_id).execute().data[0]
         
         extracted_text = policy.get('extracted_text', '')
 
         # If little or no extracted text, short-circuit
         if not extracted_text or len(extracted_text) < 50:
-            return {"answer": "This policy appears to have no extracted text. Please try re-uploading the policy document.", "citations": []}
+            return ChatResponse(answer="This policy appears to have no extracted text. Please try re-uploading the policy document.", citations=[])
 
         # Use retrieve_top_k from rag to get context chunks (RAG)
         try:
             from src.rag import retrieve_top_k
         except Exception as e:
             logging.exception("Failed to import rag.retrieve_top_k: %s", e)
-            return {"answer": "Server misconfiguration: retrieval not available", "citations": []}
+            return ChatResponse(answer="Server misconfiguration: retrieval not available", citations=[])
 
         # Retrieve top chunks for the question
         top = []
@@ -562,10 +573,10 @@ def chat(policy_id: str, question: str, user_id: str = Depends(get_current_user)
 
         final_prompt = f"You are an insurance expert. Use the provided context to answer the question. Context:\n{context_str}\n\nQuestion: {question}\n\nAnswer succinctly and cite chunks by id when referenced."
 
-        # Call Gemini (via llm.make_gemini_request) if available, otherwise fallback
+        # Call optimized LLM (prefers Groq, falls back to Gemini) if available
         try:
-            from src.llm import make_gemini_request
-            resp = make_gemini_request(final_prompt)
+            from src.llm import make_llm_request
+            resp = make_llm_request(final_prompt)
             answer = getattr(resp, 'text', str(resp))
         except Exception as e:
             logging.exception("Gemini generation failed, using fallback chat_with_policy: %s", e)
@@ -597,11 +608,11 @@ def chat(policy_id: str, question: str, user_id: str = Depends(get_current_user)
             "answer": answer
         }).execute()
 
-        return {"answer": answer, "citations": citations}
+        return ChatResponse(answer=answer, citations=citations)
     except IndexError:
         raise HTTPException(status_code=404, detail="Policy not found for this user.")
     except Exception as e:
-        logging.exception("Chat error for policy %s: %s", policy_id, str(e))
+        logging.exception("Chat error for policy %s: %s", getattr(request, 'policy_id', 'unknown'), str(e))
         raise HTTPException(status_code=500, detail=f"Error processing chat: {str(e)}")
 
 @app.post("/chat-multiple")
@@ -1094,9 +1105,9 @@ async def test_gemini(file: UploadFile):
         if status != "ACTIVE":
             raise HTTPException(status_code=500, detail="File did not become ACTIVE")
 
-        # Step 3: Extract text (prefer URI if available)
-        # Prefer using the temporary local file rather than the uploaded URI so extraction runs locally
-        extracted_text = extract_text(temp_file_path) if temp_file_path and os.path.exists(temp_file_path) else extract_text(file_uri or file_id)
+        # Step 3: Extract text locally only (no API usage)
+        # Always use the local temporary file for extraction
+        extracted_text = extract_text(temp_file_path)
 
         return {"file_id": file_id, "file_uri": file_uri, "status": status, "extracted_text": extracted_text}
 
