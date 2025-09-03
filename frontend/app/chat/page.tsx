@@ -222,17 +222,16 @@ export default function ChatPage() {
         const allPolicyResponses = await Promise.all(
           policies.map(async (policy) => {
             try {
-              const params = new URLSearchParams({
-                policy_id: policy.id,
-                question: content,
-              })
-              
-              const res = await fetch(`${API_BASE_URL}/chat?${params}`, {
+              const res = await fetch(`${API_BASE_URL}/chat`, {
                 method: "POST",
                 headers: {
                   Authorization: `Bearer ${token}`,
                   "Content-Type": "application/json",
                 },
+                body: JSON.stringify({
+                  policy_id: policy.id,
+                  question: content,
+                }),
               })
               
               if (res.ok) {
@@ -287,17 +286,16 @@ export default function ChatPage() {
         // Single policy chat
         const actualPolicyId = selectedPolicyId === "auto" ? getSmartPolicySelection(content) : selectedPolicyId
         
-        const params = new URLSearchParams({
-          policy_id: actualPolicyId,
-          question: content,
-        })
-        
-        response = await fetch(`${API_BASE_URL}/chat?${params}`, {
+        response = await fetch(`${API_BASE_URL}/chat`, {
           method: "POST",
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
           },
+          body: JSON.stringify({
+            policy_id: actualPolicyId,
+            question: content,
+          }),
         })
 
         if (!response.ok) {
@@ -536,7 +534,7 @@ export default function ChatPage() {
                       </div>
                     </div>
                   ) : (
-                    <div className="space-y-6">
+                    <div className="space-y-8 max-w-4xl mx-auto">
                       {messages.map((message) => (
                         <Message key={message.id} message={message} onCopy={handleCopy} onFeedback={handleFeedback} />
                       ))}
@@ -566,6 +564,23 @@ export default function ChatPage() {
                   )}
                 </CardContent>
               </Card>
+
+              {/* AI Transparency Notice */}
+              {policies.length > 0 && (
+                <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-4 shadow-sm dark:bg-amber-950/20 dark:border-amber-800/50">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-amber-800 dark:text-amber-200 mb-1">
+                        AI-Powered Assistance
+                      </p>
+                      <p className="text-sm text-amber-700 dark:text-amber-300">
+                        Answers are AI-powered. Please confirm with your insurer before taking decisions.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Chat Input - Only show if we have policies */}
               {policies.length > 0 && (

@@ -127,6 +127,40 @@ def poll_file_status(file_id: str, timeout: int = 300, interval: int = 5) -> str
     raise TimeoutError("Polling timed out before file became ACTIVE")
 
 
+def clean_extracted_text(text: str) -> str:
+    """
+    Clean up extracted text by removing common OCR artifacts and error messages.
+    """
+    if not text or not text.strip():
+        return ""
+    
+    # Remove common error patterns that shouldn't be in policy documents
+    error_patterns = [
+        r'zero vector chunk',
+        r'one-hot.*?position.*?chunk',
+        r'embedding.*?error',
+        r'vector.*?search.*?failed',
+        r'null.*?reference',
+        r'NoneType.*?object',
+        r'extraction.*?failed',
+        r'OCR.*?error',
+    ]
+    
+    import re
+    cleaned = text
+    for pattern in error_patterns:
+        cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE)
+    
+    # Remove excessive whitespace
+    cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
+    cleaned = re.sub(r' {3,}', ' ', cleaned)
+    
+    # Remove very short lines that are likely artifacts (less than 3 characters)
+    lines = cleaned.split('\n')
+    cleaned_lines = [line for line in lines if len(line.strip()) > 2 or line.strip() == '']
+    
+    return '\n'.join(cleaned_lines).strip()
+
 def extract_text(file_path: str) -> str:
     """
     Extract text strictly from a local PDF using PyPDF2.
@@ -170,6 +204,10 @@ def extract_text(file_path: str) -> str:
                 texts.append("")
         
         full_text = "\n".join(texts)
+        
+        # Clean up common OCR/extraction artifacts
+        full_text = clean_extracted_text(full_text)
+        
         logging.info("Local PDF extraction completed. Total length: %d characters from %d pages", 
                     len(full_text), len(reader.pages))
         return full_text

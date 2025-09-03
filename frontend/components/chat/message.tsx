@@ -3,8 +3,107 @@
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Copy, ThumbsUp, ThumbsDown, User, Bot } from "lucide-react"
+import { Copy, ThumbsUp, ThumbsDown, User, Bot, FileText } from "lucide-react"
 import { useState } from "react"
+
+// Component to format assistant responses with proper styling
+function FormattedContent({ content }: { content: string }) {
+  // Split content into paragraphs and format
+  const formatContent = (text: string) => {
+    // Split by double newlines for paragraphs
+    const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim())
+    
+    return paragraphs.map((paragraph, index) => {
+      const trimmed = paragraph.trim()
+      
+      // Check if it's a "Referenced policies" section or similar
+      if (trimmed.match(/^(Referenced policies:|Sources:|References:)/i)) {
+        return (
+          <div key={index} className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl dark:from-blue-950/50 dark:to-indigo-950/50 dark:border-blue-800">
+            <h4 className="font-semibold text-blue-900 dark:text-blue-100 text-sm mb-3 flex items-center gap-2">
+              <FileText className="w-4 h-4" />
+              Referenced policies:
+            </h4>
+            <div className="ml-6">
+              {trimmed.split('\n').slice(1).filter(line => line.trim()).map((line, lineIndex) => (
+                <p key={lineIndex} className="text-blue-800 dark:text-blue-200 text-sm mb-2 font-medium">
+                  {line.trim()}
+                </p>
+              ))}
+            </div>
+          </div>
+        )
+      }
+
+      // Check if it's a section header (starts with common policy section indicators)
+      if (trimmed.match(/^(Coverage|Benefits|Exclusions|Terms|Conditions|Section|Article|\d+\.)/i)) {
+        return (
+          <div key={index} className="mb-4">
+            <h4 className="font-semibold text-blue-900 dark:text-blue-100 text-sm mb-2 flex items-center gap-2">
+              <FileText className="w-4 h-4" />
+              {trimmed}
+            </h4>
+          </div>
+        )
+      }
+      
+      // Check if it contains bullet points or lists
+      if (trimmed.includes('•') || trimmed.match(/^\s*[-*]\s/m)) {
+        const listItems = trimmed.split(/\n/).filter(line => line.trim())
+        return (
+          <div key={index} className="mb-4">
+            <ul className="space-y-2 ml-4">
+              {listItems.map((item, itemIndex) => {
+                const cleanItem = item.replace(/^[\s•\-*]+/, '').trim()
+                if (cleanItem) {
+                  return (
+                    <li key={itemIndex} className="text-gray-700 dark:text-gray-200 text-[15px] leading-relaxed flex items-start">
+                      <span className="w-2 h-2 bg-blue-500 rounded-full mr-3 mt-2 flex-shrink-0"></span>
+                      <span>{cleanItem}</span>
+                    </li>
+                  )
+                }
+                return null
+              }).filter(Boolean)}
+            </ul>
+          </div>
+        )
+      }
+      
+      // Check if it contains policy references or specific sections
+      if (trimmed.match(/section\s+[\d\.\*]+/i) || trimmed.match(/\*\*.*\*\*/)) {
+        // Parse bold text markers
+        const parts = trimmed.split(/(\*\*.*?\*\*)/)
+        return (
+          <div key={index} className="mb-4 p-3 bg-blue-50/50 border-l-4 border-blue-400 rounded-r-lg dark:bg-blue-950/30 dark:border-blue-500">
+            <p className="text-gray-800 dark:text-gray-100 text-[15px] leading-relaxed">
+              {parts.map((part, partIndex) => {
+                if (part.match(/\*\*(.*?)\*\*/)) {
+                  const boldText = part.replace(/\*\*/g, '')
+                  return (
+                    <strong key={partIndex} className="font-semibold text-blue-800 dark:text-blue-200">
+                      {boldText}
+                    </strong>
+                  )
+                }
+                return <span key={partIndex}>{part}</span>
+              })}
+            </p>
+          </div>
+        )
+      }
+      
+      // Regular paragraph
+      return (
+        <p key={index} className="mb-6 text-gray-700 dark:text-gray-200 text-[15px] leading-relaxed">
+          {trimmed}
+        </p>
+      )
+    })
+  }
+
+  return <div className="space-y-2">{formatContent(content)}</div>
+}
 
 interface MessageProps {
   message: {
@@ -41,7 +140,7 @@ export function Message({ message, onCopy, onFeedback }: MessageProps) {
         </Avatar>
       )}
 
-      <div className={`max-w-2xl ${message.role === "user" ? "order-first" : ""}`}> 
+      <div className={`max-w-4xl ${message.role === "user" ? "order-first ml-auto" : "mr-auto"}`}> 
         <Card
           className={`$
             message.role === "user"
@@ -51,13 +150,13 @@ export function Message({ message, onCopy, onFeedback }: MessageProps) {
         >
           <CardContent className="p-5">
             <div className="prose prose-sm max-w-none">
-              <p className={`mb-0 text-[15px] leading-relaxed ${
-                message.role === "user"
-                  ? "text-gray-900 dark:text-gray-100"
-                  : "text-gray-900 dark:text-gray-100"
-              }`}>
-                {message.content}
-              </p>
+              {message.role === "assistant" ? (
+                <FormattedContent content={message.content} />
+              ) : (
+                <p className="mb-0 text-[15px] leading-relaxed text-gray-900 dark:text-gray-100">
+                  {message.content}
+                </p>
+              )}
             </div>
 
             {/* Policy References */}

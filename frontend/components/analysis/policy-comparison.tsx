@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { CheckCircle, X, AlertTriangle, TrendingUp, TrendingDown, DollarSign, Shield, BarChart3, ChevronUp, ChevronDown } from "lucide-react"
+import { CheckCircle, X, AlertTriangle, TrendingUp, TrendingDown, DollarSign, Shield, BarChart3, ChevronUp, ChevronDown, AlertCircle } from "lucide-react"
 import type { PolicySummary } from "@/lib/api"
 import { supabase } from "@/lib/supabase"
 
@@ -124,6 +124,21 @@ export function PolicyComparison({ policies, onRemovePolicy }: PolicyComparisonP
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Policy Comparison</h2>
         <p className="text-gray-600 dark:text-gray-300">Comparing {policies.length} policies</p>
+      </div>
+
+      {/* AI Transparency Notice */}
+      <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-4 shadow-sm dark:bg-amber-950/20 dark:border-amber-800/50">
+        <div className="flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-200 mb-1">
+              AI-Powered Comparison
+            </p>
+            <p className="text-sm text-amber-700 dark:text-amber-300">
+              Comparison insights are AI-powered. Please confirm with your insurer before taking decisions.
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Enhanced Comparison Content */}

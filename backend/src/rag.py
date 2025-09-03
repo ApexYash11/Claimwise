@@ -1,6 +1,7 @@
 from typing import List, Tuple, Optional
 import os
 import logging
+from datetime import datetime
 
 from src.db import supabase, supabase_storage
 from src.embeddings import embed_texts_with_cache
@@ -103,7 +104,7 @@ def index_documents(text: str, document_id: str, chunk_size: int = 500, overlap:
         emb = None
 
     row = {
-      "document_id": document_id,
+      "policy_id": document_id,  # Use policy_id instead of document_id
       "chunk_index": idx,
       "content": chunk,
     }
@@ -111,6 +112,7 @@ def index_documents(text: str, document_id: str, chunk_size: int = 500, overlap:
       row["embedding"] = emb
 
     try:
+      # First try with policy_id (current schema)
       res = service_client.table("document_chunks").insert(row).execute()
       err = getattr(res, "error", None)
       if err:
@@ -119,7 +121,13 @@ def index_documents(text: str, document_id: str, chunk_size: int = 500, overlap:
 
       result.append((chunk, emb))
     except Exception as e:
-      logger.exception("Exception inserting chunk %d for doc %s: %s", idx, document_id, e)
+      # If foreign key constraint fails, it might be schema mismatch
+      if "foreign key constraint" in str(e).lower():
+        logger.warning("Document chunks table foreign key constraint failed for policy %s - skipping RAG indexing", document_id)
+        logger.debug("Full error: %s", e)
+        break  # Skip remaining chunks for this document
+      else:
+        logger.exception("Exception inserting chunk %d for doc %s: %s", idx, document_id, e)
 
   return result
 

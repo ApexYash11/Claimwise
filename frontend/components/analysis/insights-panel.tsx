@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { CheckCircle, AlertTriangle, TrendingUp, Shield, DollarSign, Calendar } from "lucide-react"
+import { CheckCircle, AlertTriangle, TrendingUp, Shield, DollarSign, Calendar, AlertCircle } from "lucide-react"
 
 interface InsightsPanelProps {
   insights: string[]
@@ -54,6 +54,21 @@ export function InsightsPanel({ insights, recommendations }: InsightsPanelProps)
 
   return (
     <div className="space-y-6">
+      {/* AI Transparency Notice */}
+      <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-4 shadow-sm dark:bg-amber-950/20 dark:border-amber-800/50">
+        <div className="flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-200 mb-1">
+              AI-Generated Insights
+            </p>
+            <p className="text-sm text-amber-700 dark:text-amber-300">
+              All insights and recommendations are AI-powered. Please confirm with your insurer before taking decisions.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Summary Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">

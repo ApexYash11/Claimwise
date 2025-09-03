@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, BarChart3, FileText, MessageSquare, Eye, CheckCircle, Calendar, DollarSign, Shield } from "lucide-react"
+import { ArrowLeft, BarChart3, FileText, MessageSquare, Eye, CheckCircle, Calendar, DollarSign, Shield, AlertCircle } from "lucide-react"
 import Link from "next/link"
 import type { PolicySummary } from "@/lib/api"
 
@@ -467,7 +467,7 @@ export default function AnalyzePage() {
 
   return (
     <ProtectedRoute>
-  <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 dark:from-gray-950 dark:to-blue-950">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 dark:from-gray-950 dark:to-blue-950">
         <Header />
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -537,7 +537,23 @@ export default function AnalyzePage() {
           ) : error ? (
             <div className="text-center py-16 text-lg text-red-500">{error}</div>
           ) : (
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+            <>
+              {/* AI Transparency Notice */}
+              <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-4 mb-6 shadow-sm dark:bg-amber-950/20 dark:border-amber-800/50">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-amber-800 dark:text-amber-200 mb-1">
+                      AI-Powered Analysis
+                    </p>
+                    <p className="text-sm text-amber-700 dark:text-amber-300">
+                      Analysis and insights are AI-powered. Please confirm with your insurer before taking decisions.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
               <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:grid-cols-4">
                 <TabsTrigger value="analysis" className="flex items-center space-x-2">
                   <Eye className="w-4 h-4" />
@@ -712,6 +728,7 @@ export default function AnalyzePage() {
                 <InsightsPanel insights={insights} recommendations={recommendations} />
               </TabsContent>
             </Tabs>
+            </>
           )}
         </div>
       </div>

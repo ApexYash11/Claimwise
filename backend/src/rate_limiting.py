@@ -219,7 +219,7 @@ class RateLimitManager:
             RateLimitStrategy.TOKEN_BUCKET: TokenBucketRateLimiter()
         }
         self._configs: Dict[str, RateLimitConfig] = {}
-        self._stats = defaultdict(lambda: {
+        self._stats: Dict[str, Dict[str, Any]] = defaultdict(lambda: {
             'requests': 0,
             'blocked': 0,
             'last_reset': datetime.now()
@@ -293,8 +293,8 @@ class RateLimitManager:
         with self._lock:
             stats_copy = {}
             for name, stats in self._stats.items():
-                total_requests = stats['requests']
-                blocked_requests = stats['blocked']
+                total_requests = int(stats['requests']) if isinstance(stats['requests'], int) else 0
+                blocked_requests = int(stats['blocked']) if isinstance(stats['blocked'], int) else 0
                 block_rate = (blocked_requests / total_requests * 100) if total_requests > 0 else 0
                 
                 stats_copy[name] = {

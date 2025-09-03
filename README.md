@@ -1,166 +1,578 @@
-# ClaimWise
+# 🛡️ ClaimWise - AI-Powered Insurance Policy Analysis Platform
 
-ClaimWise is a policy-document analysis tool: upload insurance policies and other documents, extract text, run analyses with LLMs, compare policies, and chat with documents.
+**ClaimWise** is a production-ready, enterprise-grade platform that revolutionizes insurance policy management through advanced AI analysis. Upload insurance policies, get intelligent insights, compare coverage options, and chat with your documents using state-of-the-art language models.
 
-This README describes the current project (what's in the repo now), how to run it locally, key files and endpoints, environment variables, and common troubleshooting steps.
+## ✨ Key Features
 
----
-
-## Tech stack
-
-- Frontend: Next.js (App Router), React, TypeScript, Tailwind CSS
-- Backend: FastAPI (Python), Uvicorn
-- Database/Auth/Storage: Supabase (Postgres + Auth + Storage)
-- LLMs: Groq and Google Gemini (integration in backend)
-- OCR: Tesseract + pdf2image + poppler (currently in backend)
-- Vector/search (optional): not included by default (RAG planning in `README_RAG_PLAN.md`)
+- 🔍 **AI-Powered Policy Analysis** - Comprehensive policy breakdown with claim readiness scoring
+- 📊 **Policy Comparison** - Side-by-side analysis of multiple insurance policies  
+- 💬 **Document Chat** - Interactive Q&A with your policy documents using RAG
+- 📈 **Smart Insights** - Premium optimization, coverage gap analysis, and renewal alerts
+- 🔒 **Enterprise Security** - JWT authentication, role-based access, and secure file handling
+- ⚡ **High Performance** - Advanced caching, rate limiting, and real-time monitoring
+- 📱 **Modern UI** - Responsive design with dark mode and accessibility features
+- 🤖 **AI Transparency** - Clear disclosure of AI-powered features with user guidance
 
 ---
 
-## Repo layout (high level)
+## 🏗️ Architecture & Tech Stack
 
-- `frontend/` — Next.js application
-  - `app/` — pages (dashboard, chat, upload, analyze, admin)
-  - `components/` — UI components and widgets
-  - `lib/` — API helpers, Supabase client
-  - `.env.local` — local frontend env (not committed)
+### Frontend
+- **Next.js 15** (App Router) with TypeScript
+- **React 18** with modern hooks and suspense
+- **Tailwind CSS** + **shadcn/ui** for beautiful, accessible components
+- **Supabase Client** for authentication and real-time features
 
-- `backend/` — FastAPI service
-  - `src/main.py` — application routes and middleware
-  - `src/auth.py` — JWT verification / Supabase integration
-  - `src/db.py` — Supabase DB helpers
-  - `src/OCR.py` — OCR helpers
-  - `src/llm.py`, `src/llm_groq.py` — LLM integration
-  - `requirements.txt` — Python deps
-  - `.env` — backend env (not committed)
+### Backend  
+- **FastAPI** with async/await and automatic API documentation
+- **Enhanced Production Systems**:
+  - 🛡️ **Comprehensive Error Handling** - Structured exceptions with recovery suggestions
+  - 📊 **Performance Monitoring** - Real-time metrics and request tracking
+  - 💾 **Multi-Strategy Caching** - LRU, LFU, FIFO, and TTL cache algorithms
+  - 🚦 **Smart Rate Limiting** - Token bucket, fixed window, and sliding window algorithms
+  - 🧠 **Advanced Embeddings** - Multiple providers (OpenAI, HuggingFace, SentenceTransformers)
 
-- `tests/` — project tests
-- `README_RAG_PLAN.md` — planning doc for adding RAG (separate)
-
----
-
-## Key backend endpoints (examples)
-
-- `GET /` — root message
-- `GET /healthz` — health check
-- `POST /upload-policy` — upload a policy file (protected)
-- `POST /analyze-policy` — run analysis on an uploaded policy
-- `POST /compare-policies` — compare multiple policies
-- `POST /chat` — chat against a policy or policies
-- `GET /dashboard/stats` — authenticated dashboard stats
-- `GET /dashboard/stats-dev` — unauthenticated dev stats
-- `GET /activities` — user activity (authenticated)
-- Various `/debug/*` endpoints used for development
-
-Note: Many endpoints require an Authorization header (Bearer <JWT>) signed by Supabase.
+### Infrastructure
+- **Supabase** - PostgreSQL database, authentication, and file storage
+- **AI/ML Services**:
+  - 🤖 **Groq** - Ultra-fast LLM inference for policy analysis
+  - 🧠 **Google Gemini** - Advanced reasoning and document understanding
+  - 🔗 **OpenAI** - High-quality embeddings and chat completions
+- **OCR Pipeline** - Tesseract + pdf2image + poppler for document processing
 
 ---
 
-## Required environment variables (examples)
+## 📁 Project Structure
 
-Do NOT commit secrets. Provide these via `.env` locally or as platform secrets (Render/Vercel).
-
-Backend (examples)
-
-- `SUPABASE_URL` - e.g. `https://<project>.supabase.co`
-- `SUPABASE_KEY` - service role key (used by backend)
-- `SUPABASE_JWT_SECRET` - Supabase JWT secret used to validate tokens
-- `GEMINI_API_KEY` - Google Gemini API key
-- `GROQ_API_KEY` - Groq API key (if used)
-- `ALLOWED_ORIGINS` - comma-separated list for CORS (or edit `backend/src/main.py`)
-
-Frontend (examples in `frontend/.env.local`)
-
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `NEXT_PUBLIC_API_URL` - e.g. `https://claimwise.onrender.com`
-
----
-
-## Run locally (quick start)
-
-Prereqs: Node.js, pnpm or npm, Python 3.11+, virtualenv or venv, Tesseract + Poppler installed (for OCR locally), Supabase project ready.
-
-Backend
-
-```powershell
-cd backend
-python -m venv .venv
-. .\.venv\Scripts\Activate
-pip install -r requirements.txt
-# Create a local .env with required secrets (see above)
-uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+```
+claimwise/
+├── 🌐 frontend/                    # Next.js Application
+│   ├── app/                       # App Router Pages
+│   │   ├── (auth)/               # Authentication pages
+│   │   ├── dashboard/            # User dashboard
+│   │   ├── upload/               # Policy upload interface
+│   │   ├── analyze/              # AI analysis results
+│   │   ├── chat/                 # Document chat interface
+│   │   └── compare/              # Policy comparison tool
+│   ├── components/               # Reusable UI Components
+│   │   ├── ui/                   # shadcn/ui base components
+│   │   ├── auth/                 # Authentication components
+│   │   ├── analysis/             # Policy analysis widgets
+│   │   └── layout/               # Layout components
+│   ├── lib/                      # Utility Libraries
+│   │   ├── api.ts                # API client with retry logic
+│   │   ├── auth.ts               # Authentication helpers
+│   │   └── supabase.ts           # Supabase client
+│   └── hooks/                    # Custom React hooks
+│
+├── ⚡ backend/                     # FastAPI Application  
+│   ├── src/                      # Source Code
+│   │   ├── main.py               # FastAPI app with all enhancements
+│   │   ├── auth.py               # JWT authentication & authorization
+│   │   ├── db.py                 # Supabase database operations
+│   │   ├── models.py             # Pydantic data models
+│   │   ├── llm.py & llm_groq.py  # AI/LLM integrations
+│   │   ├── OCR.py                # Document processing pipeline
+│   │   ├── rag.py                # RAG implementation
+│   │   └── 🚀 Production Enhancements:
+│   │       ├── exceptions.py     # Comprehensive error handling
+│   │       ├── monitoring.py     # Performance monitoring
+│   │       ├── caching.py        # Multi-strategy caching
+│   │       ├── rate_limiting.py  # Smart rate limiting
+│   │       ├── embeddings.py     # Advanced embedding system
+│   │       └── content_filters.py # Content optimization
+│   ├── requirements.txt          # Python dependencies
+│   └── .env                      # Environment variables (not committed)
+│
+└── 📚 Documentation
+    ├── README.md                 # This file
+    └── README_RAG_PLAN.md        # RAG implementation details
 ```
 
-Frontend
+---
+
+## 🚀 Quick Start Guide
+
+### Prerequisites
+- **Node.js** 18+ and **pnpm** (or npm)
+- **Python** 3.11+ with **pip**
+- **Tesseract OCR** and **Poppler** (for local development)
+- **Supabase** project with database and storage configured
+
+### 1. Backend Setup
 
 ```bash
-cd frontend
-pnpm install   # or npm install
-# create frontend/.env.local with NEXT_PUBLIC_API_URL and Supabase keys
-pnpm dev       # or npm run dev
-```
-
-Testing via PowerShell
-
-```powershell
-Invoke-RestMethod 'http://localhost:8000/healthz' | ConvertTo-Json
-```
-
----
-
-## Common troubleshooting
-
-- 401 Unauthorized on protected endpoints:
-  - Ensure frontend sends `Authorization: Bearer <access_token>`.
-  - Verify `SUPABASE_JWT_SECRET` on backend matches Supabase project's JWT secret.
-
-- CORS errors from browser:
-  - Confirm `ALLOWED_ORIGINS` includes your frontend domain (Vercel domain or `http://localhost:3000`).
-  - Check `backend/src/main.py` for CORSMiddleware settings.
-
-- OCR failures (poppler/tesseract):
-  - Ensure Tesseract and Poppler binaries are installed and in PATH (or configured in `OCR.py`).
-  - On some hosting platforms (Render), system packages may be unavailable — consider removing OCR from hosted backend and using Gemini Files API instead.
-
-- Insert foreign key errors when creating policies:
-  - Ensure the `user_id` exists in Supabase `auth.users` and related `users` table if you maintain one.
-  - Use `get_current_user` to extract user id from JWT and use that id for inserts.
-
-- 404 for `/dashboard/stats-dev` in browser but works locally:
-  - Confirm `NEXT_PUBLIC_API_URL` is set correctly in deployed frontend.
-  - Ensure backend is redeployed after code/env changes on Render.
-
----
-
-## Tests & linting
-
-- Python tests: run from project root
-
-```powershell
+# Navigate to backend directory
 cd backend
-. .\.venv\Scripts\Activate
-pytest -q
+
+# Create and activate virtual environment
+python -m venv .venv
+# Windows PowerShell
+.\.venv\Scripts\Activate
+# macOS/Linux
+source .venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Create environment file
+cp .env.example .env
+# Edit .env with your API keys and configuration
+
+# Start the server
+uvicorn src.main:app --reload
 ```
 
-- Frontend tests: (if present) run via pnpm/npm test
+The backend will be available at `http://localhost:8000` with interactive docs at `http://localhost:8000/docs`
+
+### 2. Frontend Setup
+
+```bash
+# Navigate to frontend directory  
+cd frontend
+
+# Install dependencies
+pnpm install
+
+# Create environment file
+cp .env.local.example .env.local
+# Edit .env.local with your configuration
+
+# Start the development server
+pnpm dev
+```
+
+The frontend will be available at `http://localhost:3000`
 
 ---
 
-## Deployment notes
+## 🔧 Environment Configuration
 
-- Backend: Render is used in this project; configure environment variables in Render dashboard and redeploy after changes.
-- Frontend: Vercel recommended; set `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SUPABASE_URL`, and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in Vercel project settings.
-- Secrets: use platform secret stores, do not commit `.env` files.
+### Backend Environment Variables (`.env`)
+
+```bash
+# Supabase Configuration
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_KEY=your-service-role-key
+SUPABASE_JWT_SECRET=your-jwt-secret
+SUPABASE_STORAGE_BUCKET=your-bucket-name
+
+# AI/LLM API Keys
+GROQ_API_KEY=your-groq-api-key
+GEMINI_API_KEY=your-gemini-api-key
+OPENAI_API_KEY=your-openai-api-key
+
+# Application Configuration
+ALLOWED_ORIGINS=http://localhost:3000,https://your-frontend-domain.com
+LOG_LEVEL=INFO
+EMBEDDING_DIM=768
+
+# Optional: Monitoring and Performance
+ENABLE_MONITORING=true
+CACHE_TTL=3600
+RATE_LIMIT_ENABLED=true
+```
+
+### Frontend Environment Variables (`.env.local`)
+
+```bash
+# Supabase Public Configuration
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+
+# Backend API URL
+NEXT_PUBLIC_API_URL=http://localhost:8000
+
+# Optional: Feature Flags
+NEXT_PUBLIC_ENABLE_ANALYTICS=false
+NEXT_PUBLIC_DEBUG_MODE=false
+```
 
 ---
 
-## Where to find more details
+## 📚 API Documentation
 
-- RAG planning: `README_RAG_PLAN.md` (contains roadmap & implementation ideas)
-- Backend routes & logic: `backend/src/main.py`
-- Supabase integration: `backend/src/auth.py` and `frontend/lib/supabase.ts`
+### Core Endpoints
+
+#### 🔐 Authentication
+- `POST /auth/login` - User login with JWT token response
+- `POST /auth/refresh` - Refresh JWT tokens
+- `GET /auth/me` - Get current user information
+
+#### 📄 Policy Management  
+- `POST /upload-policy` - Upload and process insurance policy documents
+- `GET /policies` - List user's uploaded policies
+- `DELETE /policies/{policy_id}` - Remove a policy
+
+#### 🧠 AI Analysis
+- `POST /analyze-policy` - Comprehensive AI policy analysis
+- `POST /compare-policies` - Compare multiple policies side-by-side
+- `POST /chat` - Interactive Q&A with policy documents
+- `GET /analysis/{policy_id}` - Retrieve cached analysis results
+
+#### 📊 Dashboard & Insights
+- `GET /dashboard/stats` - User dashboard statistics  
+- `GET /activities` - User activity history and timeline
+- `GET /insights` - Personalized policy insights and recommendations
+
+#### 🔧 System & Monitoring
+- `GET /health` - System health check with detailed status
+- `GET /metrics` - Performance metrics (admin only)
+- `GET /cache/stats` - Cache performance statistics
+- `GET /rate-limit/stats` - Rate limiting statistics
+
+### Enhanced Features
+
+#### 🛡️ Error Handling
+- **Structured Exceptions**: Comprehensive error types with recovery suggestions
+- **Global Exception Handler**: Consistent error responses across all endpoints
+- **Automatic Retry Logic**: Built-in retry mechanisms for external API calls
+
+#### 📊 Performance Monitoring  
+- **Request Tracking**: Detailed metrics for every API call
+- **System Metrics**: CPU, memory, and disk usage monitoring
+- **Custom Alerts**: Configurable thresholds for performance issues
+
+#### 💾 Advanced Caching
+- **Multiple Strategies**: LRU, LFU, FIFO, and TTL cache algorithms
+- **Intelligent Invalidation**: Smart cache updates based on data changes
+- **Background Cleanup**: Automated cache maintenance and optimization
+
+#### 🚦 Smart Rate Limiting
+- **Multiple Algorithms**: Token bucket, fixed window, and sliding window
+- **Per-User Limits**: Customizable rate limits based on user tiers
+- **Graceful Degradation**: Smooth handling of rate limit exceeded scenarios
 
 ---
 
-If you want a shorter or longer README (or a README tailored for contributors or operators), tell me which audience and I will generate it.
+## 🧪 Testing & Development
+
+### Running Tests
+
+```bash
+# Backend Tests
+cd backend
+source .venv/bin/activate  # or .\.venv\Scripts\Activate on Windows
+pytest tests/ -v --cov=src
+
+# Frontend Tests  
+cd frontend
+pnpm test
+pnpm test:e2e  # End-to-end tests
+```
+
+### Development Tools
+
+```bash
+# Backend Development
+uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+
+# Frontend Development
+pnpm dev        # Development server
+pnpm build      # Production build
+pnpm lint       # Code linting
+pnpm type-check # TypeScript validation
+
+# Database Management
+pnpm db:push    # Push schema changes
+pnpm db:studio  # Open Supabase studio
+```
+
+### API Testing
+
+```bash
+# Health Check
+curl http://localhost:8000/health
+
+# Upload Policy (with authentication)
+curl -X POST "http://localhost:8000/upload-policy" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -F "file=@policy.pdf" \
+  -F "policy_name=My Policy"
+
+# Get Analysis
+curl -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  http://localhost:8000/analysis/POLICY_ID
+```
+
+---
+
+## 🚀 Deployment Guide
+
+### Production Deployment
+
+#### Backend Deployment (Render/Railway/DigitalOcean)
+
+```bash
+# 1. Build and deploy backend
+git push origin main  # Triggers automatic deployment
+
+# 2. Set environment variables in platform dashboard:
+# - All environment variables from .env.example
+# - Set LOG_LEVEL=INFO for production
+# - Configure monitoring and alerting
+
+# 3. Health check endpoint
+curl https://your-api-domain.com/health
+```
+
+#### Frontend Deployment (Vercel/Netlify)
+
+```bash
+# 1. Connect repository to Vercel
+# 2. Set environment variables:
+# - NEXT_PUBLIC_SUPABASE_URL
+# - NEXT_PUBLIC_SUPABASE_ANON_KEY  
+# - NEXT_PUBLIC_API_URL (your backend URL)
+
+# 3. Deploy
+vercel --prod
+```
+
+### Docker Deployment
+
+```dockerfile
+# Backend Dockerfile
+FROM python:3.11-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+COPY . .
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+# Frontend Dockerfile  
+FROM node:18-alpine
+WORKDIR /app
+COPY package.json pnpm-lock.yaml ./
+RUN npm install -g pnpm && pnpm install
+COPY . .
+RUN pnpm build
+CMD ["pnpm", "start"]
+```
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+services:
+  backend:
+    build: ./backend
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+    ports:
+      - "8000:8000"
+  
+  frontend:
+    build: ./frontend  
+    environment:
+      - NEXT_PUBLIC_API_URL=http://backend:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+```
+
+---
+
+## 🛠️ Troubleshooting Guide
+
+### Common Issues & Solutions
+
+#### 🔒 Authentication Errors
+```bash
+# Problem: 401 Unauthorized errors
+# Solution: Check JWT configuration
+export SUPABASE_JWT_SECRET="your-actual-jwt-secret"
+
+# Verify token in backend logs
+tail -f logs/claimwise.log | grep "JWT"
+```
+
+#### 🌐 CORS Issues
+```bash  
+# Problem: Browser CORS errors
+# Solution: Update ALLOWED_ORIGINS
+ALLOWED_ORIGINS="http://localhost:3000,https://your-domain.vercel.app"
+
+# Check CORS middleware in main.py
+```
+
+#### 📄 File Upload Problems
+```bash
+# Problem: File processing failures
+# Solution: Verify OCR dependencies
+tesseract --version
+pdftoppm -h
+
+# Check file size limits (default 10MB)
+MAX_FILE_SIZE=20971520  # 20MB
+```
+
+#### 🚀 Performance Issues
+```bash
+# Check system metrics
+curl http://localhost:8000/metrics
+
+# Monitor cache performance
+curl http://localhost:8000/cache/stats
+
+# Check rate limiting
+curl http://localhost:8000/rate-limit/stats
+```
+
+#### 🗄️ Database Connection Issues
+```bash
+# Verify Supabase connection
+curl -H "apikey: YOUR_SUPABASE_ANON_KEY" \
+     -H "Authorization: Bearer YOUR_SERVICE_KEY" \
+     "https://YOUR_PROJECT.supabase.co/rest/v1/policies"
+
+# Check database schema
+psql "postgresql://postgres:[PASSWORD]@db.[PROJECT].supabase.co:5432/postgres"
+```
+
+#### 🌐 SSR & Hydration Issues
+```bash
+# Problem: useLayoutEffect SSR warnings
+# Solution: Warnings are suppressed in development via next.config.mjs
+
+# Problem: Hydration mismatches
+# Solution: Use ClientOnly wrapper for client-specific components
+import { ClientOnly } from "@/components/ui/client-only"
+
+# Example usage:
+<ClientOnly fallback={<div>Loading...</div>}>
+  <ComponentThatNeedsClient />
+</ClientOnly>
+```
+
+### Performance Optimization
+
+#### Backend Optimization
+- **Enable Caching**: Set `CACHE_TTL=3600` for 1-hour cache
+- **Configure Rate Limits**: Adjust limits based on your usage patterns  
+- **Monitor Memory**: Use `GET /metrics` to track resource usage
+- **Database Indexing**: Ensure proper indexes on frequently queried columns
+
+#### Frontend Optimization  
+- **Enable ISR**: Use Incremental Static Regeneration for policy pages
+- **Image Optimization**: Use Next.js Image component for policy previews
+- **Code Splitting**: Lazy load heavy components and pages
+- **CDN Configuration**: Configure proper caching headers
+
+---
+
+## 📈 Monitoring & Analytics
+
+### Built-in Monitoring
+
+- **Request Metrics**: Response times, error rates, and throughput
+- **System Health**: CPU, memory, and disk usage tracking
+- **Cache Performance**: Hit rates, memory usage, and eviction statistics  
+- **Rate Limiting**: Request patterns and limit enforcement
+- **Error Tracking**: Comprehensive error logging with stack traces
+
+### Dashboard Access
+
+```bash
+# System metrics (admin only)
+GET /metrics
+
+# Performance dashboard  
+GET /dashboard/system
+
+# Error analytics
+GET /errors/summary?days=7
+
+# User activity insights
+GET /analytics/users?period=30d
+```
+
+---
+
+## 🤝 Contributing
+
+### Development Workflow
+
+1. **Fork & Clone**
+   ```bash
+   git clone https://github.com/ApexYash11/Claimwise.git
+   cd Claimwise
+   ```
+
+2. **Setup Development Environment**
+   ```bash
+   # Backend setup
+   cd backend && pip install -r requirements.txt
+   # Frontend setup  
+   cd frontend && pnpm install
+   ```
+
+3. **Create Feature Branch**
+   ```bash
+   git checkout -b feature/amazing-new-feature
+   ```
+
+4. **Run Tests**
+   ```bash
+   # Backend tests
+   pytest tests/ --cov=src
+   # Frontend tests
+   pnpm test
+   ```
+
+5. **Submit Pull Request**
+   - Write clear commit messages
+   - Include tests for new features
+   - Update documentation as needed
+
+### Code Style
+
+- **Backend**: Black formatter, isort, flake8 linting
+- **Frontend**: Prettier, ESLint, TypeScript strict mode
+- **Commits**: Conventional Commits format
+
+---
+
+## 📄 License & Support
+
+### License
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+
+### Support & Community
+
+- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/ApexYash11/Claimwise/issues)
+- 💡 **Feature Requests**: [GitHub Discussions](https://github.com/ApexYash11/Claimwise/discussions)
+- 📧 **Email Support**: support@claimwise.ai
+- 💬 **Community Discord**: [Join our Discord](https://discord.gg/claimwise)
+
+### Enterprise Support
+
+For enterprise deployments, custom integrations, or priority support, contact us at enterprise@claimwise.ai
+
+---
+
+## 🔮 Roadmap
+
+### Upcoming Features
+
+- [ ] **Multi-language Support** - Support for regional languages
+- [ ] **Mobile App** - React Native iOS/Android apps  
+- [ ] **Advanced Analytics** - Predictive insights and recommendations
+- [ ] **Integration APIs** - Connect with insurance providers
+- [ ] **Blockchain Verification** - Document authenticity verification
+- [ ] **Voice Interface** - Voice-based policy queries
+
+### Recent Updates
+
+- [x] **Enhanced Error Handling** - Comprehensive exception management
+- [x] **Performance Monitoring** - Real-time system metrics
+- [x] **Advanced Caching** - Multi-strategy cache implementation
+- [x] **Smart Rate Limiting** - Intelligent request throttling  
+- [x] **Embedding System** - Multi-provider embedding support
+
+---
+
+**Made with ❤️ by the ClaimWise Team**
+
+*Empowering users to make informed insurance decisions through AI-powered analysis and insights.*

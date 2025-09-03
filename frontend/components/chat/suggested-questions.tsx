@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { MessageSquare, HelpCircle, BarChart3, Shield, DollarSign, Calendar, TrendingUp, FileText } from "lucide-react"
 import type { PolicySummary } from "@/lib/api"
 
@@ -166,15 +167,25 @@ export function SuggestedQuestions({ onQuestionSelect, policies = [], selectedPo
             </div>
             <div className="space-y-2">
               {category.questions.map((question, index) => (
-                <Button
-                  key={index}
-                  variant="ghost"
-                  className="w-full justify-start text-left h-auto p-3 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-xl transition-colors duration-200 font-medium leading-relaxed"
-                  onClick={() => onQuestionSelect(question)}
-                >
-                  <MessageSquare className="w-3 h-3 mr-2 flex-shrink-0" />
-                  <span className="truncate">{question}</span>
-                </Button>
+                <Tooltip key={index}>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-start text-left h-auto p-3 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-xl transition-colors duration-200 font-medium leading-relaxed"
+                      onClick={() => onQuestionSelect(question)}
+                    >
+                      <MessageSquare className="w-3 h-3 mr-2 flex-shrink-0" />
+                      <span className="truncate">{question}</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent 
+                    side="top" 
+                    className="max-w-sm p-3 text-sm bg-gray-900 text-white rounded-lg shadow-lg border-0"
+                    sideOffset={5}
+                  >
+                    <p className="leading-relaxed">{question}</p>
+                  </TooltipContent>
+                </Tooltip>
               ))}
             </div>
           </div>

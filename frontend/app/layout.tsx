@@ -5,6 +5,7 @@ import "./globals.css"
 
 import { AuthProvider } from "@/hooks/use-auth"
 import { ThemeProvider } from "@/components/theme-provider"
+import { TooltipProvider } from "@/components/ui/tooltip"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -30,7 +31,9 @@ export const metadata: Metadata = {
   <html lang="en" className={`${inter.variable} ${merriweather.variable} antialiased`} suppressHydrationWarning>
       <body className="font-sans">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <AuthProvider>{children}</AuthProvider>
+          <TooltipProvider delayDuration={300}>
+            <AuthProvider>{children}</AuthProvider>
+          </TooltipProvider>
         </ThemeProvider>
       </body>
     </html>
