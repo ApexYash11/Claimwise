@@ -29,12 +29,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // Skip auth initialization if we're in a build environment
+    if (typeof window === "undefined") {
+      setLoading(false)
+      return
+    }
+
     // Get initial session
     const getInitialSession = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      setUser(session?.user ?? null)
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        setUser(session?.user ?? null)
+      } catch (error) {
+        console.warn("Failed to get session:", error)
+        setUser(null)
+      }
       setLoading(false)
     }
 
