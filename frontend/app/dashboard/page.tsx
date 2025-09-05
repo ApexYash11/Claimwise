@@ -248,21 +248,33 @@ export default function DashboardPage() {
                   <CheckCircle className="w-6 h-6 text-green-600 flex-shrink-0 mt-1" />
                   <div className="space-y-2">
                     <p className="text-base font-semibold text-green-900 dark:text-green-100">Coverage Analysis Complete</p>
-                    <p className="text-sm text-green-700 dark:text-green-300 leading-relaxed">4 policies analyzed with comprehensive coverage details and recommendations</p>
+                    <p className="text-sm text-green-700 dark:text-green-300 leading-relaxed">
+                      {loading ? "Loading..." : `${stats?.analysesCompleted || 0} policies analyzed with comprehensive coverage details and recommendations`}
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-start space-x-4 p-5 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 rounded-2xl border border-blue-200/50 dark:border-blue-800/30">
                   <CheckCircle className="w-6 h-6 text-blue-600 flex-shrink-0 mt-1" />
                   <div className="space-y-2">
                     <p className="text-base font-semibold text-blue-900 dark:text-blue-100">Claim Readiness Assessment</p>
-                    <p className="text-sm text-blue-700 dark:text-blue-300 leading-relaxed">Your documents are well-organized for efficient claim processing</p>
+                    <p className="text-sm text-blue-700 dark:text-blue-300 leading-relaxed">
+                      {loading ? "Loading..." : stats?.documentsProcessed && stats.documentsProcessed > 0 
+                        ? "Your documents are well-organized for efficient claim processing" 
+                        : "Upload and analyze policies to assess claim readiness"
+                      }
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-start space-x-4 p-5 bg-gradient-to-r from-purple-50 to-violet-50 dark:from-purple-950/20 dark:to-violet-950/20 rounded-2xl border border-purple-200/50 dark:border-purple-800/30">
                   <CheckCircle className="w-6 h-6 text-purple-600 flex-shrink-0 mt-1" />
                   <div className="space-y-2">
                     <p className="text-base font-semibold text-purple-900 dark:text-purple-100">Coverage Gaps Identified</p>
-                    <p className="text-sm text-purple-700 dark:text-purple-300 leading-relaxed">Review analysis for potential coverage improvements and optimization</p>
+                    <p className="text-sm text-purple-700 dark:text-purple-300 leading-relaxed">
+                      {loading ? "Loading..." : stats?.comparisonsRun && stats.comparisonsRun > 0 
+                        ? "Review analysis for potential coverage improvements and optimization" 
+                        : "Run policy comparisons to identify potential coverage gaps"
+                      }
+                    </p>
                   </div>
                 </div>
               </CardContent>
@@ -284,20 +296,31 @@ export default function DashboardPage() {
                     <CheckCircle className="w-6 h-6 text-green-600 flex-shrink-0 mt-1" />
                     <div className="space-y-2">
                       <p className="text-base font-semibold text-green-900 dark:text-green-100">All Documents Processed</p>
-                      <p className="text-sm text-green-700 dark:text-green-300 leading-relaxed">4 policy documents successfully analyzed and indexed</p>
+                      <p className="text-sm text-green-700 dark:text-green-300 leading-relaxed">
+                        {loading ? "Loading..." : `${stats?.documentsProcessed || 0} policy documents successfully analyzed and indexed`}
+                      </p>
                     </div>
                   </div>
-                  <Badge className="bg-gradient-to-r from-green-500 to-emerald-500 text-white border-0 px-3 py-1">Complete</Badge>
+                  <Badge className="bg-gradient-to-r from-green-500 to-emerald-500 text-white border-0 px-3 py-1">
+                    {loading ? "..." : (stats?.documentsProcessed && stats.documentsProcessed > 0 ? "Complete" : "Pending")}
+                  </Badge>
                 </div>
                 <div className="flex items-start justify-between p-5 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 rounded-2xl border border-blue-200/50 dark:border-blue-800/30">
                   <div className="flex items-start space-x-4">
                     <CheckCircle className="w-6 h-6 text-blue-600 flex-shrink-0 mt-1" />
                     <div className="space-y-2">
                       <p className="text-base font-semibold text-blue-900 dark:text-blue-100">Ready for Chat Analysis</p>
-                      <p className="text-sm text-blue-700 dark:text-blue-300 leading-relaxed">Ask questions about your policy coverage and get instant answers</p>
+                      <p className="text-sm text-blue-700 dark:text-blue-300 leading-relaxed">
+                        {loading ? "Loading..." : stats?.analysesCompleted && stats.analysesCompleted > 0 
+                          ? "Ask questions about your policy coverage and get instant answers" 
+                          : "Upload and analyze policies to enable chat analysis"
+                        }
+                      </p>
                     </div>
                   </div>
-                  <Badge className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white border-0 px-3 py-1">Available</Badge>
+                  <Badge className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white border-0 px-3 py-1">
+                    {loading ? "..." : (stats?.analysesCompleted && stats.analysesCompleted > 0 ? "Available" : "Pending")}
+                  </Badge>
                 </div>
                 <div className="pt-4">
                   <Button variant="outline" asChild className="w-full bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-950/20 dark:to-amber-950/20 border-orange-200 hover:bg-gradient-to-r hover:from-orange-100 hover:to-amber-100 dark:border-orange-800/30 transition-all duration-300 h-12 text-base font-semibold">

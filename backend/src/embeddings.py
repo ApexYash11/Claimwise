@@ -1,269 +1,436 @@
-from typing import List, Any, Optional
-import os 
-import time
+"""
+Enhanced embedding system for ClaimWise backend.
+Provides efficient text embedding with caching, batching, and multiple provider support.
+"""
 import logging
-
-try:
-    import google.generativeai as genai
-except ImportError:
-    genai = None
+import hashlib
+from typing import List, Dict, Any, Optional, Tuple
+import numpy as np
+from src.caching import get_embedding_cache, cached
+from src.exceptions import ExternalAPIError, ProcessingError, handle_exceptions
 
 logger = logging.getLogger(__name__)
 
-# Configuration from environment
-EMBEDDING_MODEL = os.getenv("GEMINI_EMBEDDING_MODEL", "text-embedding-004")
-DEFAULT_BATCH_SIZE = int(os.getenv("EMBEDDING_BATCH_SIZE", "20"))
-ENABLE_EMBEDDING_CACHE = os.getenv("ENABLE_EMBEDDING_CACHE", "true").lower() == "true"
-MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
-INITIAL_DELAY = float(os.getenv("INITIAL_DELAY", "1.0"))
+class EmbeddingProvider:
+    """Base class for embedding providers"""
+    
+    def __init__(self, name: str):
+        self.name = name
+    
+    async def embed_texts(self, texts: List[str]) -> List[List[float]]:
+        """Generate embeddings for a list of texts"""
+        raise NotImplementedError
+    
+    def get_embedding_dimension(self) -> int:
+        """Get the dimension of embeddings produced by this provider"""
+        raise NotImplementedError
 
-# Initialize Gemini client properly
-client = None
-api_key = os.getenv("GEMINI_API_KEY")
-if genai and api_key:
-    try:
-        os.environ["GOOGLE_API_KEY"] = api_key
-        client = genai
-        logger.info("Gemini embedding client initialized")
-    except Exception as e:
-        logger.error(f"Failed to initialize Gemini client: {e}")
-        client = None
-else:
-    logger.warning("Gemini not available - embeddings will fail gracefully")
-
-from typing import List, Any, Optional
-import logging
-
-def embed_texts_with_cache(texts: List[str], max_retries: int = 3, batch_size: Optional[int] = None, delay: float = 1.0) -> List[Optional[List[float]]]:
-    """
-    Embed texts with caching support to reduce API calls.
+class OpenAIEmbeddingProvider(EmbeddingProvider):
+    """OpenAI embedding provider"""
     
-    Args:
-        texts: List of strings to embed
-        max_retries: Number of retry attempts for rate limits
-        batch_size: Number of texts to embed per API call (None = use DEFAULT_BATCH_SIZE)
-        delay: Initial delay between retries (exponential backoff)
-        
-    Returns:
-        List of embeddings (or None for failed embeddings)
-    """
-    if not texts:
-        return []
+    def __init__(self, api_key: str, model: str = "text-embedding-ada-002"):
+        super().__init__("openai")
+        self.api_key = api_key
+        self.model = model
+        self.dimension = 1536  # ada-002 dimension
     
-    if batch_size is None:
-        batch_size = DEFAULT_BATCH_SIZE
-    
-    # If caching is disabled, use regular embedding
-    if not ENABLE_EMBEDDING_CACHE:
-        return embed_texts(texts, max_retries, batch_size, delay)
-    
-    from src.content_filters import get_content_fingerprint
-    from src.db import supabase, supabase_storage
-    
-    cached_embeddings = []
-    texts_to_embed = []
-    cache_map = {}  # fingerprint -> index in original texts
-    
-    # Step 1: Check cache for existing embeddings
-    for i, text in enumerate(texts):
-        fingerprint = get_content_fingerprint(text)
-        
+    async def embed_texts(self, texts: List[str]) -> List[List[float]]:
+        """Generate embeddings using OpenAI API"""
         try:
-            # Try to get cached embedding
-            service_client = supabase_storage or supabase
-            result = service_client.rpc('get_cached_embedding', {'fingerprint': fingerprint}).execute()
+            import openai
+            client = openai.OpenAI(api_key=self.api_key)
             
-            if result.data and result.data[0]:
-                # Found cached embedding
-                cached_embeddings.append((i, result.data[0]))
-                logger.debug(f"Using cached embedding for text {i}")
-            else:
-                # Need to embed this text
-                texts_to_embed.append(text)
-                cache_map[fingerprint] = i
-                
-        except Exception as e:
-            logger.warning(f"Cache lookup failed for text {i}: {e}")
-            texts_to_embed.append(text)
-            cache_map[fingerprint] = i
-    
-    # Step 2: Embed uncached texts
-    new_embeddings = []
-    if texts_to_embed:
-        logger.info(f"Cache hit rate: {len(cached_embeddings)}/{len(texts)} ({len(cached_embeddings)/len(texts)*100:.1f}%)")
-        new_embeddings = embed_texts(texts_to_embed, max_retries, batch_size, delay)
-        
-        # Step 3: Cache new embeddings
-        for j, embedding in enumerate(new_embeddings):
-            if embedding is not None:
-                text = texts_to_embed[j]
-                fingerprint = get_content_fingerprint(text)
-                
-                try:
-                    service_client = supabase_storage or supabase
-                    service_client.rpc('cache_embedding', {
-                        'fingerprint': fingerprint,
-                        'content_preview': text[:200],
-                        'embedding_vector': embedding,
-                        'model_name': EMBEDDING_MODEL
-                    }).execute()
-                    logger.debug(f"Cached new embedding for text {cache_map[fingerprint]}")
-                except Exception as e:
-                    logger.warning(f"Failed to cache embedding: {e}")
-    
-    # Step 4: Combine cached and new embeddings in original order
-    final_embeddings: List[Optional[List[float]]] = [None] * len(texts)
-    
-    # Place cached embeddings
-    for i, embedding in cached_embeddings:
-        final_embeddings[i] = embedding
-    
-    # Place new embeddings
-    new_embedding_index = 0
-    for fingerprint, original_index in cache_map.items():
-        if new_embedding_index < len(new_embeddings):
-            final_embeddings[original_index] = new_embeddings[new_embedding_index]
-            new_embedding_index += 1
-    
-    return final_embeddings
-
-
-# Keep original function for backward compatibility
-def embed_texts(texts: List[str], max_retries: int = 3, batch_size: Optional[int] = None, delay: float = 1.0) -> List[Optional[List[float]]]:
-    """
-    Embed texts with batching and retry logic to handle rate limits.
-    
-    Args:
-        texts: List of strings to embed
-        max_retries: Number of retry attempts for rate limits
-        batch_size: Number of texts to embed per API call (None = use DEFAULT_BATCH_SIZE)
-        delay: Initial delay between retries (exponential backoff)
-    """
-    if not texts:
-        return []
-    
-    if batch_size is None:
-        batch_size = DEFAULT_BATCH_SIZE
-    
-    logger.info(f"Embedding {len(texts)} texts in batches of {batch_size}")
-    all_embeddings = []
-    
-    # Process in batches
-    for i in range(0, len(texts), batch_size):
-        batch = texts[i:i + batch_size]
-        batch_embeddings = _embed_batch(batch, max_retries, delay)
-        all_embeddings.extend(batch_embeddings)
-    
-    return all_embeddings
-
-def _embed_batch(texts: List[str], max_retries: int, initial_delay: float) -> List[Optional[List[float]]]:
-    """Embed a batch of texts with retry logic using correct Gemini API."""
-    for attempt in range(max_retries):
-        try:
-            if not client:
-                logger.error("Gemini client not available")
-                return [None] * len(texts)
-                
-            # Use the correct Gemini embedding API
+            # OpenAI allows up to 2048 texts per request
+            batch_size = min(2048, len(texts))
             embeddings = []
-            for text in texts:
-                try:
-                    # Use the correct Gemini API call with proper error handling
-                    result = genai.embed_content(
-                        model=f"models/{EMBEDDING_MODEL}",
-                        content=text,
-                        task_type="retrieval_document"
-                    )
-                    
-                    # Extract the embedding from the response - handle different response formats
-                    embedding_data = None
-                    
-                    # Try different ways to access the embedding
-                    try:
-                        if isinstance(result, dict):
-                            embedding_data = result.get('embedding')
-                        elif hasattr(result, '__getitem__'):
-                            embedding_data = result['embedding']
-                        else:
-                            # Try to get embedding attribute safely
-                            embedding_data = getattr(result, 'embedding', None)
-                    except (KeyError, TypeError, AttributeError):
-                        embedding_data = None
-                    
-                    if embedding_data is not None:
-                        if isinstance(embedding_data, list):
-                            embeddings.append(embedding_data)
-                        elif hasattr(embedding_data, '__iter__'):
-                            embeddings.append(list(embedding_data))
-                        else:
-                            logger.warning(f"Unexpected embedding format: {type(embedding_data)}")
-                            embeddings.append(None)
-                    else:
-                        logger.warning(f"No embedding data in response for text: {text[:50]}...")
-                        embeddings.append(None)
-                        
-                except Exception as text_error:
-                    logger.warning(f"Failed to embed individual text: {text_error}")
-                    embeddings.append(None)
             
-            successful_embeddings = sum(1 for e in embeddings if e is not None)
-            logger.info(f"Successfully embedded {successful_embeddings}/{len(texts)} texts in batch")
+            for i in range(0, len(texts), batch_size):
+                batch = texts[i:i + batch_size]
+                
+                response = client.embeddings.create(
+                    input=batch,
+                    model=self.model
+                )
+                
+                batch_embeddings = [item.embedding for item in response.data]
+                embeddings.extend(batch_embeddings)
+            
             return embeddings
             
         except Exception as e:
-            error_str = str(e)
-            delay = initial_delay * (2 ** attempt)  # Exponential backoff
-            
-            # Check for rate limiting or API errors
-            if ("429" in error_str or "quota" in error_str.lower() or "rate limit" in error_str.lower()) and attempt < max_retries - 1:
-                logger.warning(f"Rate limit hit on batch, waiting {delay:.1f} seconds (attempt {attempt + 1}/{max_retries})")
-                time.sleep(delay)
-                continue
-            elif "embed_content" in error_str and "not" in error_str:
-                # API method not available - use graceful fallback
-                logger.error("Gemini embed_content method not available - using graceful fallback")
-                return [None] * len(texts)
-            else:
-                logger.error(f"Embedding API error on attempt {attempt + 1}: {error_str}")
-                break
+            raise ExternalAPIError(
+                message=f"OpenAI embedding failed: {str(e)}",
+                service="openai_embeddings",
+                original_exception=e
+            )
     
-    # All retries failed - return None embeddings for graceful degradation
-    logger.warning(f"Failed to embed batch after {max_retries} retries - using graceful fallback")
-    return [None] * len(texts)
+    def get_embedding_dimension(self) -> int:
+        return self.dimension
 
-def _parse_embeddings_response(resp, expected_count: int) -> List[Optional[List[float]]]:
-    """Parse embeddings from various SDK response shapes."""
-    embeddings = []
-    try:
-        # try iterable response
-        for item in resp:
-            # item may be a simple object with 'values' or 'embedding'
-            val = getattr(item, 'values', None) or getattr(item, 'embedding', None) or item
-            if hasattr(val, '__iter__'):
-                embeddings.append(list(val))
-            else:
-                # fallback to string parsing
-                embeddings.append([float(x) for x in str(val).split() if x])
-    except TypeError:
-        # resp not iterable, try attribute access
-        val = getattr(resp, 'data', None) or getattr(resp, 'embeddings', None) or resp
-        if isinstance(val, list):
-            for item in val:
-                v = getattr(item, 'values', None) or getattr(item, 'embedding', None) or item
-                embeddings.append(list(v) if hasattr(v, '__iter__') else [float(x) for x in str(v).split() if x])
-        else:
-            # single embedding
-            v = getattr(val, 'values', None) or getattr(val, 'embedding', None) or val
-            embeddings.append(list(v) if hasattr(v, '__iter__') else [float(x) for x in str(v).split() if x])
-
-    # Ensure each embedding is a list of floats and pad/truncate if needed
-    cleaned = []
-    for emb in embeddings:
-        cleaned_emb = [float(x) for x in emb]
-        cleaned.append(cleaned_emb)
+class SentenceTransformerProvider(EmbeddingProvider):
+    """Local sentence transformer embedding provider"""
     
-    # Fill missing embeddings with None if response was shorter than expected
-    while len(cleaned) < expected_count:
-        cleaned.append(None)
+    def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
+        super().__init__("sentence_transformer")
+        self.model_name = model_name
+        self._model = None
+        self.dimension = 384  # Default for all-MiniLM-L6-v2
+    
+    def _load_model(self):
+        """Lazy load the sentence transformer model"""
+        if self._model is None:
+            try:
+                from sentence_transformers import SentenceTransformer
+                self._model = SentenceTransformer(self.model_name)
+                logger.info(f"Loaded sentence transformer model: {self.model_name}")
+            except ImportError as e:
+                raise ProcessingError(
+                    message="sentence-transformers library not installed",
+                    operation="load_embedding_model",
+                    original_exception=e,
+                    recovery_suggestions=[
+                        "Install sentence-transformers: pip install sentence-transformers"
+                    ]
+                )
+            except Exception as e:
+                raise ProcessingError(
+                    message=f"Failed to load sentence transformer model: {str(e)}",
+                    operation="load_embedding_model",
+                    original_exception=e
+                )
+    
+    async def embed_texts(self, texts: List[str]) -> List[List[float]]:
+        """Generate embeddings using sentence transformers"""
+        self._load_model()
         
-    return cleaned
+        if self._model is None:
+            raise ProcessingError(
+                message="Sentence transformer model failed to load",
+                operation="generate_embeddings"
+            )
+        
+        try:
+            embeddings = self._model.encode(texts, convert_to_tensor=False)
+            return embeddings.tolist()
+        except Exception as e:
+            raise ProcessingError(
+                message=f"Sentence transformer embedding failed: {str(e)}",
+                operation="generate_embeddings",
+                original_exception=e
+            )
+    
+    def get_embedding_dimension(self) -> int:
+        return self.dimension
+
+class HuggingFaceEmbeddingProvider(EmbeddingProvider):
+    """Hugging Face embedding provider"""
+    
+    def __init__(self, model_name: str = "sentence-transformers/all-MiniLM-L6-v2"):
+        super().__init__("huggingface")
+        self.model_name = model_name
+        self._tokenizer = None
+        self._model = None
+        self.dimension = 384
+    
+    def _load_model(self):
+        """Lazy load the Hugging Face model"""
+        if self._model is None:
+            try:
+                from transformers import AutoTokenizer, AutoModel
+                self._tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+                self._model = AutoModel.from_pretrained(self.model_name)
+                logger.info(f"Loaded Hugging Face model: {self.model_name}")
+            except ImportError:
+                raise ProcessingError(
+                    message="transformers library not installed",
+                    operation="load_embedding_model",
+                    recovery_suggestions=[
+                        "Install transformers: pip install transformers torch"
+                    ]
+                )
+    
+    async def embed_texts(self, texts: List[str]) -> List[List[float]]:
+        """Generate embeddings using Hugging Face transformers"""
+        self._load_model()
+        
+        if self._tokenizer is None or self._model is None:
+            raise ProcessingError(
+                message="Hugging Face model or tokenizer failed to load",
+                operation="generate_embeddings"
+            )
+        
+        try:
+            import torch
+            
+            # Tokenize and encode
+            encoded_input = self._tokenizer(
+                texts, 
+                padding=True, 
+                truncation=True, 
+                return_tensors='pt'
+            )
+            
+            with torch.no_grad():
+                model_output = self._model(**encoded_input)
+                # Use mean pooling
+                embeddings = model_output.last_hidden_state.mean(dim=1)
+            
+            return embeddings.tolist()
+            
+        except Exception as e:
+            raise ProcessingError(
+                message=f"Hugging Face embedding failed: {str(e)}",
+                operation="generate_embeddings",
+                original_exception=e
+            )
+    
+    def get_embedding_dimension(self) -> int:
+        return self.dimension
+
+class EmbeddingManager:
+    """Manages multiple embedding providers and caching"""
+    
+    def __init__(self):
+        self.providers: Dict[str, EmbeddingProvider] = {}
+        self.default_provider: Optional[str] = None
+        self.cache = get_embedding_cache()
+        
+        # Initialize default providers
+        self._initialize_providers()
+    
+    def _initialize_providers(self):
+        """Initialize available embedding providers"""
+        import os
+        
+        # Try to initialize OpenAI provider
+        openai_key = os.getenv("OPENAI_API_KEY")
+        if openai_key:
+            try:
+                self.providers["openai"] = OpenAIEmbeddingProvider(openai_key)
+                self.default_provider = "openai"
+                logger.info("Initialized OpenAI embedding provider")
+            except Exception as e:
+                logger.warning(f"Failed to initialize OpenAI provider: {e}")
+        
+        # Try to initialize Sentence Transformer provider
+        try:
+            self.providers["sentence_transformer"] = SentenceTransformerProvider()
+            if self.default_provider is None:
+                self.default_provider = "sentence_transformer"
+            logger.info("Initialized Sentence Transformer provider")
+        except Exception as e:
+            logger.warning(f"Failed to initialize Sentence Transformer provider: {e}")
+        
+        # Try to initialize Hugging Face provider
+        try:
+            self.providers["huggingface"] = HuggingFaceEmbeddingProvider()
+            if self.default_provider is None:
+                self.default_provider = "huggingface"
+            logger.info("Initialized Hugging Face provider")
+        except Exception as e:
+            logger.warning(f"Failed to initialize Hugging Face provider: {e}")
+        
+        if not self.providers:
+            logger.error("No embedding providers available!")
+    
+    def add_provider(self, name: str, provider: EmbeddingProvider):
+        """Add a custom embedding provider"""
+        self.providers[name] = provider
+        if self.default_provider is None:
+            self.default_provider = name
+        logger.info(f"Added custom embedding provider: {name}")
+    
+    def _generate_cache_key(self, texts: List[str], provider_name: str) -> str:
+        """Generate a cache key for the given texts and provider"""
+        # Create a hash of the texts and provider
+        text_content = "|".join(texts)
+        content_hash = hashlib.sha256(
+            f"{provider_name}:{text_content}".encode()
+        ).hexdigest()[:16]
+        return f"embed:{provider_name}:{content_hash}"
+    
+    @handle_exceptions(logger)
+    async def embed_texts(
+        self, 
+        texts: List[str], 
+        provider: Optional[str] = None,
+        use_cache: bool = True
+    ) -> List[List[float]]:
+        """Generate embeddings for a list of texts"""
+        
+        if not texts:
+            return []
+        
+        # Use default provider if none specified
+        provider_name = provider or self.default_provider
+        if not provider_name or provider_name not in self.providers:
+            available = list(self.providers.keys())
+            raise ProcessingError(
+                message=f"Embedding provider '{provider_name}' not available",
+                operation="embed_texts",
+                details={"available_providers": available},
+                recovery_suggestions=[
+                    f"Use one of the available providers: {', '.join(available)}",
+                    "Check your API keys and dependencies"
+                ]
+            )
+        
+        # Check cache first
+        cache_key = self._generate_cache_key(texts, provider_name)
+        if use_cache:
+            cached_result = self.cache.get(cache_key)
+            if cached_result is not None:
+                logger.debug(f"Cache hit for embedding batch of {len(texts)} texts")
+                return cached_result
+        
+        # Generate embeddings
+        provider_instance = self.providers[provider_name]
+        
+        try:
+            embeddings = await provider_instance.embed_texts(texts)
+            
+            # Validate results
+            if len(embeddings) != len(texts):
+                raise ProcessingError(
+                    message="Embedding count mismatch",
+                    operation="embed_texts",
+                    details={
+                        "input_count": len(texts),
+                        "output_count": len(embeddings)
+                    }
+                )
+            
+            # Cache the results
+            if use_cache:
+                self.cache.set(cache_key, embeddings, ttl=7200)  # Cache for 2 hours
+            
+            logger.debug(f"Generated {len(embeddings)} embeddings using {provider_name}")
+            return embeddings
+            
+        except Exception as e:
+            if isinstance(e, (ExternalAPIError, ProcessingError)):
+                raise
+            else:
+                raise ProcessingError(
+                    message=f"Embedding generation failed with {provider_name}",
+                    operation="embed_texts",
+                    original_exception=e
+                )
+    
+    async def embed_single_text(
+        self, 
+        text: str, 
+        provider: Optional[str] = None,
+        use_cache: bool = True
+    ) -> List[float]:
+        """Generate embedding for a single text"""
+        embeddings = await self.embed_texts([text], provider, use_cache)
+        return embeddings[0] if embeddings else []
+    
+    def get_embedding_dimension(self, provider: Optional[str] = None) -> int:
+        """Get the embedding dimension for the specified provider"""
+        provider_name = provider or self.default_provider
+        if provider_name and provider_name in self.providers:
+            return self.providers[provider_name].get_embedding_dimension()
+        return 384  # Default dimension
+    
+    def get_available_providers(self) -> List[str]:
+        """Get list of available embedding providers"""
+        return list(self.providers.keys())
+    
+    def calculate_similarity(
+        self, 
+        embedding1: List[float], 
+        embedding2: List[float]
+    ) -> float:
+        """Calculate cosine similarity between two embeddings"""
+        try:
+            # Convert to numpy arrays
+            vec1 = np.array(embedding1)
+            vec2 = np.array(embedding2)
+            
+            # Calculate cosine similarity
+            dot_product = np.dot(vec1, vec2)
+            norm1 = np.linalg.norm(vec1)
+            norm2 = np.linalg.norm(vec2)
+            
+            if norm1 == 0 or norm2 == 0:
+                return 0.0
+            
+            return dot_product / (norm1 * norm2)
+            
+        except Exception as e:
+            logger.error(f"Error calculating similarity: {e}")
+            return 0.0
+    
+    def find_most_similar(
+        self, 
+        query_embedding: List[float], 
+        candidate_embeddings: List[List[float]],
+        top_k: int = 5
+    ) -> List[Tuple[int, float]]:
+        """Find the most similar embeddings to the query"""
+        try:
+            similarities = []
+            
+            for i, candidate in enumerate(candidate_embeddings):
+                similarity = self.calculate_similarity(query_embedding, candidate)
+                similarities.append((i, similarity))
+            
+            # Sort by similarity (descending)
+            similarities.sort(key=lambda x: x[1], reverse=True)
+            
+            return similarities[:top_k]
+            
+        except Exception as e:
+            logger.error(f"Error finding similar embeddings: {e}")
+            return []
+
+# Global embedding manager instance
+embedding_manager = EmbeddingManager()
+
+# Convenience functions
+async def embed_texts(
+    texts: List[str], 
+    provider: Optional[str] = None,
+    use_cache: bool = True
+) -> List[List[float]]:
+    """Generate embeddings for a list of texts"""
+    return await embedding_manager.embed_texts(texts, provider, use_cache)
+
+async def embed_text(
+    text: str, 
+    provider: Optional[str] = None,
+    use_cache: bool = True
+) -> List[float]:
+    """Generate embedding for a single text"""
+    return await embedding_manager.embed_single_text(text, provider, use_cache)
+
+def calculate_similarity(embedding1: List[float], embedding2: List[float]) -> float:
+    """Calculate cosine similarity between two embeddings"""
+    return embedding_manager.calculate_similarity(embedding1, embedding2)
+
+# Cached wrapper functions
+@cached("embeddings", ttl=7200)
+def embed_texts_with_cache(texts: List[str], provider: Optional[str] = None) -> List[List[float]]:
+    """Cached version of embed_texts for synchronous use"""
+    import asyncio
+    
+    try:
+        loop = asyncio.get_event_loop()
+        return loop.run_until_complete(embed_texts(texts, provider, use_cache=True))
+    except RuntimeError:
+        # No running loop, create new one
+        return asyncio.run(embed_texts(texts, provider, use_cache=True))
+
+@cached("embeddings", ttl=7200)
+def embed_text_with_cache(text: str, provider: Optional[str] = None) -> List[float]:
+    """Cached version of embed_text for synchronous use"""
+    import asyncio
+    
+    try:
+        loop = asyncio.get_event_loop()
+        return loop.run_until_complete(embed_text(text, provider, use_cache=True))
+    except RuntimeError:
+        # No running loop, create new one
+        return asyncio.run(embed_text(text, provider, use_cache=True))

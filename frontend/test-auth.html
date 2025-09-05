@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Supabase Auth Test</title>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <h1>Direct Supabase Auth Test</h1>
+    <div>
+        <input type="email" id="email" placeholder="Email" value="test@example.com">
+        <input type="password" id="password" placeholder="Password" value="test123456">
+        <button onclick="testSignup()">Test Signup</button>
+        <button onclick="testSignin()">Test Signin</button>
+    </div>
+    <div id="result"></div>
+
+    <script>
+        const supabase = window.supabase.createClient(
+            'https://pmsooebddaeddjyabghw.supabase.co',
+            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBtc29vZWJkZGFlZGRqeWFiZ2h3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ4OTI4MjQsImV4cCI6MjA3MDQ2ODgyNH0.2BlwCRTvCsseKn75RaarZ9p1NM2AWVSpsZiPxsE2LDI'
+        );
+
+        async function testSignup() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            console.log('Testing signup with:', email);
+            
+            try {
+                const { data, error } = await supabase.auth.signUp({
+                    email: email,
+                    password: password,
+                });
+                
+                console.log('Signup result:', { data, error });
+                
+                if (error) {
+                    document.getElementById('result').innerHTML = `
+                        <div style="color: red;">
+                            <strong>Error:</strong> ${error.message}<br>
+                            <strong>Code:</strong> ${error.status || 'N/A'}<br>
+                            <strong>Details:</strong> ${JSON.stringify(error)}
+                        </div>
+                    `;
+                } else {
+                    document.getElementById('result').innerHTML = `
+                        <div style="color: green;">
+                            <strong>Success!</strong><br>
+                            User: ${data.user ? data.user.email : 'No user'}<br>
+                            Session: ${data.session ? 'Created' : 'Email confirmation required'}
+                        </div>
+                    `;
+                }
+            } catch (err) {
+                console.error('Unexpected error:', err);
+                document.getElementById('result').innerHTML = `
+                    <div style="color: red;">
+                        <strong>Unexpected Error:</strong> ${err.message}
+                    </div>
+                `;
+            }
+        }
+
+        async function testSignin() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const { data, error } = await supabase.auth.signInWithPassword({
+                    email: email,
+                    password: password,
+                });
+                
+                if (error) {
+                    document.getElementById('result').innerHTML = `
+                        <div style="color: red;">
+                            <strong>Login Error:</strong> ${error.message}
+                        </div>
+                    `;
+                } else {
+                    document.getElementById('result').innerHTML = `
+                        <div style="color: green;">
+                            <strong>Login Success!</strong><br>
+                            User: ${data.user.email}
+                        </div>
+                    `;
+                }
+            } catch (err) {
+                document.getElementById('result').innerHTML = `
+                    <div style="color: red;">
+                        <strong>Login Error:</strong> ${err.message}
+                    </div>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>

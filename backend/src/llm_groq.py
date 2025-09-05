@@ -25,6 +25,7 @@ load_dotenv()
 # Initialize API keys for multiple providers
 groq_api_key = os.getenv("GROQ_API_KEY")
 groq_api_key_2 = os.getenv("GROQ_API_KEY_2")  # Second Groq account for fallback
+groq_api_key_3 = os.getenv("GROQ_API_KEY_3")  # Third Groq account for even more fallback
 gemini_api_key = os.getenv("GEMINI_API_KEY")
 openai_api_key = os.getenv("OPENAI_API_KEY")  # For OpenAI free tier
 anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")  # For Claude free tier
@@ -34,6 +35,7 @@ together_api_key = os.getenv("TOGETHER_API_KEY")  # For Together.ai free tier
 # Initialize Groq/OpenAI-compatible client only if the OpenAI SDK is available
 groq_client = None
 groq_client_2 = None  # Second Groq client for fallback
+groq_client_3 = None  # Third Groq client for maximum reliability
 
 if OpenAI is not None and groq_api_key:
     try:
@@ -57,6 +59,17 @@ if OpenAI is not None and groq_api_key_2:
     except Exception as e:
         logging.getLogger(__name__).warning("failed to initialize second Groq/OpenAI client: %s", e)
         groq_client_2 = None
+
+# Initialize third Groq client for maximum reliability
+if OpenAI is not None and groq_api_key_3:
+    try:
+        groq_client_3 = OpenAI(
+            base_url="https://api.groq.com/openai/v1",
+            api_key=groq_api_key_3
+        )
+    except Exception as e:
+        logging.getLogger(__name__).warning("failed to initialize third Groq/OpenAI client: %s", e)
+        groq_client_3 = None
 
 # Fallback: Gemini client
 genai = None
@@ -90,8 +103,8 @@ if gemini_api_key:
 
 def make_llm_request(prompt: str, max_retries: int = 3, delay: float = 1.0):
     """
-    Make an LLM request with multiple Groq API keys + other providers for maximum reliability.
-    Each Groq API key has separate 100k token/day limits!
+    Make an LLM request with TRIPLE Groq API keys + other providers for maximum reliability.
+    Each Groq API key has separate 100k token/day limits = 300k total Groq capacity!
     """
     import logging
     logger = logging.getLogger(__name__)
@@ -126,7 +139,22 @@ def make_llm_request(prompt: str, max_retries: int = 3, delay: float = 1.0):
         except Exception as e:
             logger.warning("❌ Secondary Groq API failed: %s", str(e))
     
-    # Provider 3: Gemini (Different provider = different limits)
+    # Provider 3: Tertiary Groq API (third separate 100k tokens/day!)
+    if groq_client_3:
+        try:
+            logger.info("Trying Tertiary Groq API (third separate quota)...")
+            response = groq_client_3.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1,
+                max_tokens=4000
+            )
+            logger.info("✅ Success with Tertiary Groq API")
+            return response.choices[0].message.content
+        except Exception as e:
+            logger.warning("❌ Tertiary Groq API failed: %s", str(e))
+    
+    # Provider 4: Gemini (Different provider = different limits)
     if gemini_available:
         try:
             logger.info("Trying Gemini API...")

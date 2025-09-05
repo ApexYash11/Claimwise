@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { signUp, signInWithProvider } from "@/lib/auth"
-import { Github, Globe } from "lucide-react"
+import { Github, Globe, Eye, EyeOff } from "lucide-react"
 import { Loader2, Shield, CheckCircle } from "lucide-react"
 
 export function SignupForm() {
@@ -19,6 +19,8 @@ export function SignupForm() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
   const [socialLoading, setSocialLoading] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -29,15 +31,21 @@ export function SignupForm() {
     setSocialLoading(provider)
     setError("")
     try {
+      console.log(`🔗 Starting ${provider} social signup`)
       const { error: authError } = await signInWithProvider(provider)
+      
       if (authError) {
-        setError(authError.message)
+        console.error(`❌ ${provider} signup failed:`, authError.message)
+        setError(`${provider} signup failed. Please try again or use email signup.`)
         setSocialLoading(null)
         return
       }
-      // Supabase will usually redirect on success
+      
+      console.log(`✅ ${provider} signup initiated - redirecting...`)
+      // Supabase will handle the redirect on success
     } catch (err) {
-      setError("An error occurred during social sign up. Please try again.")
+      console.error(`💥 ${provider} signup error:`, err)
+      setError(`An error occurred during ${provider} sign up. Please try again or use email signup.`)
       setSocialLoading(null)
     }
   }
@@ -46,27 +54,109 @@ export function SignupForm() {
     e.preventDefault()
     setError("")
     if (loading) return
+    
+    // Phase 1: Client-side validation (as per flow diagram)
+    console.log('🔍 Phase 1: Starting form validation')
+    
     if (password !== confirmPassword) {
       setError("Passwords do not match")
       return
     }
     if (password.length < 6) {
-      setError("Password must be at least 6 characters")
+      setError("Password must be at least 6 characters long")
+      return
+    }
+    if (!email || !email.includes('@')) {
+      setError("Please enter a valid email address")
+      return
+    }
+    if (!fullName.trim()) {
+      setError("Please enter your full name")
       return
     }
 
+    console.log('✅ Phase 1: Validation passed, proceeding to authentication')
     setLoading(true)
+    
     try {
-      const { data, error: authError } = await signUp(email, password, fullName)
+      console.log('🚀 Phase 2: Starting 3-strategy authentication for:', email)
+      const { data, error: authError } = await signUp(email, password, fullName.trim())
+      
+      console.log('📊 Authentication result:', { 
+        hasData: !!data, 
+        hasUser: !!data?.user,
+        hasSession: !!data?.session,
+        errorType: authError?.name,
+        errorMessage: authError?.message
+      })
+      
       if (authError) {
-        setError(authError.message)
+        console.error('❌ Authentication failed:', authError)
+        
+        // Enhanced error handling with specific user guidance
+        let errorMessage = authError.message
+        
+        // Handle specific error types with user-friendly messages
+        if (authError.message.includes('User already registered') || 
+            authError.message.includes('already registered')) {
+          errorMessage = 'This email is already registered. Please use the login page instead.'
+        } else if (authError.message.includes('Invalid email') || 
+                   authError.message.includes('invalid_email')) {
+          errorMessage = 'Please enter a valid email address.'
+        } else if (authError.message.includes('Password should be at least') || 
+                   authError.message.includes('password')) {
+          errorMessage = 'Password must be at least 6 characters long.'
+        } else if (authError.message.includes('Email not confirmed')) {
+          errorMessage = 'Please check your email and click the confirmation link.'
+        } else if (authError.message.includes('Invalid credentials')) {
+          errorMessage = 'Invalid email or password format.'
+        } else if (authError.message.includes('Email signup is temporarily unavailable') || 
+                   authError.message.includes('server configuration')) {
+          errorMessage = '📧 Email signup is temporarily unavailable. Please use Google or GitHub signup instead.'
+        } else if (authError.message.includes('Account creation failed')) {
+          errorMessage = '⚠️ Having trouble with email signup? Try Google or GitHub signup for instant access.'
+        } else if (authError.message.includes('rate limit') || 
+                   authError.message.includes('too many')) {
+          errorMessage = 'Too many signup attempts. Please wait a few minutes and try again.'
+        } else if (authError.message.includes('network') || 
+                   authError.message.includes('connection')) {
+          errorMessage = 'Connection issue. Please check your internet and try again.'
+        } else {
+          // Keep original error for debugging
+          errorMessage = `Signup failed: ${authError.message}`
+        }
+        
+        setError(errorMessage)
         setLoading(false)
         return
       }
-      setSuccess(true)
-      setLoading(false)
+      
+      // Phase 5: Success flow
+      if (data?.user) {
+        console.log('🎉 Phase 5: Signup successful for user:', data.user.email)
+        console.log('🔄 Checking session state...')
+        
+        if (data.session) {
+          console.log('✅ Session created, redirecting to dashboard')
+          setSuccess(true)
+          // Auto-redirect after showing success message
+          setTimeout(() => {
+            router.push('/dashboard')
+          }, 2000)
+        } else {
+          console.log('📧 No immediate session - likely email confirmation required')
+          setSuccess(true)
+          // Show success message about email confirmation
+        }
+      } else {
+        console.error('❌ Unexpected state: No error but no user created')
+        setError('Account creation incomplete. Please try again or use social login.')
+      }
+
     } catch (err) {
-      setError("An unexpected error occurred. Please try again.")
+      console.error('💥 Unexpected error during signup process:', err)
+      setError('An unexpected error occurred. Please try again or use Google/GitHub signup.')
+    } finally {
       setLoading(false)
     }
   }
@@ -80,15 +170,21 @@ export function SignupForm() {
               <CheckCircle className="w-6 h-6 text-white" />
             </div>
             <div>
-              <CardTitle className="text-2xl font-bold text-gray-900">Check your email</CardTitle>
+              <CardTitle className="text-2xl font-bold text-gray-900">Account Created!</CardTitle>
               <CardDescription className="text-gray-600">
-                We've sent you a confirmation link to complete your registration
+                Welcome to ClaimWise! You can now sign in to analyze your insurance policies.
               </CardDescription>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <p className="text-sm text-blue-800">
+                📧 <strong>Check your email</strong> if you don't get redirected automatically. 
+                Some email providers may require you to confirm your account.
+              </p>
+            </div>
             <Button onClick={() => router.push("/login")} className="w-full bg-blue-600 hover:bg-blue-700 text-white">
-              Back to Login
+              Continue to Login
             </Button>
           </CardContent>
         </Card>
@@ -175,30 +271,62 @@ export function SignupForm() {
               <Label htmlFor="password" className="text-gray-700">
                 Password
               </Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="border-gray-200 focus:border-blue-500 focus:ring-blue-500"
-                placeholder="Create a password"
-              />
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="border-gray-200 focus:border-blue-500 focus:ring-blue-500 pr-10"
+                  placeholder="Create a password"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4 text-gray-400" />
+                  ) : (
+                    <Eye className="h-4 w-4 text-gray-400" />
+                  )}
+                </Button>
+              </div>
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="confirmPassword" className="text-gray-700">
                 Confirm Password
               </Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                className="border-gray-200 focus:border-blue-500 focus:ring-blue-500"
-                placeholder="Confirm your password"
-              />
+              <div className="relative">
+                <Input
+                  id="confirmPassword"
+                  type={showConfirmPassword ? "text" : "password"}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  className="border-gray-200 focus:border-blue-500 focus:ring-blue-500 pr-10"
+                  placeholder="Confirm your password"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                >
+                  {showConfirmPassword ? (
+                    <EyeOff className="h-4 w-4 text-gray-400" />
+                  ) : (
+                    <Eye className="h-4 w-4 text-gray-400" />
+                  )}
+                </Button>
+              </div>
             </div>
 
             <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white" disabled={loading}>
