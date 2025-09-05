@@ -17,7 +17,7 @@ import type { PolicySummary } from "@/lib/api"
 
 // Dynamic policy data from backend/AI
 import { supabase } from "@/lib/supabase"
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+import { createApiUrlWithLogging } from "@/lib/url-utils"
 
 // Generate clean insights from policy data
 const generateInsights = (policies: PolicySummary[]) => {
@@ -233,7 +233,8 @@ export default function AnalyzePage() {
           try {
             const formData = new FormData();
             formData.append("policy_id", policyData.id);
-            const response = await fetch(`${API_BASE_URL}/analyze-policy`, {
+            const analyzeUrl = createApiUrlWithLogging("/analyze-policy");
+            const response = await fetch(analyzeUrl, {
               method: "POST",
               headers: token ? { Authorization: `Bearer ${token}` } : undefined,
               body: formData,

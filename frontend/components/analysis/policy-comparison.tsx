@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { CheckCircle, X, AlertTriangle, TrendingUp, TrendingDown, DollarSign, Shield, BarChart3, ChevronUp, ChevronDown, AlertCircle } from "lucide-react"
 import type { PolicySummary } from "@/lib/api"
 import { supabase } from "@/lib/supabase"
+import { createApiUrlWithLogging } from "@/lib/url-utils"
 
 interface PolicyComparisonProps {
   policies: PolicySummary[]
@@ -31,7 +32,8 @@ export function PolicyComparison({ policies, onRemovePolicy }: PolicyComparisonP
       const token = session.data.session?.access_token
       
       if (token && policies.length >= 2) {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/compare-policies`, {
+        const compareUrl = createApiUrlWithLogging("/compare-policies");
+        const response = await fetch(compareUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/x-www-form-urlencoded",

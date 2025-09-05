@@ -7,7 +7,7 @@ import { FileText, MessageSquare, BarChart3, Upload, Clock } from "lucide-react"
 import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase"
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+import { createApiUrlWithLogging } from "@/lib/url-utils"
 
 interface ActivityItem {
   id: string
@@ -46,7 +46,8 @@ export function RecentActivity() {
 
         let response;
         if (token) {
-          response = await fetch(`${API_BASE_URL}/activities`, {
+          const activitiesUrl = createApiUrlWithLogging("/activities");
+          response = await fetch(activitiesUrl, {
             headers: {
               "Authorization": `Bearer ${token}`,
               "Content-Type": "application/json",

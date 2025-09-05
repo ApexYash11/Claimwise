@@ -1,7 +1,6 @@
 // API utilities for backend communication
 import { supabase } from "./supabase"
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+import { createApiUrlWithLogging } from "./url-utils"
 
 export interface PolicyAnalysisRequest {
   files: File[]
@@ -49,7 +48,8 @@ export const uploadPolicies = async (files: File[], userId: string): Promise<Pol
   const token = session.data.session?.access_token
 
   try {
-    const response = await fetch(`${API_BASE_URL}/analyze-policy`, {
+    const apiUrl = createApiUrlWithLogging("/analyze-policy");
+    const response = await fetch(apiUrl, {
       method: "POST",
       body: formData,
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
@@ -68,7 +68,8 @@ export const uploadPolicies = async (files: File[], userId: string): Promise<Pol
 
 export const getAnalysisStatus = async (analysisId: string): Promise<PolicyAnalysisResponse> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/analysis/${analysisId}`)
+    const apiUrl = createApiUrlWithLogging(`/api/analysis/${analysisId}`);
+    const response = await fetch(apiUrl)
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`)
@@ -83,7 +84,8 @@ export const getAnalysisStatus = async (analysisId: string): Promise<PolicyAnaly
 
 export const comparePolicies = async (policyIds: string[]): Promise<any> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/compare-policies`, {
+    const apiUrl = createApiUrlWithLogging("/api/compare-policies");
+    const response = await fetch(apiUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -110,7 +112,8 @@ export const getPolicies = async (userId: string): Promise<PolicySummary[]> => {
     const session = await supabase.auth.getSession()
     const token = session.data.session?.access_token
 
-    const response = await fetch(`${API_BASE_URL}/api/policies/${userId}`, {
+    const apiUrl = createApiUrlWithLogging(`/api/policies/${userId}`);
+    const response = await fetch(apiUrl, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     })
 
@@ -127,7 +130,8 @@ export const getPolicies = async (userId: string): Promise<PolicySummary[]> => {
 
 export const chatWithPolicies = async (message: string, policyIds: string[]): Promise<any> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/chat`, {
+    const apiUrl = createApiUrlWithLogging("/api/chat");
+    const response = await fetch(apiUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -193,8 +197,9 @@ export const getActivityHistory = async (): Promise<HistoryResponse> => {
       throw new Error("No authentication token available")
     }
 
-    console.log("DEBUG: Making request to:", `${API_BASE_URL}/history`)
-    const response = await fetch(`${API_BASE_URL}/history`, {
+    const apiUrl = createApiUrlWithLogging("/history");
+    console.log("DEBUG: Making request to:", apiUrl);
+    const response = await fetch(apiUrl, {
       method: "GET",
       headers: {
         "Authorization": `Bearer ${token}`,

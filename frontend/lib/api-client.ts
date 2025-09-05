@@ -11,6 +11,7 @@ import {
   parseNetworkError,
   ErrorLogger 
 } from './error-handling';
+import { getApiBaseUrl, joinUrl } from './url-utils';
 
 export interface RequestConfig {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
@@ -97,7 +98,7 @@ export class ApiClient {
   private requestCount = 0;
 
   constructor(baseUrl?: string) {
-    this.baseUrl = baseUrl || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    this.baseUrl = baseUrl || getApiBaseUrl();
     this.defaultHeaders = {
       'Content-Type': 'application/json',
     };
@@ -127,7 +128,7 @@ export class ApiClient {
     config: RequestConfig,
     attempt: number = 1
   ): Promise<ApiResponse<T>> {
-    const fullUrl = url.startsWith('http') ? url : `${this.baseUrl}${url}`;
+    const fullUrl = url.startsWith('http') ? url : joinUrl(this.baseUrl, url);
     const startTime = performance.now();
     this.requestCount++;
 

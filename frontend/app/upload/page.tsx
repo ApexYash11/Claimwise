@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { supabase } from "@/lib/supabase"
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+import { createApiUrlWithLogging } from "@/lib/url-utils"
 import { useRouter } from "next/navigation"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { Header } from "@/components/layout/header"
@@ -70,7 +70,8 @@ export default function UploadPage() {
         }
       }
       
-      const response = await fetch(`${API_BASE_URL}/upload-policy`, {
+      const uploadUrl = createApiUrlWithLogging("/upload-policy");
+      const response = await fetch(uploadUrl, {
         method: "POST",
         body: formData,
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,

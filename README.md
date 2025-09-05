@@ -2,13 +2,21 @@
 
 **ClaimWise** is a production-ready, enterprise-grade platform that revolutionizes insurance policy management through advanced AI analysis. Upload insurance policies, get intelligent insights, compare coverage options, and chat with your documents using state-of-the-art language models.
 
+## ⚠️ SECURITY NOTICE
+
+**As of [Current Date]**: A critical chat data leakage vulnerability has been identified and **FIXED**. 
+- **Issue**: Chat conversations were shared between users on the same browser/device
+- **Fix**: Implemented user-specific storage with server-side authentication
+- **Action**: All users should refresh their browsers to load the secure version
+- **Details**: See [CHAT_LEAKAGE_FIX.md](./CHAT_LEAKAGE_FIX.md) for complete technical details
+
 ## ✨ Key Features
 
 - 🔍 **AI-Powered Policy Analysis** - Comprehensive policy breakdown with claim readiness scoring
 - 📊 **Policy Comparison** - Side-by-side analysis of multiple insurance policies  
 - 💬 **Document Chat** - Interactive Q&A with your policy documents using RAG
 - 📈 **Smart Insights** - Premium optimization, coverage gap analysis, and renewal alerts
-- 🔒 **Enterprise Security** - JWT authentication, role-based access, and secure file handling
+- 🔒 **Enterprise Security** - JWT authentication, user data isolation, and secure file handling
 - ⚡ **High Performance** - Advanced caching, rate limiting, and real-time monitoring
 - 📱 **Modern UI** - Responsive design with dark mode and accessibility features
 - 🤖 **AI Transparency** - Clear disclosure of AI-powered features with user guidance

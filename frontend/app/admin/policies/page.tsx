@@ -11,7 +11,7 @@ import { ArrowLeft, Edit2, Save, X } from "lucide-react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+import { createApiUrlWithLogging } from "@/lib/url-utils"
 
 interface PolicyDebugInfo {
   id: string
@@ -55,7 +55,8 @@ export default function PolicyManagerPage() {
         return
       }
 
-      const response = await fetch(`${API_BASE_URL}/debug/policies`, {
+      const debugUrl = createApiUrlWithLogging("/debug/policies");
+      const response = await fetch(debugUrl, {
         headers: {
           Authorization: `Bearer ${token}`
         }
@@ -79,7 +80,8 @@ export default function PolicyManagerPage() {
 
       if (!token) return
 
-      const response = await fetch(`${API_BASE_URL}/debug/update-policy-name/${policyId}?new_name=${encodeURIComponent(name)}`, {
+      const debugUrl = createApiUrlWithLogging(`/debug/update-policy-name/${policyId}?new_name=${encodeURIComponent(name)}`);
+      const response = await fetch(debugUrl, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`

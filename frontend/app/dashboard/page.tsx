@@ -13,6 +13,7 @@ import { ChatWidget } from "@/components/chat/chat-widget"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { createApiUrlWithLogging } from "@/lib/url-utils"
 // ...existing code...
 import { FileText, IndianRupee, Shield, Calendar, AlertTriangle, CheckCircle, TrendingUp } from "lucide-react"
 import Link from "next/link"
@@ -69,16 +70,19 @@ export default function DashboardPage() {
 
       let res;
       if (token) {
-        res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/dashboard/stats`, {
+        const statsUrl = createApiUrlWithLogging("/dashboard/stats");
+        res = await fetch(statsUrl, {
           headers: { Authorization: `Bearer ${token}` },
         })
         // If unauthorized or not found, fall back to dev endpoint
         if (res.status === 401 || res.status === 404) {
-          res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/dashboard/stats-dev`)
+          const devUrl = createApiUrlWithLogging("/dashboard/stats-dev");
+          res = await fetch(devUrl)
         }
       } else {
         // No token, use dev endpoint
-        res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/dashboard/stats-dev`)
+        const devUrl = createApiUrlWithLogging("/dashboard/stats-dev");
+        res = await fetch(devUrl)
       }
       if (!res.ok) throw new Error("Failed to fetch stats from both endpoints")
       const data = await res.json()

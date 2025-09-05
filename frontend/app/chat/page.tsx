@@ -16,7 +16,7 @@ import Link from "next/link"
 import { supabase } from "@/lib/supabase"
 import type { PolicySummary } from "@/lib/api"
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+import { createApiUrlWithLogging } from "@/lib/url-utils"
 
 interface ChatMessage {
   id: string
@@ -96,7 +96,8 @@ export default function ChatPage() {
             try {
               const formData = new FormData()
               formData.append("policy_id", policy.id)
-              const response = await fetch(`${API_BASE_URL}/analyze-policy`, {
+              const analyzeUrl = createApiUrlWithLogging("/analyze-policy");
+              const response = await fetch(analyzeUrl, {
                 method: "POST",
                 headers: token ? { Authorization: `Bearer ${token}` } : undefined,
                 body: formData,
@@ -133,15 +134,50 @@ export default function ChatPage() {
           }
         }
 
-        // Load chat history from localStorage (for now)
-        const storedHistory = localStorage.getItem("claimwise_chat_history")
-        if (storedHistory) {
-          const history = JSON.parse(storedHistory).map((msg: any) => ({
-            ...msg,
-            timestamp: new Date(msg.timestamp)
-          }))
-          setChatHistory(history)
-          setMessages(history)
+        // Load chat history from server first, with localStorage fallback
+        try {
+          console.log("Loading chat history from server...")
+          const chatHistoryUrl = createApiUrlWithLogging("/history")
+          const historyResponse = await fetch(chatHistoryUrl, {
+            headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          })
+          
+          if (historyResponse.ok) {
+            const historyData = await historyResponse.json()
+            // Extract chat messages from the history response
+            const serverMessages: ChatMessage[] = []
+            
+            if (historyData.chat_logs && Array.isArray(historyData.chat_logs)) {
+              historyData.chat_logs.forEach((chat: any) => {
+                // Add user message
+                serverMessages.push({
+                  id: `user_${chat.id}`,
+                  content: chat.question,
+                  role: "user",
+                  timestamp: new Date(chat.created_at),
+                  policyId: chat.policy_id
+                })
+                // Add assistant message
+                serverMessages.push({
+                  id: `assistant_${chat.id}`,
+                  content: chat.answer,
+                  role: "assistant",
+                  timestamp: new Date(chat.created_at),
+                  policyId: chat.policy_id
+                })
+              })
+            }
+            
+            setChatHistory(serverMessages)
+            setMessages(serverMessages)
+            console.log(`Loaded ${serverMessages.length} messages from server`)
+          } else {
+            console.warn("Failed to load chat history from server, using localStorage fallback")
+            loadFromLocalStorage(user.id)
+          }
+        } catch (e) {
+          console.error("Error loading server chat history:", e)
+          loadFromLocalStorage(user.id)
         }
 
       } catch (e) {
@@ -149,6 +185,21 @@ export default function ChatPage() {
         setError("Failed to load policies and chat history")
       } finally {
         setLoadingPolicies(false)
+      }
+    }
+
+    // Helper function to load from user-specific localStorage
+    const loadFromLocalStorage = (userId: string) => {
+      const userSpecificKey = `claimwise_chat_history_${userId}`
+      const storedHistory = localStorage.getItem(userSpecificKey)
+      if (storedHistory) {
+        const history = JSON.parse(storedHistory).map((msg: any) => ({
+          ...msg,
+          timestamp: new Date(msg.timestamp)
+        }))
+        setChatHistory(history)
+        setMessages(history)
+        console.log(`Loaded ${history.length} messages from localStorage (user-specific)`)
       }
     }
 
@@ -207,8 +258,8 @@ export default function ChatPage() {
     setError("")
 
     try {
-      const session = await supabase.auth.getSession()
-      const token = session.data.session?.access_token
+      const chatSession = await supabase.auth.getSession()
+      const token = chatSession.data.session?.access_token
       
       if (!token) {
         throw new Error("Authentication required")
@@ -222,7 +273,8 @@ export default function ChatPage() {
         const allPolicyResponses = await Promise.all(
           policies.map(async (policy) => {
             try {
-              const res = await fetch(`${API_BASE_URL}/chat`, {
+              const chatUrl = createApiUrlWithLogging("/chat");
+              const res = await fetch(chatUrl, {
                 method: "POST",
                 headers: {
                   Authorization: `Bearer ${token}`,
@@ -286,7 +338,8 @@ export default function ChatPage() {
         // Single policy chat
         const actualPolicyId = selectedPolicyId === "auto" ? getSmartPolicySelection(content) : selectedPolicyId
         
-        response = await fetch(`${API_BASE_URL}/chat`, {
+        const chatUrl = createApiUrlWithLogging("/chat");
+        response = await fetch(chatUrl, {
           method: "POST",
           headers: {
             Authorization: `Bearer ${token}`,
@@ -322,8 +375,15 @@ export default function ChatPage() {
       const newMessages = [...messages, userMessage, assistantMessage]
       setMessages(newMessages)
       
-      // Save to localStorage (and could also sync to backend)
-      localStorage.setItem("claimwise_chat_history", JSON.stringify(newMessages))
+      // Save to user-specific localStorage as backup
+      const saveSession = await supabase.auth.getSession()
+      const user = saveSession.data.session?.user
+      if (user) {
+        const userSpecificKey = `claimwise_chat_history_${user.id}`
+        localStorage.setItem(userSpecificKey, JSON.stringify(newMessages))
+      }
+      
+      // Note: Server-side saving happens automatically in the backend via chat_logs table
       
     } catch (err) {
       console.error("Chat error:", err)
@@ -337,8 +397,16 @@ export default function ChatPage() {
     handleSendMessage(question)
   }
 
-  const handleClearHistory = () => {
+  const handleClearHistory = async () => {
     setMessages([])
+    // Clear user-specific localStorage
+    const session = await supabase.auth.getSession()
+    const user = session.data.session?.user
+    if (user) {
+      const userSpecificKey = `claimwise_chat_history_${user.id}`
+      localStorage.removeItem(userSpecificKey)
+    }
+    // Also clear the old global key for backward compatibility
     localStorage.removeItem("claimwise_chat_history")
   }
 
