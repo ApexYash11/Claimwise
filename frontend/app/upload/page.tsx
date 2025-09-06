@@ -81,7 +81,27 @@ export default function UploadPage() {
         let errorMessage = `Upload failed with status ${response.status}`
         try {
           const errorData = await response.json()
-          if (errorData && errorData.detail) {
+          
+          // Handle new validation error format
+          if (errorData && errorData.detail && typeof errorData.detail === 'object') {
+            const detail = errorData.detail
+            if (detail.error && detail.message) {
+              // This is a validation error
+              errorMessage = `⚠️ ${detail.error}: ${detail.message}`
+              
+              // Add suggestions if available
+              if (detail.suggestions && detail.suggestions.length > 0) {
+                errorMessage += '\n\nSuggestions:\n' + detail.suggestions.map((s: string) => `• ${s}`).join('\n')
+              }
+              
+              // Add validation details for debugging (optional)
+              if (detail.validation_details) {
+                console.log('Validation details:', detail.validation_details)
+              }
+            } else {
+              errorMessage = JSON.stringify(detail)
+            }
+          } else if (errorData && errorData.detail && typeof errorData.detail === 'string') {
             errorMessage = errorData.detail
           } else if (errorData && typeof errorData === 'object') {
             errorMessage = JSON.stringify(errorData)
@@ -209,7 +229,7 @@ export default function UploadPage() {
                   </div>
                   <div className="flex-1">
                     <div className="text-red-800 font-medium mb-1">Upload Error</div>
-                    <div className="text-red-700 text-sm">{error}</div>
+                    <div className="text-red-700 text-sm whitespace-pre-line">{error}</div>
                     <button 
                       onClick={() => setError("")}
                       className="mt-2 text-sm text-red-600 hover:text-red-800 underline"

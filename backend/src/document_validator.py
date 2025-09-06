@@ -72,7 +72,7 @@ class DocumentValidator:
     NON_POLICY_KEYWORDS = {
         'presentation': [
             'slide', 'presentation', 'agenda', 'overview', 'introduction',
-            'powerpoint', 'ppt', 'keynote', 'slides', 'deck'
+            'powerpoint', 'ppt', 'keynote', 'slides', 'deck', 'slideshow'
         ],
         'medical': [
             'patient', 'diagnosis', 'treatment', 'medication', 'doctor',
@@ -81,11 +81,21 @@ class DocumentValidator:
         ],
         'financial': [
             'balance sheet', 'income statement', 'cash flow', 'revenue',
-            'expenses', 'profit', 'loss', 'accounting', 'financial report'
+            'expenses', 'profit', 'loss', 'accounting', 'financial report',
+            'bank statement', 'transaction', 'deposit', 'withdrawal'
         ],
         'contract': [
             'agreement', 'contract', 'terms of service', 'license agreement',
             'employment contract', 'lease agreement', 'purchase agreement'
+        ],
+        'academic': [
+            'time table', 'timetable', 'schedule', 'semester', 'course',
+            'subject', 'exam', 'assignment', 'grade', 'student', 'professor',
+            'university', 'college', 'curriculum', 'syllabus', 'lecture', 'dse'
+        ],
+        'resume': [
+            'resume', 'curriculum vitae', 'cv', 'work experience', 'education',
+            'skills', 'qualifications', 'employment history', 'references'
         ]
     }
     
@@ -108,7 +118,7 @@ class DocumentValidator:
     
     def __init__(self):
         self.min_content_length = 100  # Minimum characters for analysis
-        self.confidence_threshold = 0.3  # Minimum confidence for policy classification
+        self.confidence_threshold = 0.6  # RAISED: Much stricter threshold for policy classification
         
     def validate_document(self, text: str, filename: str = "") -> DocumentValidationReport:
         """
@@ -181,29 +191,60 @@ class DocumentValidator:
         if total_words > 0:
             policy_score = policy_score / total_words * 100
         
-        # Check for negative indicators
+        # Check for negative indicators - MUCH STRONGER PENALTIES
         negative_score = 0.0
+        detected_categories = []
+        
         for category, keywords in self.NON_POLICY_KEYWORDS.items():
+            category_hits = 0
             for keyword in keywords:
-                count = text_lower.count(keyword.lower()) + filename_lower.count(keyword.lower())
-                if count > 0:
-                    negative_score += count * 2.0
+                text_count = text_lower.count(keyword.lower())
+                filename_count = filename_lower.count(keyword.lower())
+                total_count = text_count + filename_count
+                if total_count > 0:
+                    category_hits += total_count
+                    # MUCH STRONGER penalty - each hit heavily penalizes
+                    negative_score += total_count * 10.0  # Increased from 2.0 to 10.0
+            
+            if category_hits > 0:
+                detected_categories.append(category)
+                # Extra penalty for being in a non-policy category
+                negative_score += 20.0
+        
+        # If ANY negative keywords detected, heavily penalize
+        if negative_score > 0:
+            negative_score += 30.0  # Base penalty for any non-policy content
         
         # Adjust policy score based on negative indicators
         adjusted_score = max(0.0, policy_score - negative_score)
         confidence = min(1.0, adjusted_score / 10.0)  # Normalize to 0-1
         
-        # Determine document type
-        if confidence >= self.confidence_threshold:
+        # IMPROVED classification logic - more aggressive detection
+        if len(detected_categories) > 0:
+            # Force classification based on detected negative categories
+            if 'academic' in detected_categories:
+                doc_type = DocumentType.OTHER
+                confidence = 0.0  # Force rejection
+            elif 'resume' in detected_categories:
+                doc_type = DocumentType.OTHER  
+                confidence = 0.0  # Force rejection
+            elif 'presentation' in detected_categories:
+                doc_type = DocumentType.PRESENTATION
+                confidence = 0.0  # Force rejection
+            elif 'medical' in detected_categories:
+                doc_type = DocumentType.MEDICAL_RECORD
+                confidence = 0.0  # Force rejection
+            elif 'financial' in detected_categories:
+                doc_type = DocumentType.FINANCIAL_DOCUMENT
+                confidence = 0.0  # Force rejection
+            elif 'contract' in detected_categories:
+                doc_type = DocumentType.CONTRACT
+                confidence = 0.0  # Force rejection
+            else:
+                doc_type = DocumentType.OTHER
+                confidence = 0.0  # Force rejection
+        elif confidence >= self.confidence_threshold:
             doc_type = DocumentType.INSURANCE_POLICY
-        elif any(keyword in filename_lower for keyword in self.NON_POLICY_KEYWORDS['presentation']):
-            doc_type = DocumentType.PRESENTATION
-        elif any(keyword in text_lower for keyword in self.NON_POLICY_KEYWORDS['medical'][:3]):
-            doc_type = DocumentType.MEDICAL_RECORD
-        elif any(keyword in text_lower for keyword in self.NON_POLICY_KEYWORDS['financial'][:3]):
-            doc_type = DocumentType.FINANCIAL_DOCUMENT
-        elif any(keyword in text_lower for keyword in self.NON_POLICY_KEYWORDS['contract'][:3]):
-            doc_type = DocumentType.CONTRACT
         else:
             doc_type = DocumentType.OTHER
             
