@@ -36,12 +36,12 @@ class CacheItem:
     ttl: Optional[int] = None  # TTL in seconds
     size_bytes: int = 0
     
-    @property
-    def is_expired(self) -> bool:
-        """Check if item has expired"""
+    def is_expired(self, current_time: Optional[datetime] = None) -> bool:
+        """Check if item has expired using provided timestamp or current time"""
         if self.ttl is None:
             return False
-        return datetime.now() > self.created_at + timedelta(seconds=self.ttl)
+        check_time = current_time or datetime.now()
+        return check_time > self.created_at + timedelta(seconds=self.ttl)
     
     @property
     def age_seconds(self) -> int:
@@ -115,7 +115,8 @@ class AdvancedCache:
         
         elif self.strategy == CacheStrategy.TTL:
             # Remove oldest expired item, or oldest if none expired
-            expired_keys = [k for k, v in self._cache.items() if v.is_expired]
+            current_time = datetime.now()
+            expired_keys = [k for k, v in self._cache.items() if v.is_expired(current_time)]
             if expired_keys:
                 return min(expired_keys, 
                           key=lambda k: self._cache[k].created_at)
@@ -138,29 +139,31 @@ class AdvancedCache:
             del self._cache[key]
             self._access_order.pop(key, None)
     
-    def _clean_expired(self):
+    def _clean_expired(self, current_time: Optional[datetime] = None):
         """Remove expired items"""
-        expired_keys = [k for k, v in self._cache.items() if v.is_expired]
+        check_time = current_time or datetime.now()
+        expired_keys = [k for k, v in self._cache.items() if v.is_expired(check_time)]
         for key in expired_keys:
             self._remove_item(key)
     
     def get(self, key: str, default: Any = None) -> Any:
         """Get value from cache"""
         with self._lock:
-            self._clean_expired()
+            current_time = datetime.now()
+            self._clean_expired(current_time)
             
             if key not in self._cache:
                 self._misses += 1
                 return default
             
             item = self._cache[key]
-            if item.is_expired:
+            if item.is_expired(current_time):
                 self._remove_item(key)
                 self._misses += 1
                 return default
             
             # Update access information
-            item.last_accessed = datetime.now()
+            item.last_accessed = current_time
             item.access_count += 1
             self._access_order.move_to_end(key)
             self._hits += 1
@@ -214,8 +217,9 @@ class AdvancedCache:
     def exists(self, key: str) -> bool:
         """Check if key exists in cache"""
         with self._lock:
-            self._clean_expired()
-            return key in self._cache and not self._cache[key].is_expired
+            current_time = datetime.now()
+            self._clean_expired(current_time)
+            return key in self._cache and not self._cache[key].is_expired(current_time)
     
     def clear(self):
         """Clear all items from cache"""
@@ -227,7 +231,8 @@ class AdvancedCache:
     def keys(self) -> List[str]:
         """Get all cache keys"""
         with self._lock:
-            self._clean_expired()
+            current_time = datetime.now()
+            self._clean_expired(current_time)
             return list(self._cache.keys())
     
     def stats(self) -> Dict[str, Any]:

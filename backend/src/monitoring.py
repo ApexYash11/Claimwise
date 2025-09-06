@@ -77,6 +77,20 @@ class PerformanceMonitor:
         # Performance thresholds
         self.slow_request_threshold = 5.0  # seconds
         self.high_error_rate_threshold = 5.0  # percent
+        
+        # Initialize psutil CPU monitoring for non-blocking measurements
+        self.psutil_available = False
+        try:
+            import psutil
+            # Seed CPU measurement - first call may return 0.0
+            psutil.cpu_percent(interval=None)
+            self.psutil_available = True
+            logger.debug("psutil initialized for non-blocking CPU measurements")
+        except ImportError:
+            logger.debug("psutil not available, system metrics will use defaults")
+        except Exception as e:
+            logger.debug(f"Error initializing psutil: {e}")
+    
     
     def start_request(self, endpoint: str, method: str, user_id: Optional[str] = None) -> str:
         """Start tracking a new request"""
@@ -156,17 +170,19 @@ class PerformanceMonitor:
             memory_percent = 0.0
             disk_percent = 0.0
             
-            try:
-                import psutil
-                cpu_percent = psutil.cpu_percent(interval=0.1)
-                memory = psutil.virtual_memory()
-                memory_percent = memory.percent
-                disk = psutil.disk_usage('/')
-                disk_percent = disk.percent
-            except ImportError:
+            if self.psutil_available:
+                try:
+                    import psutil
+                    # Use non-blocking CPU measurement
+                    cpu_percent = psutil.cpu_percent(interval=None)
+                    memory = psutil.virtual_memory()
+                    memory_percent = memory.percent
+                    disk = psutil.disk_usage('/')
+                    disk_percent = disk.percent
+                except Exception as e:
+                    logger.debug(f"Error getting system metrics: {e}")
+            else:
                 logger.debug("psutil not available, using default system metrics")
-            except Exception as e:
-                logger.debug(f"Error getting system metrics: {e}")
             
             with self.lock:
                 active_count = len(self.active_requests)
