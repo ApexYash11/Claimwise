@@ -541,9 +541,9 @@ export default function ChatPage() {
                   <AlertDescription>
                     {error}
                     {(error.includes("quota") || error.includes("429")) && (
-                      <div className="mt-2 p-3 bg-orange-50 border border-orange-200 rounded-lg">
-                        <h4 className="font-semibold text-orange-800 mb-2">API Quota Exceeded - Solutions:</h4>
-                        <ul className="text-sm text-orange-700 space-y-1">
+                      <div className="mt-2 p-3 bg-orange-50 dark:bg-orange-950/50 border border-orange-200 dark:border-orange-800 rounded-lg">
+                        <h4 className="font-semibold text-orange-800 dark:text-orange-200 mb-2">API Quota Exceeded - Solutions:</h4>
+                        <ul className="text-sm text-orange-700 dark:text-orange-300 space-y-1">
                           <li>• Wait 24 hours for quota to reset</li>
                           <li>• Review policy documents directly from the analyze page</li>
                           <li>• Use the policy comparison feature instead</li>

@@ -142,21 +142,21 @@ export function FileUpload({ onFilesUploaded, maxFiles = 5, maxSize = 10 * 1024 
   return (
     <div className="space-y-6">
       {/* Upload Area */}
-      <Card className="border-2 border-dashed border-gray-300 hover:border-blue-400 transition-colors">
+      <Card className="border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500 transition-colors">
         <CardContent className="p-8">
           <div
             {...getRootProps()}
-            className={cn("text-center cursor-pointer transition-colors", isDragActive && "text-blue-600")}
+            className={cn("text-center cursor-pointer transition-colors", isDragActive && "text-blue-600 dark:text-blue-400")}
           >
             <input {...getInputProps()} />
-            <div className="mx-auto w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
-              <Upload className="w-8 h-8 text-blue-600" />
+            <div className="mx-auto w-16 h-16 bg-blue-100 dark:bg-blue-900/50 rounded-full flex items-center justify-center mb-4">
+              <Upload className="w-8 h-8 text-blue-600 dark:text-blue-400" />
             </div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
               {isDragActive ? "Drop files here" : "Upload your insurance policies"}
             </h3>
-            <p className="text-gray-600 mb-4">Drag and drop your files here, or click to browse</p>
-            <p className="text-sm text-gray-500">
+            <p className="text-gray-600 dark:text-gray-300 mb-4">Drag and drop your files here, or click to browse</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
               Supports PDF, DOC, DOCX, TXT, and image files up to {maxSize / (1024 * 1024)}MB
             </p>
           </div>
@@ -174,35 +174,35 @@ export function FileUpload({ onFilesUploaded, maxFiles = 5, maxSize = 10 * 1024 
       {/* File List */}
       {files.length > 0 && (
         <div className="space-y-4">
-          <h4 className="text-lg font-semibold text-gray-900">Uploaded Files</h4>
+          <h4 className="text-lg font-semibold text-gray-900 dark:text-white">Uploaded Files</h4>
           <div className="space-y-3">
             {files.map((file) => (
-              <Card key={file.id} className="border border-gray-200">
+              <Card key={file.id} className="border border-gray-200 dark:border-gray-700">
                 <CardContent className="p-4">
                   <div className="flex items-center space-x-4">
                     {/* File Icon */}
                     <div className="flex-shrink-0">
                       {file.type && file.type.startsWith("image/") ? (
-                        <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                          <ImageIcon className="w-5 h-5 text-green-600" />
+                        <div className="w-10 h-10 bg-green-100 dark:bg-green-900/50 rounded-lg flex items-center justify-center">
+                          <ImageIcon className="w-5 h-5 text-green-600 dark:text-green-400" />
                         </div>
                       ) : (
-                        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                          <FileText className="w-5 h-5 text-blue-600" />
+                        <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/50 rounded-lg flex items-center justify-center">
+                          <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                         </div>
                       )}
                     </div>
 
                     {/* File Info */}
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{file.name}</p>
-                      <p className="text-sm text-gray-500">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{file.name}</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
 
                       {/* Progress Bar */}
                       {file.status === "uploading" && (
                         <div className="mt-2">
                           <Progress value={file.progress} className="h-2" />
-                          <p className="text-xs text-gray-500 mt-1">{Math.round(file.progress)}% uploaded</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{Math.round(file.progress)}% uploaded</p>
                         </div>
                       )}
                     </div>

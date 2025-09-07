@@ -43,14 +43,14 @@ export function ChatInput({
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className="min-h-[60px] max-h-32 resize-none border-gray-200 focus:border-blue-400 focus:ring-blue-400 rounded-xl shadow-sm bg-white/80 backdrop-blur-sm text-[15px] leading-relaxed transition-colors"
+          className="min-h-[60px] max-h-32 resize-none border-gray-200 dark:border-gray-700 focus:border-blue-400 dark:focus:border-blue-500 focus:ring-blue-400 dark:focus:ring-blue-500 rounded-xl shadow-sm bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm text-[15px] leading-relaxed transition-colors"
           disabled={isLoading}
         />
       </div>
       <Button
         type="submit"
         disabled={!message.trim() || isLoading}
-        className="self-end bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 shadow-lg rounded-xl px-5 py-3 transition-all duration-200 hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+        className="self-end bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 dark:from-blue-500 dark:to-blue-400 dark:hover:from-blue-600 dark:hover:to-blue-500 shadow-lg rounded-xl px-5 py-3 transition-all duration-200 hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {isLoading ? 
           <Loader2 className="w-4 h-4 animate-spin" /> : 

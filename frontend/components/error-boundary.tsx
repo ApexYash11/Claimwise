@@ -97,24 +97,24 @@ Please describe what you were doing when this error occurred:
   getSeverityColor(severity: ErrorSeverity): string {
     switch (severity) {
       case ErrorSeverity.LOW:
-        return 'text-yellow-600 bg-yellow-50 border-yellow-200';
+        return 'text-yellow-700 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-950/50 border-yellow-200 dark:border-yellow-800';
       case ErrorSeverity.MEDIUM:
-        return 'text-orange-600 bg-orange-50 border-orange-200';
+        return 'text-orange-700 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/50 border-orange-200 dark:border-orange-800';
       case ErrorSeverity.HIGH:
-        return 'text-red-600 bg-red-50 border-red-200';
+        return 'text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/50 border-red-200 dark:border-red-800';
       case ErrorSeverity.CRITICAL:
-        return 'text-red-700 bg-red-100 border-red-300';
+        return 'text-red-800 dark:text-red-300 bg-red-100 dark:bg-red-950/70 border-red-300 dark:border-red-700';
       default:
-        return 'text-gray-600 bg-gray-50 border-gray-200';
+        return 'text-muted-foreground bg-muted border-border';
     }
   }
 
   getSeverityIcon(severity: ErrorSeverity): ReactNode {
     switch (severity) {
       case ErrorSeverity.CRITICAL:
-        return <AlertTriangle className="w-6 h-6 text-red-600" />;
+        return <AlertTriangle className="w-6 h-6 text-red-600 dark:text-red-400" />;
       default:
-        return <Bug className="w-6 h-6 text-orange-600" />;
+        return <Bug className="w-6 h-6 text-orange-600 dark:text-orange-400" />;
     }
   }
 
@@ -129,7 +129,7 @@ Please describe what you were doing when this error occurred:
       const severityClass = this.getSeverityColor(error.severity);
 
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+        <div className="min-h-screen flex items-center justify-center bg-background p-4">
           <Card className="w-full max-w-2xl">
             <CardHeader>
               <CardTitle className="flex items-center space-x-3">
@@ -147,26 +147,26 @@ Please describe what you were doing when this error occurred:
 
               {/* Error details (if enabled) */}
               {this.props.showDetails && (
-                <div className="bg-gray-50 rounded-lg p-4 space-y-3">
-                  <div className="text-sm text-gray-600">
+                <div className="bg-muted rounded-lg p-4 space-y-3">
+                  <div className="text-sm text-muted-foreground">
                     <strong>Error Code:</strong> {error.traceId || 'Unknown'}
                   </div>
                   {error.details.field && (
-                    <div className="text-sm text-gray-600">
+                    <div className="text-sm text-muted-foreground">
                       <strong>Field:</strong> {error.details.field}
                     </div>
                   )}
-                  <div className="text-sm text-gray-600">
+                  <div className="text-sm text-muted-foreground">
                     <strong>Category:</strong> {error.category}
                   </div>
-                  <div className="text-sm text-gray-600">
+                  <div className="text-sm text-muted-foreground">
                     <strong>Time:</strong> {error.timestamp.toLocaleString()}
                   </div>
-                  <details className="text-sm text-gray-600">
-                    <summary className="cursor-pointer hover:text-gray-800">
+                  <details className="text-sm text-muted-foreground">
+                    <summary className="cursor-pointer hover:text-foreground">
                       Technical Details
                     </summary>
-                    <pre className="mt-2 bg-white p-3 rounded border text-xs overflow-auto">
+                    <pre className="mt-2 bg-card border border-border p-3 rounded text-xs overflow-auto">
                       {JSON.stringify(
                         {
                           message: error.technicalMessage,
@@ -184,7 +184,7 @@ Please describe what you were doing when this error occurred:
               {/* Recovery actions */}
               {error.recoveryActions.length > 0 && (
                 <div className="space-y-3">
-                  <h3 className="font-medium text-gray-900">What can you do?</h3>
+                  <h3 className="font-medium text-foreground">What can you do?</h3>
                   <div className="flex flex-wrap gap-3">
                     {error.recoveryActions.map((action, index) => (
                       <Button
@@ -231,7 +231,7 @@ Please describe what you were doing when this error occurred:
 
               {/* Error ID for support */}
               {this.state.eventId && (
-                <div className="text-xs text-gray-500 text-center pt-4 border-t">
+                <div className="text-xs text-muted-foreground text-center pt-4 border-t border-border">
                   Error ID: {this.state.eventId}
                   <br />
                   Please include this ID when contacting support.
