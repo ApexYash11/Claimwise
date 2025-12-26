@@ -1,4 +1,4 @@
-# 🛡️ ClaimWise
+# ClaimWise
 ### AI-Powered Insurance Policy Analysis Platform
 
 Transform the way you understand and manage insurance policies with cutting-edge AI technology.
