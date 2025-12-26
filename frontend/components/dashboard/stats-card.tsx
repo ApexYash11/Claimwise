@@ -1,37 +1,32 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import type { LucideIcon } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 interface StatsCardProps {
   title: string
   value: string | number
   description?: string
   icon: LucideIcon
-  trend?: {
-    value: number
-    isPositive: boolean
-  }
+  trend?: string
+  alert?: boolean
 }
 
-export function StatsCard({ title, value, description, icon: Icon, trend }: StatsCardProps) {
+export function StatsCard({ title, value, description, icon: Icon, trend, alert }: StatsCardProps) {
   return (
-    <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow">
+    <Card className={cn("transition-all", alert ? "border-amber-200 bg-amber-50/50" : "")}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium text-gray-600">{title}</CardTitle>
-        <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-          <Icon className="w-4 h-4 text-blue-600" />
-        </div>
+        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
+        <Icon className={cn("h-4 w-4", alert ? "text-amber-600" : "text-muted-foreground")} />
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold text-gray-900">{value}</div>
-        {description && <p className="text-xs text-gray-500 mt-1">{description}</p>}
+        <div className="text-2xl font-bold font-mono tracking-tight">{value}</div>
+        <p className="text-xs text-muted-foreground mt-1">
+          {description}
+        </p>
         {trend && (
-          <div className="flex items-center mt-2">
-            <span className={`text-xs font-medium ${trend.isPositive ? "text-green-600" : "text-red-600"}`}>
-              {trend.isPositive ? "+" : ""}
-              {trend.value}%
-            </span>
-            <span className="text-xs text-gray-500 ml-1">from last month</span>
-          </div>
+          <p className={cn("text-xs mt-1 font-medium", alert ? "text-amber-700" : "text-emerald-600")}>
+            {trend}
+          </p>
         )}
       </CardContent>
     </Card>

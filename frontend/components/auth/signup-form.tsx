@@ -163,27 +163,27 @@ export function SignupForm() {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-        <Card className="w-full max-w-md shadow-xl border-0 bg-white/95 backdrop-blur">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4">
+        <Card className="w-full max-w-md shadow-sm border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
           <CardHeader className="text-center space-y-4">
-            <div className="mx-auto w-12 h-12 bg-green-600 rounded-xl flex items-center justify-center">
+            <div className="mx-auto w-12 h-12 bg-teal-600 rounded-xl flex items-center justify-center">
               <CheckCircle className="w-6 h-6 text-white" />
             </div>
             <div>
-              <CardTitle className="text-2xl font-bold text-gray-900">Account Created!</CardTitle>
-              <CardDescription className="text-gray-600">
+              <CardTitle className="text-2xl font-serif font-bold text-slate-900 dark:text-slate-50">Account Created!</CardTitle>
+              <CardDescription className="text-slate-600 dark:text-slate-400">
                 Welcome to ClaimWise! You can now sign in to analyze your insurance policies.
               </CardDescription>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <p className="text-sm text-blue-800">
+            <div className="p-4 bg-teal-50 dark:bg-teal-900/20 rounded-lg border border-teal-200 dark:border-teal-800">
+              <p className="text-sm text-teal-800 dark:text-teal-200">
                 📧 <strong>Check your email</strong> if you don't get redirected automatically. 
                 Some email providers may require you to confirm your account.
               </p>
             </div>
-            <Button onClick={() => router.push("/login")} className="w-full bg-blue-600 hover:bg-blue-700 text-white">
+            <Button onClick={() => router.push("/login")} className="w-full bg-teal-600 hover:bg-teal-700 text-white">
               Continue to Login
             </Button>
           </CardContent>
@@ -193,15 +193,15 @@ export function SignupForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <Card className="w-full max-w-md shadow-xl border-0 bg-white/95 backdrop-blur">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4">
+      <Card className="w-full max-w-md shadow-sm border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
         <CardHeader className="text-center space-y-4">
-          <div className="mx-auto w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center">
+          <div className="mx-auto w-12 h-12 bg-teal-600 rounded-xl flex items-center justify-center">
             <Shield className="w-6 h-6 text-white" />
           </div>
           <div>
-            <CardTitle className="text-2xl font-bold text-gray-900">Create account</CardTitle>
-            <CardDescription className="text-gray-600">
+            <CardTitle className="text-2xl font-serif font-bold text-slate-900 dark:text-slate-50">Create account</CardTitle>
+            <CardDescription className="text-slate-600 dark:text-slate-400">
               Join ClaimWise to analyze your insurance policies
             </CardDescription>
           </div>
@@ -212,21 +212,21 @@ export function SignupForm() {
               <Button
                 type="button"
                 variant="outline"
-                className="w-full flex items-center justify-center gap-2 border-gray-200"
+                className="w-full flex items-center justify-center gap-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
                 onClick={() => handleSocialSignup("google")}
                 disabled={socialLoading === "google" || loading}
               >
-                <Globe className="w-5 h-5 text-blue-600" />
+                <Globe className="w-5 h-5 text-teal-600" />
                 {socialLoading === "google" ? "Signing up with Google..." : "Sign up with Google"}
               </Button>
               <Button
                 type="button"
                 variant="outline"
-                className="w-full flex items-center justify-center gap-2 border-gray-200"
+                className="w-full flex items-center justify-center gap-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
                 onClick={() => handleSocialSignup("github")}
                 disabled={socialLoading === "github" || loading}
               >
-                <Github className="w-5 h-5 text-gray-800" />
+                <Github className="w-5 h-5 text-slate-800 dark:text-slate-200" />
                 {socialLoading === "github" ? "Signing up with GitHub..." : "Sign up with GitHub"}
               </Button>
             </div>
@@ -238,7 +238,7 @@ export function SignupForm() {
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="fullName" className="text-gray-700">
+              <Label htmlFor="fullName" className="text-slate-700 dark:text-slate-300">
                 Full Name
               </Label>
               <Input
@@ -247,13 +247,13 @@ export function SignupForm() {
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 required
-                className="border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                className="border-slate-200 dark:border-slate-700 focus:border-teal-500 focus:ring-teal-500 dark:bg-slate-950 dark:text-white"
                 placeholder="Enter your full name"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-gray-700">
+              <Label htmlFor="email" className="text-slate-700 dark:text-slate-300">
                 Email
               </Label>
               <Input
@@ -262,13 +262,13 @@ export function SignupForm() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                className="border-slate-200 dark:border-slate-700 focus:border-teal-500 focus:ring-teal-500 dark:bg-slate-950 dark:text-white"
                 placeholder="Enter your email"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-gray-700">
+              <Label htmlFor="password" className="text-slate-700 dark:text-slate-300">
                 Password
               </Label>
               <div className="relative">
@@ -278,7 +278,7 @@ export function SignupForm() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="border-gray-200 focus:border-blue-500 focus:ring-blue-500 pr-10"
+                  className="border-slate-200 dark:border-slate-700 focus:border-teal-500 focus:ring-teal-500 pr-10 dark:bg-slate-950 dark:text-white"
                   placeholder="Create a password"
                 />
                 <Button
@@ -290,16 +290,16 @@ export function SignupForm() {
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? (
-                    <EyeOff className="h-4 w-4 text-gray-400" />
+                    <EyeOff className="h-4 w-4 text-slate-400" />
                   ) : (
-                    <Eye className="h-4 w-4 text-gray-400" />
+                    <Eye className="h-4 w-4 text-slate-400" />
                   )}
                 </Button>
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword" className="text-gray-700">
+              <Label htmlFor="confirmPassword" className="text-slate-700 dark:text-slate-300">
                 Confirm Password
               </Label>
               <div className="relative">
@@ -309,7 +309,7 @@ export function SignupForm() {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
-                  className="border-gray-200 focus:border-blue-500 focus:ring-blue-500 pr-10"
+                  className="border-slate-200 dark:border-slate-700 focus:border-teal-500 focus:ring-teal-500 pr-10 dark:bg-slate-950 dark:text-white"
                   placeholder="Confirm your password"
                 />
                 <Button
@@ -321,15 +321,15 @@ export function SignupForm() {
                   aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
                 >
                   {showConfirmPassword ? (
-                    <EyeOff className="h-4 w-4 text-gray-400" />
+                    <EyeOff className="h-4 w-4 text-slate-400" />
                   ) : (
-                    <Eye className="h-4 w-4 text-gray-400" />
+                    <Eye className="h-4 w-4 text-slate-400" />
                   )}
                 </Button>
               </div>
             </div>
 
-            <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white" disabled={loading}>
+            <Button type="submit" className="w-full bg-teal-600 hover:bg-teal-700 text-white" disabled={loading}>
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -342,9 +342,9 @@ export function SignupForm() {
           </form>
 
           <div className="mt-6 text-center">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-slate-600 dark:text-slate-400">
               Already have an account? {" "}
-              <Link href="/login" className="text-blue-600 hover:text-blue-700 font-medium">
+              <Link href="/login" className="text-teal-600 hover:text-teal-700 font-medium">
                 Sign in
               </Link>
             </p>

@@ -137,33 +137,33 @@ export function SuggestedQuestions({ onQuestionSelect, policies = [], selectedPo
     },
   ]
   return (
-    <Card className="border-0 shadow-xl rounded-2xl bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm">
-      <CardHeader className="pb-4">
-        <CardTitle className="flex items-center space-x-2 text-lg">
-          <HelpCircle className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+    <Card className="border border-slate-200 shadow-sm rounded-xl bg-white dark:bg-slate-900 dark:border-slate-800">
+      <CardHeader className="pb-4 border-b border-slate-100 dark:border-slate-800">
+        <CardTitle className="flex items-center space-x-2 text-lg font-serif text-slate-900 dark:text-white">
+          <HelpCircle className="w-5 h-5 text-teal-600" />
           <span>Suggested Questions</span>
         </CardTitle>
         {policies.length > 0 && (
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap gap-1 mt-2">
             {policies.slice(0, 2).map((policy) => (
-              <Badge key={policy.id} variant="secondary" className="text-xs font-medium px-2 py-1 rounded-full bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800">
+              <Badge key={policy.id} variant="secondary" className="text-xs font-medium px-2 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                 {policy.policyType}
               </Badge>
             ))}
             {policies.length > 2 && (
-              <Badge variant="secondary" className="text-xs font-medium px-2 py-1 rounded-full bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800">
+              <Badge variant="secondary" className="text-xs font-medium px-2 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                 +{policies.length - 2}
               </Badge>
             )}
           </div>
         )}
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-6 pt-6">
         {suggestedQuestions.map((category) => (
           <div key={category.category}>
             <div className="flex items-center space-x-2 mb-3">
-              <category.icon className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-              <h3 className="font-semibold text-gray-900 dark:text-white text-sm">{category.category}</h3>
+              <category.icon className="w-4 h-4 text-teal-600" />
+              <h3 className="font-semibold text-slate-900 dark:text-white text-sm">{category.category}</h3>
             </div>
             <div className="space-y-2">
               {category.questions.map((question, index) => (
@@ -171,16 +171,16 @@ export function SuggestedQuestions({ onQuestionSelect, policies = [], selectedPo
                   <TooltipTrigger asChild>
                     <Button
                       variant="ghost"
-                      className="w-full justify-start text-left h-auto p-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-blue-50 dark:hover:bg-blue-950/50 hover:text-blue-700 dark:hover:text-blue-400 rounded-xl transition-colors duration-200 font-medium leading-relaxed"
+                      className="w-full justify-start text-left h-auto p-3 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white rounded-lg transition-colors duration-200 font-medium leading-relaxed whitespace-normal"
                       onClick={() => onQuestionSelect(question)}
                     >
-                      <MessageSquare className="w-3 h-3 mr-2 flex-shrink-0" />
-                      <span className="truncate">{question}</span>
+                      <MessageSquare className="w-3 h-3 mr-2 flex-shrink-0 mt-0.5" />
+                      <span className="">{question}</span>
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent 
                     side="top" 
-                    className="max-w-sm p-3 text-sm bg-gray-900 dark:bg-gray-800 text-white dark:text-gray-100 rounded-lg shadow-lg border-0"
+                    className="max-w-sm p-3 text-sm bg-slate-900 dark:bg-slate-800 text-white dark:text-slate-100 rounded-lg shadow-lg border-0"
                     sideOffset={5}
                   >
                     <p className="leading-relaxed">{question}</p>

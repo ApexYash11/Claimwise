@@ -6,3 +6,5 @@ dist/
 build
 *.pyc
 .vercel
+.pytest_cache/
+__pycache__/  

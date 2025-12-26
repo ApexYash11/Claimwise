@@ -9,11 +9,17 @@ import { InsightsPanel } from "@/components/analysis/insights-panel"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, BarChart3, FileText, MessageSquare, Eye, CheckCircle, Calendar, DollarSign, Shield, AlertCircle } from "lucide-react"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { Progress } from "@/components/ui/progress"
+import { ArrowLeft, BarChart3, FileText, MessageSquare, Eye, CheckCircle, Calendar, DollarSign, Shield, AlertCircle, ChevronRight, FileJson, Trash2 } from "lucide-react"
 import Link from "next/link"
 import type { PolicySummary } from "@/lib/api"
+import { cn } from "@/lib/utils"
 
 // Dynamic policy data from backend/AI
 import { supabase } from "@/lib/supabase"
@@ -99,7 +105,7 @@ const generateRecommendations = (policies: PolicySummary[]) => {
     return sum + score
   }, 0) / policies.length
   
-  recommendations.push(`Overall claim readiness score: ${Math.round(avgClaimScore)}/100`)
+  recommendations.push(`Portfolio Average Claim Readiness: ${Math.round(avgClaimScore)}/100`)
   
   // Premium optimization
   const validPremiums = policies.filter(p => parseFloat(p.premium.replace(/[^0-9.]/g, "") || "0") > 0)
@@ -463,275 +469,379 @@ export default function AnalyzePage() {
     return recommendations
   }
 
+  const handleDeletePolicy = async (e: React.MouseEvent, policyId: string) => {
+    e.stopPropagation() // Prevent selecting the policy when clicking delete
+    
+    if (!policyId) {
+      console.error("No policy ID provided for deletion")
+      return
+    }
+
+    if (!confirm("Are you sure you want to delete this policy?")) return
+
+    try {
+      const session = await supabase.auth.getSession()
+      const token = session.data.session?.access_token
+      
+      const deleteUrl = createApiUrlWithLogging(`/policies/${policyId}`)
+      console.log(`Attempting to delete policy: ${policyId} at ${deleteUrl}`)
+      
+      const response = await fetch(deleteUrl, {
+        method: "DELETE",
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      })
+
+      if (!response.ok) {
+        let errorMessage = "Failed to delete policy"
+        try {
+          const errorData = await response.json()
+          errorMessage = errorData.detail || errorMessage
+        } catch (e) {
+          // If not JSON, use status text
+          errorMessage = `Error ${response.status}: ${response.statusText}`
+        }
+        throw new Error(errorMessage)
+      }
+
+      // Remove from local state
+      const updatedPolicies = policies.filter(p => p.id !== policyId)
+      setPolicies(updatedPolicies)
+      
+      // Update selection if needed
+      if (selectedPolicyId === policyId) {
+        setSelectedPolicyId(updatedPolicies.length > 0 ? updatedPolicies[0].id : "")
+      }
+      
+      // Update localStorage
+      const policyIds = updatedPolicies.map(p => p.id)
+      localStorage.setItem("claimwise_uploaded_policy_ids", JSON.stringify(policyIds))
+      
+      console.log("Policy deleted successfully")
+    } catch (err: any) {
+      console.error("Delete error:", err)
+      alert(err.message || "Failed to delete policy. Please try again.")
+    }
+  }
+
   const currentPolicyInsights = currentPolicy ? generateSinglePolicyInsights(currentPolicy) : []
   const currentPolicyRecommendations = currentPolicy ? generateSinglePolicyRecommendations(currentPolicy) : []
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 dark:from-gray-950 dark:to-blue-950">
+      <div className="h-screen flex flex-col bg-slate-50 dark:bg-slate-950 overflow-hidden">
         <Header />
-
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          {/* Back Button */}
-          <div className="mb-8">
-            <Button variant="ghost" asChild className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200">
-              <Link href="/dashboard">
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back to Dashboard
-              </Link>
-            </Button>
-          </div>
-
-          {/* Header with Policy Selector */}
-          <div className="mb-12">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 mb-6">
-              <div>
-                <div className="inline-flex items-center px-4 py-2 rounded-full bg-purple-50 border border-purple-200 text-purple-700 text-sm font-medium mb-4 dark:bg-purple-900/20 dark:border-purple-800 dark:text-purple-400">
-                  <BarChart3 className="w-4 h-4 mr-2" />
-                  AI Analysis
-                </div>
-                <h1 className="text-4xl lg:text-5xl font-bold text-gray-900 dark:text-white mb-4 tracking-tight">
-                  Policy
-                  <span className="text-transparent bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text block lg:inline lg:ml-3">
-                    Analysis
-                  </span>
-                </h1>
-                <p className="text-xl text-gray-600 dark:text-gray-300 leading-relaxed">
-                  Review your insurance policies, compare coverage, and get AI-powered insights.
-                </p>
-              </div>
-              
-              {/* Policy Selector - Show only when there are multiple policies */}
-              {policies.length > 1 && (
-                <div className="flex flex-col sm:items-end">
-                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Select Policy to Analyze:</label>
-                  <Select value={selectedPolicyId} onValueChange={setSelectedPolicyId}>
-                    <SelectTrigger className="w-full sm:w-64 rounded-xl bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-gray-200 dark:border-gray-700">
-                      <SelectValue placeholder="Select a policy..." />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-xl bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-gray-200/50 dark:border-gray-700/50">
-                      {policies.map((policy, index) => (
-                        <SelectItem key={policy.id} value={policy.id}>
-                          <div className="flex items-center space-x-2">
-                            <Badge variant="outline" className="text-xs bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20 border-blue-200 dark:border-blue-800">
-                              {policy.policyType}
-                            </Badge>
-                            <span>{policy.fileName}</span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-            </div>
-          </div>
-
+        
+        <main className="flex-1 overflow-hidden">
           {loading ? (
-            <div className="text-center py-16 text-lg text-gray-500">Analyzing your policy...
-              <div className="mt-4">
-                <Button variant="outline" onClick={() => window.location.reload()}>
-                  Refresh Page
-                </Button>
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center space-y-4">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-slate-900 mx-auto"></div>
+                <p className="text-slate-500">Analyzing your policies...</p>
               </div>
             </div>
           ) : error ? (
-            <div className="text-center py-16 text-lg text-red-500">{error}</div>
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center space-y-4 max-w-md mx-auto p-6 bg-white rounded-lg shadow-sm border border-red-100">
+                <AlertCircle className="h-12 w-12 text-red-500 mx-auto" />
+                <h3 className="text-lg font-medium text-slate-900">Analysis Error</h3>
+                <p className="text-slate-500">{error}</p>
+                <Button onClick={() => window.location.reload()}>Try Again</Button>
+              </div>
+            </div>
           ) : (
-            <>
-              {/* AI Transparency Notice */}
-              <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-4 mb-6 shadow-sm dark:bg-amber-950/20 dark:border-amber-800/50">
-                <div className="flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-medium text-amber-800 dark:text-amber-200 mb-1">
-                      AI-Powered Analysis
-                    </p>
-                    <p className="text-sm text-amber-700 dark:text-amber-300">
-                      Analysis and insights are AI-powered. Please confirm with your insurer before taking decisions.
-                    </p>
+            <ResizablePanelGroup direction="horizontal" className="h-full border-t border-slate-200 dark:border-slate-800">
+              
+              {/* Left Panel: Policy List / Document Source */}
+              <ResizablePanel defaultSize={25} minSize={20} maxSize={40} className="bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800">
+                <div className="h-full flex flex-col">
+                  <div className="p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+                    <h2 className="font-serif font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-slate-500" />
+                      Documents
+                    </h2>
+                  </div>
+                  <ScrollArea className="flex-1">
+                    <div className="p-3 space-y-2">
+                      {policies.map((policy) => (
+                        <div 
+                          key={policy.id}
+                          onClick={() => setSelectedPolicyId(policy.id)}
+                          className={`p-3 rounded-md cursor-pointer transition-all border ${
+                            selectedPolicyId === policy.id 
+                              ? "bg-slate-100 border-slate-300 dark:bg-slate-800 dark:border-slate-700 shadow-sm" 
+                              : "bg-white border-transparent hover:bg-slate-50 dark:bg-transparent dark:hover:bg-slate-800/50"
+                          }`}
+                        >
+                          <div className="flex items-start justify-between mb-1">
+                            <span className="font-medium text-sm text-slate-900 dark:text-slate-100 line-clamp-1">
+                              {policy.fileName}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              {selectedPolicyId === policy.id && <CheckCircle className="h-3 w-3 text-teal-600 mt-1" />}
+                              <button 
+                                onClick={(e) => handleDeletePolicy(e, policy.id)}
+                                className="text-slate-400 hover:text-red-500 transition-colors p-1"
+                                title="Delete Policy"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-slate-500">
+                            <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-normal">
+                              {policy.policyType}
+                            </Badge>
+                            <span>•</span>
+                            <span>{policy.provider}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                  <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+                    <Button variant="outline" className="w-full text-xs h-8" asChild>
+                      <Link href="/upload">
+                        <ArrowLeft className="h-3 w-3 mr-2" /> Upload New
+                      </Link>
+                    </Button>
                   </div>
                 </div>
-              </div>
+              </ResizablePanel>
 
-              <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-              <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:grid-cols-4">
-                <TabsTrigger value="analysis" className="flex items-center space-x-2">
-                  <Eye className="w-4 h-4" />
-                  <span>Analysis</span>
-                </TabsTrigger>
-                <TabsTrigger value="overview" className="flex items-center space-x-2">
-                  <FileText className="w-4 h-4" />
-                  <span>All Policies</span>
-                </TabsTrigger>
-                <TabsTrigger value="compare" className="flex items-center space-x-2">
-                  <BarChart3 className="w-4 h-4" />
-                  <span>Compare ({selectedPolicies.length})</span>
-                </TabsTrigger>
-                <TabsTrigger value="insights" className="flex items-center space-x-2">
-                  <MessageSquare className="w-4 h-4" />
-                  <span>Smart Insights</span>
-                </TabsTrigger>
-              </TabsList>
+              <ResizableHandle />
 
-              {/* Individual Policy Analysis Tab */}
-              <TabsContent value="analysis" className="space-y-6">
-                {currentPolicy ? (
-                  <div className="space-y-6">
-                    {/* Policy Summary Card */}
-                    <Card className="border-2 border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50">
-                      <CardHeader>
-                        <CardTitle className="flex items-center space-x-3">
-                          <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                            <FileText className="w-6 h-6 text-blue-600" />
-                          </div>
-                          <div>
-                            <h2 className="text-xl font-bold text-blue-900">{currentPolicy.fileName}</h2>
-                            <Badge className="mt-1 bg-blue-200 text-blue-800">{currentPolicy.policyType}</Badge>
-                          </div>
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center">
-                              <Shield className="w-5 h-5 text-blue-600" />
+              {/* Right Panel: Analysis Content */}
+              <ResizablePanel defaultSize={75}>
+                <div className="h-full flex flex-col bg-background">
+                  {/* Toolbar */}
+                  <div className="h-14 border-b bg-card flex items-center justify-between px-6">
+                    <div className="flex items-center gap-4">
+                      <h1 className="font-serif font-bold text-lg text-foreground">
+                        {currentPolicy?.fileName || "Select a Policy"}
+                      </h1>
+                      {currentPolicy && (
+                        <Badge variant="outline" className="bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-900/20 dark:text-teal-300 dark:border-teal-800">
+                          Active Analysis
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {currentPolicy && (
+                        <Sheet>
+                          <SheetTrigger asChild>
+                            <Button variant="ghost" size="icon" title="View Raw Data">
+                              <FileJson className="h-4 w-4 text-muted-foreground" />
+                            </Button>
+                          </SheetTrigger>
+                          <SheetContent className="w-[400px] sm:w-[540px]">
+                            <SheetHeader>
+                              <SheetTitle>Policy Details</SheetTitle>
+                              <SheetDescription>
+                                Raw data extracted from the policy document.
+                              </SheetDescription>
+                            </SheetHeader>
+                            <div className="mt-6 h-full overflow-hidden">
+                              <ScrollArea className="h-[calc(100vh-120px)] w-full rounded-md border p-4 bg-muted/50">
+                                <pre className="text-xs font-mono whitespace-pre-wrap break-words">
+                                  {JSON.stringify(currentPolicy, null, 2)}
+                                </pre>
+                              </ScrollArea>
                             </div>
-                            <div>
-                              <p className="text-sm text-gray-600">Provider</p>
-                              <p className="font-semibold text-gray-900">{currentPolicy.provider}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center space-x-3">
-                            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center">
-                              <DollarSign className="w-5 h-5 text-green-600" />
-                            </div>
-                            <div>
-                              <p className="text-sm text-gray-600">Annual Premium</p>
-                              <p className="font-semibold text-gray-900">{currentPolicy.premium}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center space-x-3">
-                            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center">
-                              <Shield className="w-5 h-5 text-purple-600" />
-                            </div>
-                            <div>
-                              <p className="text-sm text-gray-600">Coverage</p>
-                              <p className="font-semibold text-gray-900">{currentPolicy.coverageAmount}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center space-x-3">
-                            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center">
-                              <Calendar className="w-5 h-5 text-orange-600" />
-                            </div>
-                            <div>
-                              <p className="text-sm text-gray-600">Expires</p>
-                              <p className="font-semibold text-gray-900">
-                                {new Date(currentPolicy.expirationDate).toLocaleDateString('en-IN')}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    {/* Key Features */}
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="flex items-center space-x-2">
-                          <CheckCircle className="w-5 h-5 text-green-600" />
-                          <span>Policy Features</span>
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {currentPolicy.keyFeatures.map((feature, index) => (
-                            <div key={index} className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
-                              <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
-                              <span className="text-sm text-gray-700 font-medium">{feature}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    {/* Individual Policy Insights */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      <Card className="border-blue-200 bg-blue-50">
-                        <CardHeader>
-                          <CardTitle className="text-blue-900">Policy Analysis</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                          {currentPolicyInsights.map((insight, index) => (
-                            <div key={index} className="flex items-start space-x-3 p-3 bg-white rounded-lg border border-blue-100">
-                              <CheckCircle className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
-                              <p className="text-sm text-gray-700 font-medium">{insight}</p>
-                            </div>
-                          ))}
-                        </CardContent>
-                      </Card>
-
-                      <Card className="border-green-200 bg-green-50">
-                        <CardHeader>
-                          <CardTitle className="text-green-900">Recommendations</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                          {currentPolicyRecommendations.map((recommendation, index) => (
-                            <div key={index} className="flex items-start space-x-3 p-3 bg-white rounded-lg border border-green-100">
-                              <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
-                              <p className="text-sm text-gray-700 font-medium">{recommendation}</p>
-                            </div>
-                          ))}
-                        </CardContent>
-                      </Card>
+                          </SheetContent>
+                        </Sheet>
+                      )}
+                      <Button variant="ghost" size="sm" onClick={() => handleCompareToggle(selectedPolicyId)}>
+                        <BarChart3 className="h-4 w-4 mr-2" />
+                        Compare
+                      </Button>
+                      <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90">
+                        <MessageSquare className="h-4 w-4 mr-2" />
+                        Ask AI
+                      </Button>
                     </div>
                   </div>
-                ) : (
-                  <div className="text-center py-16 text-lg text-gray-500">
-                    No policy selected for analysis
-                  </div>
-                )}
-              </TabsContent>
 
-              {/* All Policies Overview Tab */}
-              <TabsContent value="overview" className="space-y-6">
-                <div className="mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900">All Uploaded Policies</h3>
-                  <p className="text-gray-600">Overview of all your insurance policies</p>
-                </div>
-                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-                  {policies.map((policy) => (
-                    <PolicyCard
-                      key={policy.id || `policy-${Math.random()}`}
-                      policy={policy}
-                      onViewDetails={() => {
-                        setSelectedPolicyId(policy.id)
-                        setActiveTab("analysis")
-                      }}
-                      onCompare={() => handleCompareToggle(policy.id)}
-                      isSelected={selectedPolicies.includes(policy.id)}
-                    />
-                  ))}
-                </div>
-              </TabsContent>
+                  {/* Content Area */}
+                  <ScrollArea className="flex-1 p-6">
+                    <div className="max-w-5xl mx-auto space-y-8 pb-20">
+                      {currentPolicy ? (
+                        <Tabs defaultValue="analysis" className="w-full">
+                          <TabsList className="w-full justify-start border-b rounded-none bg-transparent h-auto p-0 mb-6">
+                            <TabsTrigger 
+                              value="analysis" 
+                              className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2"
+                            >
+                              Analysis
+                            </TabsTrigger>
+                            <TabsTrigger 
+                              value="insights" 
+                              className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2"
+                            >
+                              Smart Insights
+                            </TabsTrigger>
+                          </TabsList>
 
-              {/* Compare Tab */}
-              <TabsContent value="compare" className="space-y-6">
-                <PolicyComparison policies={selectedPolicyData} onRemovePolicy={handleRemoveFromComparison} />
-              </TabsContent>
+                          <TabsContent value="analysis" className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                            {/* Key Metrics Grid - Refactored */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                              <div className="p-4 rounded-lg bg-muted/50 space-y-1">
+                                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Premium</p>
+                                <div className="text-xl font-mono font-semibold text-foreground">
+                                  {(!currentPolicy.premium || currentPolicy.premium === "Not specified") ? (
+                                    <span className="text-sm italic text-muted-foreground">Not specified</span>
+                                  ) : (
+                                    currentPolicy.premium
+                                  )}
+                                </div>
+                                <p className="text-xs text-muted-foreground">Annual payment</p>
+                              </div>
+                              
+                              <div className="p-4 rounded-lg bg-muted/50 space-y-1">
+                                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Coverage</p>
+                                <div className="text-xl font-mono font-semibold text-foreground">
+                                  {(!currentPolicy.coverageAmount || currentPolicy.coverageAmount === "Not specified") ? (
+                                    <span className="text-sm italic text-muted-foreground">Not specified</span>
+                                  ) : (
+                                    currentPolicy.coverageAmount
+                                  )}
+                                </div>
+                                <p className="text-xs text-muted-foreground">Total sum insured</p>
+                              </div>
 
-              {/* Smart Insights Tab - Overall insights across all policies */}
-              <TabsContent value="insights" className="space-y-6">
-                <div className="mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Smart Insights Across All Policies</h3>
-                  <p className="text-gray-600">AI-powered analysis and recommendations for your entire portfolio</p>
+                              <div className="p-4 rounded-lg bg-muted/50 space-y-1">
+                                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Deductible</p>
+                                <div className="text-xl font-mono font-semibold text-foreground">
+                                  {(!currentPolicy.deductible || currentPolicy.deductible === "Not specified") ? (
+                                    <span className="text-sm italic text-muted-foreground">Not specified</span>
+                                  ) : (
+                                    currentPolicy.deductible
+                                  )}
+                                </div>
+                                <p className="text-xs text-muted-foreground">Out of pocket</p>
+                              </div>
+                            </div>
+
+                            {/* Claim Readiness Score - New Visual */}
+                            <Card className="border-none shadow-none bg-card">
+                              <CardContent className="p-0 pt-2">
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="space-y-1">
+                                    <h3 className="font-medium text-foreground">Claim Readiness Score</h3>
+                                    <p className="text-xs text-muted-foreground">Based on document completeness</p>
+                                  </div>
+                                  <span className={cn(
+                                    "text-2xl font-bold",
+                                    (currentPolicy.rawAnalysis?.claim_readiness_score || 0) >= 75 ? "text-green-600" :
+                                    (currentPolicy.rawAnalysis?.claim_readiness_score || 0) >= 40 ? "text-amber-600" : "text-red-600"
+                                  )}>
+                                    {currentPolicy.rawAnalysis?.claim_readiness_score || 0}/100
+                                  </span>
+                                </div>
+                                <Progress 
+                                  value={currentPolicy.rawAnalysis?.claim_readiness_score || 0} 
+                                  className="h-2" 
+                                />
+                              </CardContent>
+                            </Card>
+
+                            {/* Accordion for Details - Progressive Disclosure */}
+                            <Accordion type="single" collapsible defaultValue="features" className="w-full border rounded-lg bg-card px-4">
+                              <AccordionItem value="features" className="border-b-0">
+                                <AccordionTrigger className="text-base font-medium hover:no-underline py-4">Key Features & Inclusions</AccordionTrigger>
+                                <AccordionContent>
+                                  <ul className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-4">
+                                    {currentPolicy.keyFeatures.map((feature, i) => (
+                                      <li key={i} className="flex items-start gap-3 text-sm text-muted-foreground">
+                                        <CheckCircle className="h-5 w-5 text-teal-600 flex-shrink-0 mt-0.5" />
+                                        <span>{feature}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </AccordionContent>
+                              </AccordionItem>
+
+                              <AccordionItem value="exclusions" className="border-t">
+                                <AccordionTrigger className="text-base font-medium hover:no-underline py-4">Exclusions & Limitations</AccordionTrigger>
+                                <AccordionContent>
+                                  <div className="text-sm text-muted-foreground leading-relaxed pb-4">
+                                    {currentPolicy.rawAnalysis?.exclusions ? (
+                                      <div className="whitespace-pre-line">{currentPolicy.rawAnalysis.exclusions}</div>
+                                    ) : (
+                                      <p className="italic">No specific exclusions detected in the summary analysis.</p>
+                                    )}
+                                  </div>
+                                </AccordionContent>
+                              </AccordionItem>
+
+                              <AccordionItem value="waiting" className="border-t border-b-0">
+                                <AccordionTrigger className="text-base font-medium hover:no-underline py-4">Waiting Periods</AccordionTrigger>
+                                <AccordionContent>
+                                  <div className="text-sm text-muted-foreground leading-relaxed pb-4">
+                                    {/* Attempt to find waiting periods in raw analysis or show generic message */}
+                                    {(currentPolicy.rawAnalysis as any)?.waiting_periods ? (
+                                       <div className="whitespace-pre-line">{(currentPolicy.rawAnalysis as any).waiting_periods}</div>
+                                    ) : (
+                                      <p className="italic">Waiting periods not explicitly extracted. Please check the full policy document.</p>
+                                    )}
+                                  </div>
+                                </AccordionContent>
+                              </AccordionItem>
+                            </Accordion>
+
+                            {/* AI Insights - Refined to fit background */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
+                              <Card className="bg-muted/30 border-none shadow-sm">
+                                <CardHeader className="pb-2">
+                                  <CardTitle className="font-serif text-lg flex items-center gap-2 text-foreground">
+                                    <Shield className="h-5 w-5 text-primary/80" />
+                                    Coverage Analysis
+                                  </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-3">
+                                  {currentPolicyInsights.map((insight, i) => (
+                                    <p key={i} className="text-sm text-muted-foreground leading-relaxed">
+                                      • {insight}
+                                    </p>
+                                  ))}
+                                </CardContent>
+                              </Card>
+
+                              <Card className="bg-muted/30 border-none shadow-sm">
+                                <CardHeader className="pb-2">
+                                  <CardTitle className="font-serif text-lg flex items-center gap-2 text-foreground">
+                                    <AlertCircle className="h-5 w-5 text-primary/80" />
+                                    Recommendations
+                                  </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-3">
+                                  {currentPolicyRecommendations.map((rec, i) => (
+                                    <p key={i} className="text-sm text-muted-foreground leading-relaxed">
+                                      • {rec}
+                                    </p>
+                                  ))}
+                                </CardContent>
+                              </Card>
+                            </div>
+                          </TabsContent>
+
+                          <TabsContent value="insights">
+                            <InsightsPanel insights={currentPolicyInsights} recommendations={currentPolicyRecommendations} />
+                          </TabsContent>
+                        </Tabs>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center h-[60vh] text-muted-foreground">
+                          <FileText className="h-16 w-16 mb-4 opacity-20" />
+                          <p className="text-lg font-medium">Select a policy to view analysis</p>
+                          <p className="text-sm">Choose a document from the sidebar</p>
+                        </div>
+                      )}
+                    </div>
+                  </ScrollArea>
                 </div>
-                <InsightsPanel insights={insights} recommendations={recommendations} />
-              </TabsContent>
-            </Tabs>
-            </>
+              </ResizablePanel>
+            </ResizablePanelGroup>
           )}
-        </div>
+        </main>
       </div>
     </ProtectedRoute>
   )

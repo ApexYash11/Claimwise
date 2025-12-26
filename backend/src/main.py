@@ -6,12 +6,13 @@ load_dotenv()
 STORAGE_BUCKET = os.getenv("SUPABASE_STORAGE_BUCKET", "proeject")
 from src.db import supabase, supabase_storage
 from src.llm_groq import analyze_policy, compare_policies, chat_with_policy, chat_with_multiple_policies, get_api_status
-from src.auth import get_current_user, refresh_token
+from src.auth import get_current_user, refresh_token, oauth2_scheme
 from fastapi.middleware.cors import CORSMiddleware
 import uuid
 from datetime import datetime
 import tempfile
 import logging
+from supabase import create_client
 
 from src.models import UploadResponse, ChatRequest, ChatResponse, PolicyAnalysisResponse, ComparisonResponse
 from typing import Union, Dict
@@ -275,7 +276,11 @@ def analyze(policy_id: str = Form(...), user_id: str = Depends(get_current_user)
         dict: LLM analysis result.
     """
     try:
-        policy = supabase.table("policies").select("extracted_text", "policy_number", "policy_name").eq("id", policy_id).eq("user_id", user_id).execute().data[0]
+        result = supabase.table("policies").select("extracted_text", "policy_number", "policy_name").eq("id", policy_id).eq("user_id", user_id).execute()
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Policy not found for this user.")
+        
+        policy = result.data[0]
         analysis = analyze_policy(policy['extracted_text'])
         
         # Log the analysis activity
@@ -298,6 +303,60 @@ def analyze(policy_id: str = Form(...), user_id: str = Depends(get_current_user)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error analyzing policy: {str(e)}")
 
+@app.delete("/policies/{policy_id}")
+def delete_policy(
+    policy_id: str, 
+    user_id: str = Depends(get_current_user),
+    token: str = Depends(oauth2_scheme)
+):
+    """
+    Delete a policy and its associated data.
+    """
+    logging.info(f"Attempting to delete policy: {policy_id} for user: {user_id}")
+    try:
+        # Create a new client authenticated with the user's token to respect RLS
+        # This is safer than using the service role and works even if service role is missing
+        url = os.getenv("SUPABASE_URL", "")
+        key = os.getenv("SUPABASE_KEY", "")
+        auth_client = create_client(url, key)
+        auth_client.postgrest.auth(token)
+        
+        # Verify policy ownership (and existence)
+        # Using auth_client ensures we only see policies the user is allowed to see
+        policy = auth_client.table("policies").select("id", "uploaded_file_url").eq("id", policy_id).execute().data
+        
+        if not policy:
+            logging.warning(f"Policy {policy_id} not found for user {user_id}")
+            raise HTTPException(status_code=404, detail="Policy not found or access denied.")
+        
+        # Delete associated document chunks first (to avoid foreign key issues)
+        try:
+            auth_client.table("document_chunks").delete().eq("policy_id", policy_id).execute()
+            logging.info(f"Deleted document chunks for policy: {policy_id}")
+        except Exception as e:
+            logging.warning(f"Could not delete document chunks for policy {policy_id}: {e}")
+            # Continue anyway, as the policy delete might still work if there's a cascade or no FK
+            
+        # Delete from database
+        auth_client.table("policies").delete().eq("id", policy_id).execute()
+        
+        # Log activity (using service role or global client is fine for logging)
+        log_activity(
+            user_id=user_id,
+            activity_type="delete",
+            title="Policy Deleted",
+            description=f"Policy {policy_id} deleted",
+            details={"policy_id": policy_id}
+        )
+        
+        return {"message": "Policy deleted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.exception(f"Error deleting policy: {e}")
+        raise HTTPException(status_code=500, detail=f"Error deleting policy: {str(e)}")
+
 @app.post("/compare-policies")
 def compare(policy_1_id: str, policy_2_id: str, user_id: str = Depends(get_current_user)):
     """
@@ -314,8 +373,14 @@ def compare(policy_1_id: str, policy_2_id: str, user_id: str = Depends(get_curre
     try:
         logging.debug("Starting comparison for user %s, policies %s vs %s", user_id, policy_1_id, policy_2_id)
 
-        pol1 = supabase.table("policies").select("extracted_text", "policy_number", "policy_name").eq("id", policy_1_id).eq("user_id", user_id).execute().data[0]
-        pol2 = supabase.table("policies").select("extracted_text", "policy_number", "policy_name").eq("id", policy_2_id).eq("user_id", user_id).execute().data[0]
+        res1 = supabase.table("policies").select("extracted_text", "policy_number", "policy_name").eq("id", policy_1_id).eq("user_id", user_id).execute()
+        res2 = supabase.table("policies").select("extracted_text", "policy_number", "policy_name").eq("id", policy_2_id).eq("user_id", user_id).execute()
+
+        if not res1.data or not res2.data:
+            raise HTTPException(status_code=404, detail="One or both policies not found for this user.")
+
+        pol1 = res1.data[0]
+        pol2 = res2.data[0]
 
         logging.debug("Retrieved policies successfully")
 
@@ -385,12 +450,15 @@ def debug_gemini_config():
         test_prompt = "Respond with exactly: 'Gemini Pro API working correctly'"
         response = make_llm_request(test_prompt)
         
+        # Ensure response is a string before slicing
+        response_text = str(response) if response is not None else ""
+        
         return {
             "status": "success",
             "model": "gemini-1.5-pro",
             "api_key_status": key_status,
-            "test_response": response[:100] + "..." if len(response) > 100 else response,
-            "response_length": len(response),
+            "test_response": response_text[:100] + "..." if len(response_text) > 100 else response_text,
+            "response_length": len(response_text),
             "message": "Gemini Pro API is working correctly with your student account!"
         }
         
@@ -459,12 +527,12 @@ def debug_update_policy_name(policy_id: str, new_name: str, user_id: str = Depen
     """
     try:
         # Verify the policy belongs to the user
-        policy = supabase.table("policies").select("id, policy_name").eq("id", policy_id).eq("user_id", user_id).execute().data
+        result = supabase.table("policies").select("id, policy_name").eq("id", policy_id).eq("user_id", user_id).execute()
         
-        if not policy:
+        if not result.data:
             raise HTTPException(status_code=404, detail="Policy not found")
         
-        old_name = policy[0].get("policy_name")
+        old_name = result.data[0].get("policy_name")
         
         # Update the policy name
         result = supabase.table("policies").update({
@@ -487,7 +555,11 @@ def debug_policy_content(policy_id: str, user_id: str = Depends(get_current_user
     Debug endpoint to check policy content for chat troubleshooting.
     """
     try:
-        policy = supabase.table("policies").select("*").eq("id", policy_id).eq("user_id", user_id).execute().data[0]
+        result = supabase.table("policies").select("*").eq("id", policy_id).eq("user_id", user_id).execute()
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Policy not found")
+            
+        policy = result.data[0]
         
         extracted_text = policy.get('extracted_text', '')
         text_length = len(extracted_text)
@@ -534,7 +606,11 @@ def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
         policy_id = request.policy_id
         question = request.question
         
-        policy = supabase.table("policies").select("extracted_text", "policy_number", "policy_name").eq("id", policy_id).eq("user_id", user_id).execute().data[0]
+        result = supabase.table("policies").select("extracted_text", "policy_number", "policy_name").eq("id", policy_id).eq("user_id", user_id).execute()
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Policy not found for this user.")
+            
+        policy = result.data[0]
         
         extracted_text = policy.get('extracted_text', '')
 
@@ -577,6 +653,8 @@ def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
         try:
             from src.llm import make_llm_request
             resp = make_llm_request(final_prompt)
+            if resp is None:
+                raise ValueError("LLM returned None")
             answer = getattr(resp, 'text', str(resp))
         except Exception as e:
             logging.exception("Gemini generation failed, using fallback chat_with_policy: %s", e)
@@ -831,9 +909,8 @@ def get_activities(user_id: str = Depends(get_current_user)):
         activities = supabase_storage.table("activities").select("*").eq("user_id", user_id).order("created_at", desc=True).limit(10).execute()
 
         logging.debug("Service role query result: %s", activities)
-        logging.debug("Activities data: %s", activities.data if activities else None)
-
-        if activities and activities.data:
+        
+        if activities and hasattr(activities, 'data') and isinstance(activities.data, list) and len(activities.data) > 0:
             logging.debug("Found %d activities", len(activities.data))
             formatted_activities = []
             for activity in activities.data:

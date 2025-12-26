@@ -429,13 +429,13 @@ export default function ChatPage() {
 
   return (
     <ProtectedRoute>
-  <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 dark:from-gray-950 dark:to-blue-950">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
         <Header />
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           {/* Back Button */}
           <div className="mb-8">
-            <Button variant="ghost" asChild className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200">
+            <Button variant="ghost" asChild className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-200">
               <Link href="/dashboard">
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back to Dashboard
@@ -448,17 +448,14 @@ export default function ChatPage() {
             <div className="lg:col-span-3 space-y-8">
               {/* Header with Policy Selector */}
               <div className="text-center">
-                <div className="inline-flex items-center px-4 py-2 rounded-full bg-green-50 border border-green-200 text-green-700 text-sm font-medium mb-6 dark:bg-green-900/20 dark:border-green-800 dark:text-green-400">
+                <div className="inline-flex items-center px-4 py-2 rounded-full bg-teal-50 border border-teal-200 text-teal-700 text-sm font-medium mb-6 dark:bg-teal-900/20 dark:border-teal-800 dark:text-teal-400">
                   <MessageSquare className="w-4 h-4 mr-2" />
                   AI Assistant
                 </div>
-                <h1 className="text-4xl lg:text-5xl font-bold text-gray-900 dark:text-white mb-6 tracking-tight">
-                  Insurance
-                  <span className="text-transparent bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text block lg:inline lg:ml-3">
-                    Assistant
-                  </span>
+                <h1 className="text-4xl lg:text-5xl font-bold font-serif text-slate-900 dark:text-white mb-6 tracking-tight">
+                  Insurance Assistant
                 </h1>
-                <p className="text-xl text-gray-600 dark:text-gray-300 mb-8 leading-relaxed max-w-3xl mx-auto">
+                <p className="text-xl text-slate-600 dark:text-slate-300 mb-8 leading-relaxed max-w-3xl mx-auto">
                   Ask questions about your policies and get instant, accurate answers powered by advanced AI.
                 </p>
 
@@ -466,50 +463,50 @@ export default function ChatPage() {
                 {!loadingPolicies && policies.length > 0 && (
                   <div className="flex flex-col sm:flex-row items-center justify-center gap-6 mb-8">
                     <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl flex items-center justify-center">
+                      <div className="w-10 h-10 bg-slate-900 rounded-lg flex items-center justify-center">
                         <FileText className="w-5 h-5 text-white" />
                       </div>
-                      <span className="text-base font-semibold text-gray-700 dark:text-gray-300">Ask about:</span>
+                      <span className="text-base font-semibold text-slate-700 dark:text-slate-300">Ask about:</span>
                     </div>
                     <Select value={selectedPolicyId} onValueChange={setSelectedPolicyId}>
-                      <SelectTrigger className="w-80 h-12 rounded-2xl border-gray-200 dark:border-gray-700 shadow-lg hover:shadow-xl transition-all duration-200 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
+                      <SelectTrigger className="w-80 h-12 rounded-lg border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-all duration-200 bg-white dark:bg-slate-800">
                         <SelectValue>
                           <div className="flex items-center space-x-3">
-                            <span className="font-semibold">{getCurrentPolicyName()}</span>
+                            <span className="font-semibold text-slate-900 dark:text-slate-100">{getCurrentPolicyName()}</span>
                             {selectedPolicyId !== "all" && selectedPolicyId !== "auto" && (
-                              <Badge variant="outline" className="text-xs font-medium bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400">
+                              <Badge variant="outline" className="text-xs font-medium bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300">
                                 {policies.find(p => p.id === selectedPolicyId)?.policyType}
                               </Badge>
                             )}
                           </div>
                         </SelectValue>
                       </SelectTrigger>
-                      <SelectContent className="rounded-2xl shadow-xl border-gray-200/50 dark:border-gray-700/50 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl">
-                        <SelectItem value="all" className="rounded-xl p-3 hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-50 dark:hover:from-blue-950/20 dark:hover:to-purple-950/20 transition-all duration-200">
+                      <SelectContent className="rounded-lg shadow-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+                        <SelectItem value="all" className="rounded-md p-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-200 cursor-pointer">
                           <div className="flex items-center space-x-3">
-                            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg flex items-center justify-center">
-                              <Globe className="w-4 h-4 text-white" />
+                            <div className="w-8 h-8 bg-slate-100 dark:bg-slate-800 rounded-md flex items-center justify-center">
+                              <Globe className="w-4 h-4 text-slate-600 dark:text-slate-400" />
                             </div>
-                            <span className="font-medium">All Policies (Comprehensive Search)</span>
+                            <span className="font-medium text-slate-900 dark:text-slate-100">All Policies (Comprehensive Search)</span>
                           </div>
                         </SelectItem>
-                        <SelectItem value="auto" className="rounded-xl p-3 hover:bg-gradient-to-r hover:from-green-50 hover:to-blue-50 dark:hover:from-green-950/20 dark:hover:to-blue-950/20 transition-all duration-200">
+                        <SelectItem value="auto" className="rounded-md p-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-200 cursor-pointer">
                           <div className="flex items-center space-x-3">
-                            <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-blue-500 rounded-lg flex items-center justify-center">
-                              <Bot className="w-4 h-4 text-white" />
+                            <div className="w-8 h-8 bg-teal-50 dark:bg-teal-900/20 rounded-md flex items-center justify-center">
+                              <Bot className="w-4 h-4 text-teal-600 dark:text-teal-400" />
                             </div>
-                            <span className="font-medium">Smart Selection (AI Picks Best Policy)</span>
+                            <span className="font-medium text-slate-900 dark:text-slate-100">Smart Selection (AI Picks Best Policy)</span>
                           </div>
                         </SelectItem>
                         {policies.map((policy) => (
-                          <SelectItem key={policy.id} value={policy.id} className="rounded-xl p-3 hover:bg-gradient-to-r hover:from-gray-50 hover:to-blue-50 dark:hover:from-gray-800 dark:hover:to-blue-950/20 transition-all duration-200">
+                          <SelectItem key={policy.id} value={policy.id} className="rounded-md p-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-200 cursor-pointer">
                             <div className="flex items-center space-x-3">
-                              <div className="w-8 h-8 bg-gradient-to-br from-gray-500 to-gray-600 rounded-lg flex items-center justify-center">
-                                <FileText className="w-4 h-4 text-white" />
+                              <div className="w-8 h-8 bg-slate-100 dark:bg-slate-800 rounded-md flex items-center justify-center">
+                                <FileText className="w-4 h-4 text-slate-600 dark:text-slate-400" />
                               </div>
                               <div className="flex flex-col">
-                                <span className="font-medium">{policy.fileName}</span>
-                                <Badge variant="outline" className="text-xs w-fit">
+                                <span className="font-medium text-slate-900 dark:text-slate-100">{policy.fileName}</span>
+                                <Badge variant="outline" className="text-xs w-fit border-slate-200 text-slate-500">
                                   {policy.policyType}
                                 </Badge>
                               </div>
@@ -524,7 +521,7 @@ export default function ChatPage() {
                         variant="outline" 
                         size="sm" 
                         onClick={handleClearHistory}
-                        className="flex items-center space-x-2 rounded-xl border-gray-200 dark:border-gray-700 hover:border-red-300 hover:text-red-600 dark:hover:border-red-500 dark:hover:text-red-400 transition-all duration-200 h-12 px-4"
+                        className="flex items-center space-x-2 rounded-lg border-slate-200 dark:border-slate-700 hover:border-red-300 hover:text-red-600 dark:hover:border-red-500 dark:hover:text-red-400 transition-all duration-200 h-12 px-4"
                       >
                         <History className="w-4 h-4" />
                         <span>Clear History</span>
@@ -556,23 +553,23 @@ export default function ChatPage() {
               )}
 
               {/* Messages */}
-              <Card className="min-h-[500px] bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200/50 dark:border-gray-700/50 shadow-xl rounded-2xl">
-                <CardContent className="p-8 text-gray-900 dark:text-gray-100">
+              <Card className="min-h-[500px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-sm rounded-xl">
+                <CardContent className="p-8 text-slate-900 dark:text-slate-100">
                   {loadingPolicies ? (
                     <div className="text-center py-12">
-                      <div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4"></div>
-                      <p className="text-gray-600 dark:text-gray-300 font-medium">Loading your policies...</p>
+                      <div className="animate-spin w-8 h-8 border-4 border-teal-600 border-t-transparent rounded-full mx-auto mb-4"></div>
+                      <p className="text-slate-600 dark:text-slate-300 font-medium">Loading your policies...</p>
                     </div>
                   ) : policies.length === 0 ? (
                     <div className="text-center py-12">
-                      <div className="w-16 h-16 bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20 rounded-2xl flex items-center justify-center mb-6 mx-auto border border-gray-200/50 dark:border-gray-700/50">
-                        <FileText className="w-8 h-8 text-gray-600 dark:text-gray-400" />
+                      <div className="w-16 h-16 bg-slate-50 dark:bg-slate-800 rounded-xl flex items-center justify-center mb-6 mx-auto border border-slate-200 dark:border-slate-700">
+                        <FileText className="w-8 h-8 text-slate-400 dark:text-slate-500" />
                       </div>
-                      <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">No Policies Found</h3>
-                      <p className="text-gray-600 dark:text-gray-300 mb-8 text-base leading-relaxed">
+                      <h3 className="text-xl font-bold font-serif text-slate-900 dark:text-white mb-3">No Policies Found</h3>
+                      <p className="text-slate-600 dark:text-slate-300 mb-8 text-base leading-relaxed">
                         Please upload your insurance policies first to use the AI assistant.
                       </p>
-                      <Button asChild className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 h-12 px-6">
+                      <Button asChild className="bg-slate-900 hover:bg-slate-800 text-white rounded-lg shadow-sm hover:shadow-md transition-all duration-200 h-12 px-6">
                         <Link href="/upload">
                           <FileText className="w-4 h-4 mr-2" />
                           Upload Policies
@@ -581,21 +578,21 @@ export default function ChatPage() {
                     </div>
                   ) : messages.length === 0 ? (
                     <div className="text-center py-12">
-                      <div className="w-16 h-16 bg-gradient-to-br from-green-50 to-blue-50 dark:from-green-950/20 dark:to-blue-950/20 rounded-2xl flex items-center justify-center mb-6 mx-auto border border-gray-200/50 dark:border-gray-700/50">
-                        <MessageSquare className="w-8 h-8 text-gray-600 dark:text-gray-400" />
+                      <div className="w-16 h-16 bg-teal-50 dark:bg-teal-900/20 rounded-xl flex items-center justify-center mb-6 mx-auto border border-teal-100 dark:border-teal-800">
+                        <MessageSquare className="w-8 h-8 text-teal-600 dark:text-teal-400" />
                       </div>
-                      <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">Start a conversation</h3>
-                      <p className="text-gray-600 dark:text-gray-300 mb-8 text-base leading-relaxed">
+                      <h3 className="text-xl font-bold font-serif text-slate-900 dark:text-white mb-3">Start a conversation</h3>
+                      <p className="text-slate-600 dark:text-slate-300 mb-8 text-base leading-relaxed">
                         Ask me anything about your {policies.length} insurance {policies.length === 1 ? 'policy' : 'policies'}. I can help with coverage details, claims, costs, and more.
                       </p>
                       <div className="flex flex-wrap gap-3 justify-center">
                         {policies.slice(0, 3).map((policy) => (
-                          <Badge key={policy.id} variant="secondary" className="text-sm font-medium px-4 py-2 rounded-full bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20 text-blue-700 dark:text-blue-300 border border-blue-200/50 dark:border-blue-800/50">
+                          <Badge key={policy.id} variant="secondary" className="text-sm font-medium px-4 py-2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                             {policy.fileName} ({policy.policyType})
                           </Badge>
                         ))}
                         {policies.length > 3 && (
-                          <Badge variant="secondary" className="text-sm font-medium px-4 py-2 rounded-full bg-gradient-to-r from-gray-50 to-blue-50 dark:from-gray-900/20 dark:to-blue-950/20 text-blue-700 dark:text-blue-300 border border-blue-200/50 dark:border-blue-800/50">
+                          <Badge variant="secondary" className="text-sm font-medium px-4 py-2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                             +{policies.length - 3} more
                           </Badge>
                         )}
@@ -608,18 +605,18 @@ export default function ChatPage() {
                       ))}
                       {isLoading && (
                         <div className="flex gap-4 justify-start">
-                          <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-blue-500 rounded-full flex items-center justify-center shadow-lg">
+                          <div className="w-8 h-8 bg-teal-600 rounded-full flex items-center justify-center shadow-sm">
                             <Bot className="w-4 h-4 text-white" />
                           </div>
-                          <Card className="bg-white/90 dark:bg-gray-900/90 border-gray-200/50 dark:border-gray-700/50 shadow-lg rounded-2xl max-w-xs">
-                            <CardContent className="p-4 text-gray-900 dark:text-gray-100">
+                          <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 shadow-sm rounded-xl max-w-xs">
+                            <CardContent className="p-4 text-slate-900 dark:text-slate-100">
                               <div className="flex items-center space-x-3">
                                 <div className="flex space-x-1">
-                                  <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" />
-                                  <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce delay-100" />
-                                  <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce delay-200" />
+                                  <div className="w-2 h-2 bg-teal-400 rounded-full animate-bounce" />
+                                  <div className="w-2 h-2 bg-teal-400 rounded-full animate-bounce delay-100" />
+                                  <div className="w-2 h-2 bg-teal-400 rounded-full animate-bounce delay-200" />
                                 </div>
-                                <span className="text-sm text-gray-600 dark:text-gray-300 font-medium">
+                                <span className="text-sm text-slate-600 dark:text-slate-300 font-medium">
                                   {selectedPolicyId === "all" ? "Analyzing all policies..." : "AI is thinking..."}
                                 </span>
                               </div>
@@ -635,7 +632,7 @@ export default function ChatPage() {
 
               {/* AI Transparency Notice */}
               {policies.length > 0 && (
-                <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-4 shadow-sm dark:bg-amber-950/20 dark:border-amber-800/50">
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 shadow-sm dark:bg-amber-950/20 dark:border-amber-800/50">
                   <div className="flex items-start gap-3">
                     <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
                     <div>

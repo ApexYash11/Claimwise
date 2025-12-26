@@ -48,15 +48,15 @@ export function LoginForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <Card className="w-full max-w-md shadow-xl border-0 bg-white/95 backdrop-blur">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4">
+      <Card className="w-full max-w-md shadow-sm border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
         <CardHeader className="text-center space-y-4">
-          <div className="mx-auto w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center">
+          <div className="mx-auto w-12 h-12 bg-teal-600 rounded-xl flex items-center justify-center">
             <Shield className="w-6 h-6 text-white" />
           </div>
           <div>
-            <CardTitle className="text-2xl font-bold text-gray-900">Welcome back</CardTitle>
-            <CardDescription className="text-gray-600">Sign in to your ClaimWise account</CardDescription>
+            <CardTitle className="text-2xl font-serif font-bold text-slate-900 dark:text-slate-50">Welcome back</CardTitle>
+            <CardDescription className="text-slate-600 dark:text-slate-400">Sign in to your ClaimWise account</CardDescription>
           </div>
         </CardHeader>
         <CardContent>
@@ -65,21 +65,21 @@ export function LoginForm() {
               <Button
                 type="button"
                 variant="outline"
-                className="w-full flex items-center justify-center gap-2 border-gray-200"
+                className="w-full flex items-center justify-center gap-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
                 onClick={() => handleSocialLogin('google')}
                 disabled={socialLoading === 'google' || loading}
               >
-                <Globe className="w-5 h-5 text-blue-600" />
+                <Globe className="w-5 h-5 text-teal-600" />
                 {socialLoading === 'google' ? 'Signing in with Google...' : 'Sign in with Google'}
               </Button>
               <Button
                 type="button"
                 variant="outline"
-                className="w-full flex items-center justify-center gap-2 border-gray-200"
+                className="w-full flex items-center justify-center gap-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
                 onClick={() => handleSocialLogin('github')}
                 disabled={socialLoading === 'github' || loading}
               >
-                <Github className="w-5 h-5 text-gray-800" />
+                <Github className="w-5 h-5 text-slate-800 dark:text-slate-200" />
                 {socialLoading === 'github' ? 'Signing in with GitHub...' : 'Sign in with GitHub'}
               </Button>
             </div>
@@ -90,7 +90,7 @@ export function LoginForm() {
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-gray-700">
+              <Label htmlFor="email" className="text-slate-700 dark:text-slate-300">
                 Email
               </Label>
               <Input
@@ -99,13 +99,13 @@ export function LoginForm() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                className="border-slate-200 dark:border-slate-700 focus:border-teal-500 focus:ring-teal-500 dark:bg-slate-950 dark:text-white"
                 placeholder="Enter your email"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-gray-700">
+              <Label htmlFor="password" className="text-slate-700 dark:text-slate-300">
                 Password
               </Label>
               <div className="relative">
@@ -115,7 +115,7 @@ export function LoginForm() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="border-gray-200 focus:border-blue-500 focus:ring-blue-500 pr-10"
+                  className="border-slate-200 dark:border-slate-700 focus:border-teal-500 focus:ring-teal-500 pr-10 dark:bg-slate-950 dark:text-white"
                   placeholder="Enter your password"
                 />
                 <Button
@@ -127,15 +127,15 @@ export function LoginForm() {
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? (
-                    <EyeOff className="h-4 w-4 text-gray-400" />
+                    <EyeOff className="h-4 w-4 text-slate-400" />
                   ) : (
-                    <Eye className="h-4 w-4 text-gray-400" />
+                    <Eye className="h-4 w-4 text-slate-400" />
                   )}
                 </Button>
               </div>
             </div>
 
-            <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white" disabled={loading}>
+            <Button type="submit" className="w-full bg-teal-600 hover:bg-teal-700 text-white" disabled={loading}>
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -148,9 +148,9 @@ export function LoginForm() {
           </form>
 
           <div className="mt-6 text-center">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-slate-600 dark:text-slate-400">
               Don't have an account?{" "}
-              <Link href="/signup" className="text-blue-600 hover:text-blue-700 font-medium">
+              <Link href="/signup" className="text-teal-600 hover:text-teal-700 font-medium">
                 Sign up
               </Link>
             </p>
