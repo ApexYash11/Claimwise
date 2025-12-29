@@ -168,11 +168,16 @@ def make_llm_request(prompt: str, max_retries: int = 3, delay: float = 1.0):
                 return response.text
             elif genai:
                 # Direct genai usage - configure API key first
-                genai.configure(api_key=gemini_api_key)
-                model = genai.GenerativeModel("gemini-1.5-flash")
-                response = model.generate_content(prompt)
-                logger.info("✅ Success with Gemini API (direct)")
-                return response.text
+                # Use getattr to avoid Pylance "not exported" errors
+                configure = getattr(genai, "configure", None)
+                GenerativeModel = getattr(genai, "GenerativeModel", None)
+                
+                if configure and GenerativeModel:
+                    configure(api_key=gemini_api_key)
+                    model = GenerativeModel("gemini-3-flash")
+                    response = model.generate_content(prompt)
+                    logger.info("✅ Success with Gemini API (direct)")
+                    return response.text
         except Exception as e:
             logger.warning("❌ Gemini API failed: %s", str(e))
     
@@ -322,7 +327,7 @@ def validate_and_clean_analysis(result: dict, original_text: str) -> dict:
                         result[field] = "Amount not specified in policy"
     
     # Clean up text fields
-    for field in ["coverage", "exclusions", "claim_process"]:
+    for field in ["coverage", "exclusions", "claim_process", "waiting_period", "copay"]:
         value = result.get(field, "")
         if value in ["Not specified", "Not found in policy", "", None]:
             if field == "coverage":
@@ -331,6 +336,10 @@ def validate_and_clean_analysis(result: dict, original_text: str) -> dict:
                 result[field] = "Exclusion details not available in the policy document"
             elif field == "claim_process":
                 result[field] = "Claim process details not available in the policy document"
+            elif field == "waiting_period":
+                result[field] = "Not specified"
+            elif field == "copay":
+                result[field] = "Not specified"
     
     # Ensure key_features is a list and not empty
     if not isinstance(result.get("key_features"), list) or not result.get("key_features"):
@@ -440,6 +449,8 @@ def analyze_policy(text: str) -> dict:
         "expiration_date": "string (policy end date in YYYY-MM-DD format only if clearly found)",
         "coverage": "string (detailed summary of what's covered)",
         "exclusions": "string (what's not covered or limitations)",
+        "waiting_period": "string (any waiting periods mentioned)",
+        "copay": "string (any copay or co-payment details)",
         "claim_process": "string (how to file claims)",
         "key_features": ["array of strings with main policy benefits/features"],
         "claim_readiness_score": "number (0-100 indicating how ready this policy is for claims)"

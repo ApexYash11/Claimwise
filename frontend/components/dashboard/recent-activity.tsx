@@ -3,9 +3,17 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { FileText, MessageSquare, BarChart3, Upload, Clock } from "lucide-react"
+import { FileText, MessageSquare, BarChart3, Upload, Clock, ArrowRight } from "lucide-react"
 import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 
 import { createApiUrlWithLogging } from "@/lib/url-utils"
 
@@ -23,7 +31,6 @@ export function RecentActivity() {
   // Force recompilation
   const [activities, setActivities] = useState<ActivityItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [showAll, setShowAll] = useState(false)
 
   // Fetch activities from API
   useEffect(() => {
@@ -33,15 +40,12 @@ export function RecentActivity() {
         let sessionResult = await supabase.auth.getSession()
         let session = sessionResult.data.session
         let token = session?.access_token
-        // Optionally log the JWT for debugging
-        console.log("[DEBUG] Supabase JWT:", token)
 
         // If no token, try to refresh
         if (!token) {
           const { data: refreshed } = await supabase.auth.refreshSession()
           session = refreshed.session
           token = session?.access_token
-          console.log("[DEBUG] Refreshed JWT:", token)
         }
 
         let response;
@@ -54,45 +58,19 @@ export function RecentActivity() {
             },
           })
         }
+        
         if (response && response.ok) {
           const data = await response.json()
           if (data.success && data.activities) {
             setActivities(data.activities)
           } else {
-            setActivities([
-              {
-                id: "welcome",
-                type: "upload",
-                title: "Welcome to ClaimWise!",
-                description: "Upload your first policy to see activities here",
-                timestamp: new Date().toISOString(),
-                status: "completed"
-              }
-            ])
+            setActivities([])
           }
         } else {
-          setActivities([
-            {
-              id: "welcome",
-              type: "upload",
-              title: "Welcome to ClaimWise!",
-              description: "Sign in to see your recent activities.",
-              timestamp: new Date().toISOString(),
-              status: "completed"
-            }
-          ])
+          setActivities([])
         }
       } catch (error) {
-        setActivities([
-          {
-            id: "welcome",
-            type: "upload",
-            title: "Welcome to ClaimWise!",
-            description: "Sign in to see your recent activities.",
-            timestamp: new Date().toISOString(),
-            status: "completed"
-          }
-        ])
+        setActivities([])
       } finally {
         setLoading(false)
       }
@@ -100,105 +78,68 @@ export function RecentActivity() {
     fetchActivities()
   }, [])
 
-  const getActivityIcon = (type: string) => {
+  const getIcon = (type: string) => {
     switch (type) {
-      case "upload":
-        return Upload
-      case "analysis":
-        return FileText
-      case "chat":
-        return MessageSquare
-      case "comparison":
-        return BarChart3
-      default:
-        return FileText
+      case "upload": return <Upload className="h-4 w-4 text-slate-500" />
+      case "analysis": return <FileText className="h-4 w-4 text-teal-600" />
+      case "chat": return <MessageSquare className="h-4 w-4 text-blue-500" />
+      case "comparison": return <BarChart3 className="h-4 w-4 text-amber-500" />
+      default: return <Clock className="h-4 w-4 text-slate-400" />
     }
   }
 
-  const getStatusColor = (status?: string) => {
-    switch (status) {
-      case "completed":
-        return "bg-green-100 text-green-800"
-      case "processing":
-        return "bg-yellow-100 text-yellow-800"
-      case "failed":
-        return "bg-red-100 text-red-800"
-      default:
-        return "bg-gray-100 text-gray-800"
-    }
-  }
-
-  const formatTimeAgo = (timestamp: string) => {
-    const date = new Date(timestamp)
-    const now = new Date()
-    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60))
-
-    if (diffInHours < 1) return "Just now"
-    if (diffInHours < 24) return `${diffInHours}h ago`
-    const diffInDays = Math.floor(diffInHours / 24)
-    return `${diffInDays}d ago`
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    })
   }
 
   return (
-    <Card className="border-0 shadow-lg">
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-lg">Recent Activity</CardTitle>
-        <Button 
-          variant="ghost" 
-          onClick={() => {
-            console.log('View All button clicked, current showAll:', showAll);
-            console.log('Activities array length:', activities.length);
-            setShowAll(!showAll);
-          }}
-          className="text-blue-600 hover:text-blue-700"
-        >
-          {showAll ? "Show Less" : "View All"} ({activities.length} total)
+    <Card className="h-full">
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardTitle className="text-lg font-serif">Recent Activity</CardTitle>
+        <Button variant="ghost" size="sm" className="text-xs text-muted-foreground">
+          View All <ArrowRight className="ml-1 h-3 w-3" />
         </Button>
       </CardHeader>
-      <CardContent className="pb-4">
+      <CardContent>
         {loading ? (
-          <div className="space-y-4">
+          <div className="space-y-2">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="flex items-start space-x-3 p-3">
-                <div className="w-8 h-8 bg-gray-200 rounded-lg animate-pulse"></div>
-                <div className="flex-1">
-                  <div className="h-4 bg-gray-200 rounded animate-pulse mb-2"></div>
-                  <div className="h-3 bg-gray-200 rounded animate-pulse"></div>
-                </div>
-              </div>
+              <div key={i} className="h-12 w-full bg-slate-100 animate-pulse rounded-md" />
             ))}
           </div>
-        ) : (
-          <div className="space-y-4">
-            {activities.slice(0, showAll ? activities.length : 3).map((activity) => {
-              const Icon = getActivityIcon(activity.type)
-              return (
-                <div
-                  key={activity.id}
-                  className="flex items-start space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Icon className="w-4 h-4 text-blue-600" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium text-gray-900 truncate">{activity.title}</p>
-                      <div className="flex items-center space-x-2">
-                        {activity.status && (
-                          <Badge className={`text-xs ${getStatusColor(activity.status)}`}>{activity.status}</Badge>
-                        )}
-                        <div className="flex items-center text-xs text-gray-500">
-                          <Clock className="w-3 h-3 mr-1" />
-                          {formatTimeAgo(activity.timestamp)}
-                        </div>
-                      </div>
-                    </div>
-                    <p className="text-sm text-gray-600 mt-1">{activity.description}</p>
-                  </div>
-                </div>
-              )
-            })}
+        ) : activities.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground text-sm">
+            No recent activity found.
           </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-[30px]"></TableHead>
+                <TableHead>Activity</TableHead>
+                <TableHead className="text-right">Date</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {activities.slice(0, 5).map((activity) => (
+                <TableRow key={activity.id}>
+                  <TableCell>{getIcon(activity.type)}</TableCell>
+                  <TableCell>
+                    <div className="font-medium text-sm">{activity.title}</div>
+                    <div className="text-xs text-muted-foreground truncate max-w-[200px]">{activity.description}</div>
+                  </TableCell>
+                  <TableCell className="text-right text-xs text-muted-foreground font-mono">
+                    {formatDate(activity.timestamp)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         )}
       </CardContent>
     </Card>

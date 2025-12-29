@@ -1,6 +1,6 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Inter, Merriweather } from "next/font/google"
+import { Inter, Merriweather, JetBrains_Mono } from "next/font/google"
 import "./globals.css"
 
 import { AuthProvider } from "@/hooks/use-auth"
@@ -15,9 +15,14 @@ const inter = Inter({
 
 const merriweather = Merriweather({
   subsets: ["latin"],
-  weight: ["300", "400", "700"],
+  weight: ["300", "400", "700", "900"],
   display: "swap",
   variable: "--font-merriweather",
+})
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono",
 })
 
 export const metadata: Metadata = {
@@ -26,12 +31,12 @@ export const metadata: Metadata = {
   generator: "ClaimWise",
 }
 
-  export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-  <html lang="en" className={`${inter.variable} ${merriweather.variable} antialiased`} suppressHydrationWarning>
-      <body className="font-sans">
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <TooltipProvider delayDuration={300}>
+    <html lang="en" className={`${inter.variable} ${merriweather.variable} ${jetbrainsMono.variable} antialiased`} suppressHydrationWarning>
+      <body className="font-sans bg-slate-50 dark:bg-slate-950">
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
+          <TooltipProvider>
             <AuthProvider>{children}</AuthProvider>
           </TooltipProvider>
         </ThemeProvider>

@@ -2,22 +2,66 @@
 
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { Header } from "@/components/layout/header"
-import { StatsCard } from "@/components/dashboard/stats-card"
 import { useEffect, useState, useCallback } from "react"
-import { PolicySummary } from "@/lib/api"
 import { useAuth } from "@/hooks/use-auth"
-import { getPolicies } from "@/lib/api"
-import { RecentActivity } from "@/components/dashboard/recent-activity"
-import { QuickActions } from "@/components/dashboard/quick-actions"
 import { ChatWidget } from "@/components/chat/chat-widget"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { createApiUrlWithLogging } from "@/lib/url-utils"
-// ...existing code...
-import { FileText, IndianRupee, Shield, Calendar, AlertTriangle, CheckCircle, TrendingUp } from "lucide-react"
+import { RecentActivity } from "@/components/dashboard/recent-activity"
+import { 
+  BrainCircuit, 
+  ShieldAlert, 
+  Shield, 
+  Zap, 
+  SearchCheck, 
+  Plus, 
+  Sparkles, 
+  MessageSquare, 
+  ArrowRight,
+  FileSearch,
+  Clock,
+  AlertCircle
+} from "lucide-react"
 import Link from "next/link"
+import { cn } from "@/lib/utils"
 
+// Circular Progress Component for Protection Score
+function CircularProgress({ value, size = 60, strokeWidth = 6 }: { value: number, size?: number, strokeWidth?: number }) {
+  const radius = (size - strokeWidth) / 2
+  const circumference = radius * 2 * Math.PI
+  const offset = circumference - (value / 100) * circumference
+
+  return (
+    <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
+      <svg className="transform -rotate-90" width={size} height={size}>
+        <circle
+          className="text-slate-200 dark:text-slate-800"
+          strokeWidth={strokeWidth}
+          stroke="currentColor"
+          fill="transparent"
+          r={radius}
+          cx={size / 2}
+          cy={size / 2}
+        />
+        <circle
+          className="text-indigo-600 dark:text-indigo-400 transition-all duration-500 ease-in-out"
+          strokeWidth={strokeWidth}
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          stroke="currentColor"
+          fill="transparent"
+          r={radius}
+          cx={size / 2}
+          cy={size / 2}
+        />
+      </svg>
+      <span className="absolute text-xs font-bold">{value}%</span>
+    </div>
+  )
+}
 
 export default function DashboardPage() {
   const { user } = useAuth()
@@ -31,60 +75,43 @@ export default function DashboardPage() {
     comparisonsRun: number
   } | null>(null)
 
-  // Helper: Format money in Indian lakhs/crores
-  const formatINR = (amount: number) => {
-    if (amount >= 1e7) {
-      return `₹${(amount / 1e7).toFixed(2)} Cr`
-    } else if (amount >= 1e5) {
-      return `₹${(amount / 1e5).toFixed(2)} Lakh`
-    } else {
-      return `₹${amount.toLocaleString("en-IN")}`
-    }
-  }
+  const [metrics, setMetrics] = useState<{
+    protectionScore: number
+    risksFound: number
+    totalCoverage: string
+    quickInsight: string
+    policiesCount: number
+  } | null>(null)
 
-  // Helper: Parse money string to number (if needed)
-  const parseAmount = (str: string) => {
-    if (!str) return 0
-    const cleaned = str.replace(/[^\d.]/g, "")
-    return Number(cleaned) || 0
-  }
+  // Data for the new "Intelligence" focus
+  const protectionScore = metrics?.protectionScore ?? 0
+  const risksFound = metrics?.risksFound ?? 0
+  const totalCoverage = metrics?.totalCoverage ?? "₹0 Lakh"
+  const quickInsight = metrics?.quickInsight ?? "Scan your first policy to get personalized savings insights."
 
-  // Fetch dashboard stats
   const fetchStats = useCallback(async () => {
     setLoading(true)
     try {
-      // Wait for Supabase session to load, and refresh if needed
       let sessionResult = await (await import("@/lib/supabase")).supabase.auth.getSession()
       let session = sessionResult.data.session
       let token = session?.access_token
-      // Optionally log the JWT for debugging
-      console.log("[DEBUG] Supabase JWT:", token)
 
-      // If no token, try to refresh
-      if (!token) {
-        const { data: refreshed } = await (await import("@/lib/supabase")).supabase.auth.refreshSession()
-        session = refreshed.session
-        token = session?.access_token
-        console.log("[DEBUG] Refreshed JWT:", token)
-      }
-
+      // Fetch stats
       let res;
       if (token) {
         const statsUrl = createApiUrlWithLogging("/dashboard/stats");
         res = await fetch(statsUrl, {
           headers: { Authorization: `Bearer ${token}` },
         })
-        // If unauthorized or not found, fall back to dev endpoint
         if (res.status === 401 || res.status === 404) {
           const devUrl = createApiUrlWithLogging("/dashboard/stats-dev");
           res = await fetch(devUrl)
         }
       } else {
-        // No token, use dev endpoint
         const devUrl = createApiUrlWithLogging("/dashboard/stats-dev");
         res = await fetch(devUrl)
       }
-      if (!res.ok) throw new Error("Failed to fetch stats from both endpoints")
+      if (!res.ok) throw new Error("Failed to fetch stats")
       const data = await res.json()
       setStats({
         uploadedDocuments: data.uploadedDocuments || 0,
@@ -92,251 +119,223 @@ export default function DashboardPage() {
         analysesCompleted: data.analysesCompleted || 0,
         comparisonsRun: data.comparisonsRun || 0,
       })
+
+      // Fetch metrics from database
+      let metricsRes;
+      if (token) {
+        const metricsUrl = createApiUrlWithLogging("/dashboard/metrics");
+        metricsRes = await fetch(metricsUrl, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (metricsRes.status === 401 || metricsRes.status === 404) {
+          const devMetricsUrl = createApiUrlWithLogging("/dashboard/metrics-dev");
+          metricsRes = await fetch(devMetricsUrl)
+        }
+      } else {
+        const devMetricsUrl = createApiUrlWithLogging("/dashboard/metrics-dev");
+        metricsRes = await fetch(devMetricsUrl)
+      }
+      
+      if (metricsRes.ok) {
+        const metricsData = await metricsRes.json()
+        setMetrics({
+          protectionScore: metricsData.protectionScore || 0,
+          risksFound: metricsData.risksFound || 0,
+          totalCoverage: metricsData.totalCoverage || "₹0 Lakh",
+          quickInsight: metricsData.quickInsight || "Scan your first policy to get insights.",
+          policiesCount: metricsData.policiesCount || 0,
+        })
+      }
     } catch (e) {
-      console.error("fetchStats error:", e)
       setStats({ uploadedDocuments: 0, documentsProcessed: 0, analysesCompleted: 0, comparisonsRun: 0 })
     } finally {
       setLoading(false)
     }
-  }, [user])
+  }, [])
 
   useEffect(() => {
     fetchStats()
   }, [fetchStats])
 
-  // Allow other parts of the app to request a stats refresh (e.g., after upload)
-  useEffect(() => {
-    const handler = () => fetchStats()
-    window.addEventListener("stats:refresh", handler)
-    return () => window.removeEventListener("stats:refresh", handler)
-  }, [fetchStats])
-
-  // Calculate stats
-  const totalPolicies = 0
-
   return (
     <ProtectedRoute>
-  <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 dark:from-gray-950 dark:to-blue-950">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-50">
         <Header />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <main className="container mx-auto px-4 py-8 space-y-8">
           {/* Welcome Section */}
-          <div className="mb-12">
-            <div className="inline-flex items-center px-4 py-2 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-sm font-medium mb-4 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-400">
-              <Shield className="w-4 h-4 mr-2" />
-              Dashboard Overview
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+              <h1 className="text-3xl font-serif font-bold tracking-tight">
+                Welcome back, {userName}
+              </h1>
+              <p className="text-muted-foreground mt-1">
+                Your AI Policy Analyst has identified new insights for your portfolio.
+              </p>
             </div>
-            <h1 className="text-4xl lg:text-5xl font-bold text-gray-900 dark:text-white mb-4 tracking-tight">
-              Welcome back, 
-              <span className="text-transparent bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text block lg:inline lg:ml-3">
-                {userName}!
-              </span>
-            </h1>
-            <p className="text-xl text-gray-600 dark:text-gray-300 leading-relaxed">
-              Here's an overview of your insurance portfolio and recent activity analysis.
-            </p>
-          </div>
-
-          {/* Stats Grid - Analysis focused */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 mb-12">
-            <div className="relative group">
-              <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-3xl blur-sm opacity-30 group-hover:opacity-60 transition duration-300"></div>
-              <div className="relative bg-white dark:bg-gray-900 rounded-2xl p-8 shadow-2xl border border-gray-100 dark:border-gray-800 hover:border-blue-200 dark:hover:border-blue-800 transition-all duration-300">
-                <div className="flex flex-col items-center text-center space-y-4">
-                  <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg">
-                    <FileText className="w-8 h-8 text-white" />
-                  </div>
-                  <div>
-                    <div className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
-                      {loading ? "--" : stats?.uploadedDocuments ?? 0}
-                    </div>
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">Documents Uploaded</h3>
-                    <p className="text-gray-600 dark:text-gray-400 text-sm">Policy documents added</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="relative group">
-              <div className="absolute -inset-1 bg-gradient-to-r from-green-500 to-emerald-500 rounded-3xl blur-sm opacity-30 group-hover:opacity-60 transition duration-300"></div>
-              <div className="relative bg-white dark:bg-gray-900 rounded-2xl p-8 shadow-2xl border border-gray-100 dark:border-gray-800 hover:border-green-200 dark:hover:border-green-800 transition-all duration-300">
-                <div className="flex flex-col items-center text-center space-y-4">
-                  <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-green-600 rounded-2xl flex items-center justify-center shadow-lg">
-                    <TrendingUp className="w-8 h-8 text-white" />
-                  </div>
-                  <div>
-                    <div className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
-                      {loading ? "--" : stats?.documentsProcessed ?? 0}
-                    </div>
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">Documents Processed</h3>
-                    <p className="text-gray-600 dark:text-gray-400 text-sm">OCR & parsing completed</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="relative group">
-              <div className="absolute -inset-1 bg-gradient-to-r from-purple-500 to-violet-500 rounded-3xl blur-sm opacity-30 group-hover:opacity-60 transition duration-300"></div>
-              <div className="relative bg-white dark:bg-gray-900 rounded-2xl p-8 shadow-2xl border border-gray-100 dark:border-gray-800 hover:border-purple-200 dark:hover:border-purple-800 transition-all duration-300">
-                <div className="flex flex-col items-center text-center space-y-4">
-                  <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg">
-                    <CheckCircle className="w-8 h-8 text-white" />
-                  </div>
-                  <div>
-                    <div className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
-                      {loading ? "--" : stats?.analysesCompleted ?? 0}
-                    </div>
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">Analyses Completed</h3>
-                    <p className="text-gray-600 dark:text-gray-400 text-sm">AI analyses generated</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="relative group">
-              <div className="absolute -inset-1 bg-gradient-to-r from-orange-500 to-amber-500 rounded-3xl blur-sm opacity-30 group-hover:opacity-60 transition duration-300"></div>
-              <div className="relative bg-white dark:bg-gray-900 rounded-2xl p-8 shadow-2xl border border-gray-100 dark:border-gray-800 hover:border-orange-200 dark:hover:border-orange-800 transition-all duration-300">
-                <div className="flex flex-col items-center text-center space-y-4">
-                  <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center shadow-lg">
-                    <Shield className="w-8 h-8 text-white" />
-                  </div>
-                  <div>
-                    <div className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
-                      {loading ? "--" : stats?.comparisonsRun ?? 0}
-                    </div>
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">Comparisons Run</h3>
-                    <p className="text-gray-600 dark:text-gray-400 text-sm">Policy comparisons performed</p>
-                  </div>
-                </div>
-              </div>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={fetchStats} className="hidden md:flex">
+                Refresh Intelligence
+              </Button>
+              <Link href="/upload">
+                <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white">
+                  <Plus className="mr-2 h-4 w-4" /> Scan New Policy
+                </Button>
+              </Link>
             </div>
           </div>
 
-          {/* No manual refresh — dashboard updates automatically after uploads/analyses */}
-
-          {/* Quick Actions Grid */}
-          <div className="mb-12">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg flex items-center justify-center">
-                <TrendingUp className="w-4 h-4 text-white" />
-              </div>
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Quick Actions</h2>
-            </div>
-            <QuickActions />
-          </div>
-
-          {/* Recent Activity */}
-          <div className="mb-12">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-blue-500 rounded-lg flex items-center justify-center">
-                <Calendar className="w-4 h-4 text-white" />
-              </div>
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Recent Activity</h2>
-            </div>
-            <RecentActivity />
-          </div>
-
-          {/* Analysis Insights and Document Status */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-            {/* Analysis Results */}
-            <Card className="border-0 shadow-2xl bg-gradient-to-br from-white to-blue-50 dark:from-gray-900 dark:to-blue-950/20 hover:shadow-3xl transition-all duration-300">
-              <CardHeader className="pb-6">
-                <CardTitle className="flex items-center space-x-4">
-                  <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-500 rounded-2xl flex items-center justify-center">
-                    <TrendingUp className="w-6 h-6 text-white" />
-                  </div>
-                  <span className="text-2xl font-bold text-gray-900 dark:text-white">Latest Analysis Results</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="flex items-start space-x-4 p-5 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 rounded-2xl border border-green-200/50 dark:border-green-800/30">
-                  <CheckCircle className="w-6 h-6 text-green-600 flex-shrink-0 mt-1" />
-                  <div className="space-y-2">
-                    <p className="text-base font-semibold text-green-900 dark:text-green-100">Coverage Analysis Complete</p>
-                    <p className="text-sm text-green-700 dark:text-green-300 leading-relaxed">
-                      {loading ? "Loading..." : `${stats?.analysesCompleted || 0} policies analyzed with comprehensive coverage details and recommendations`}
+          {/* Intelligence Metrics Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Card 1: Protection Score */}
+            <Card className="h-full overflow-hidden border-none shadow-sm bg-card">
+              <CardContent className="p-6">
+                <div className="flex justify-between items-start">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-muted-foreground">Protection Score</p>
+                    <h3 className="text-2xl font-bold text-card-foreground">{protectionScore}%</h3>
+                    <p className="text-xs text-muted-foreground">
+                      {protectionScore > 0 ? "Good coverage" : "Scan to calculate"}
                     </p>
                   </div>
+                  <CircularProgress value={protectionScore} />
                 </div>
-                <div className="flex items-start space-x-4 p-5 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 rounded-2xl border border-blue-200/50 dark:border-blue-800/30">
-                  <CheckCircle className="w-6 h-6 text-blue-600 flex-shrink-0 mt-1" />
-                  <div className="space-y-2">
-                    <p className="text-base font-semibold text-blue-900 dark:text-blue-100">Claim Readiness Assessment</p>
-                    <p className="text-sm text-blue-700 dark:text-blue-300 leading-relaxed">
-                      {loading ? "Loading..." : stats?.documentsProcessed && stats.documentsProcessed > 0 
-                        ? "Your documents are well-organized for efficient claim processing" 
-                        : "Upload and analyze policies to assess claim readiness"
-                      }
+              </CardContent>
+            </Card>
+
+            {/* Card 2: Risks Identified */}
+            <Card className="h-full overflow-hidden border-none shadow-sm bg-card">
+              <CardContent className="p-6">
+                <div className="flex justify-between items-start">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-muted-foreground">Risks Identified</p>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-2xl font-bold text-card-foreground">{risksFound}</h3>
+                      {risksFound > 0 && (
+                        <Badge variant="destructive" className="h-5 px-1.5 animate-pulse">
+                          Alert
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {risksFound > 0 ? `${risksFound} Exclusions found` : "No critical risks"}
                     </p>
                   </div>
-                </div>
-                <div className="flex items-start space-x-4 p-5 bg-gradient-to-r from-purple-50 to-violet-50 dark:from-purple-950/20 dark:to-violet-950/20 rounded-2xl border border-purple-200/50 dark:border-purple-800/30">
-                  <CheckCircle className="w-6 h-6 text-purple-600 flex-shrink-0 mt-1" />
-                  <div className="space-y-2">
-                    <p className="text-base font-semibold text-purple-900 dark:text-purple-100">Coverage Gaps Identified</p>
-                    <p className="text-sm text-purple-700 dark:text-purple-300 leading-relaxed">
-                      {loading ? "Loading..." : stats?.comparisonsRun && stats.comparisonsRun > 0 
-                        ? "Review analysis for potential coverage improvements and optimization" 
-                        : "Run policy comparisons to identify potential coverage gaps"
-                      }
-                    </p>
+                  <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
+                    <ShieldAlert className="h-6 w-6 text-amber-600 dark:text-amber-400" />
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Document Status */}
-            <Card className="border-0 shadow-2xl bg-gradient-to-br from-white to-orange-50 dark:from-gray-900 dark:to-orange-950/20 hover:shadow-3xl transition-all duration-300">
-              <CardHeader className="pb-6">
-                <CardTitle className="flex items-center space-x-4">
-                  <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-500 rounded-2xl flex items-center justify-center">
-                    <AlertTriangle className="w-6 h-6 text-white" />
+            {/* Card 3: Total Coverage */}
+            <Card className="h-full overflow-hidden border-none shadow-sm bg-card">
+              <CardContent className="p-6">
+                <div className="flex justify-between items-start">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-muted-foreground">Total Coverage</p>
+                    <h3 className="text-2xl font-bold text-card-foreground">{totalCoverage}</h3>
+                    <p className="text-xs text-muted-foreground">Sum Insured</p>
                   </div>
-                  <span className="text-2xl font-bold text-gray-900 dark:text-white">Document Status</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="flex items-start justify-between p-5 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 rounded-2xl border border-green-200/50 dark:border-green-800/30">
-                  <div className="flex items-start space-x-4">
-                    <CheckCircle className="w-6 h-6 text-green-600 flex-shrink-0 mt-1" />
-                    <div className="space-y-2">
-                      <p className="text-base font-semibold text-green-900 dark:text-green-100">All Documents Processed</p>
-                      <p className="text-sm text-green-700 dark:text-green-300 leading-relaxed">
-                        {loading ? "Loading..." : `${stats?.documentsProcessed || 0} policy documents successfully analyzed and indexed`}
-                      </p>
-                    </div>
+                  <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                    <Shield className="h-6 w-6 text-blue-600 dark:text-blue-400" />
                   </div>
-                  <Badge className="bg-gradient-to-r from-green-500 to-emerald-500 text-white border-0 px-3 py-1">
-                    {loading ? "..." : (stats?.documentsProcessed && stats.documentsProcessed > 0 ? "Complete" : "Pending")}
-                  </Badge>
                 </div>
-                <div className="flex items-start justify-between p-5 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 rounded-2xl border border-blue-200/50 dark:border-blue-800/30">
-                  <div className="flex items-start space-x-4">
-                    <CheckCircle className="w-6 h-6 text-blue-600 flex-shrink-0 mt-1" />
-                    <div className="space-y-2">
-                      <p className="text-base font-semibold text-blue-900 dark:text-blue-100">Ready for Chat Analysis</p>
-                      <p className="text-sm text-blue-700 dark:text-blue-300 leading-relaxed">
-                        {loading ? "Loading..." : stats?.analysesCompleted && stats.analysesCompleted > 0 
-                          ? "Ask questions about your policy coverage and get instant answers" 
-                          : "Upload and analyze policies to enable chat analysis"
-                        }
-                      </p>
-                    </div>
+              </CardContent>
+            </Card>
+
+            {/* Card 4: Quick Insights */}
+            <Card className="h-full overflow-hidden border-none shadow-sm bg-card border-l-4 border-l-purple-500">
+              <CardContent className="p-6">
+                <div className="flex justify-between items-start">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-muted-foreground">Quick Insights</p>
+                    <p className="text-sm font-medium leading-tight text-card-foreground">
+                      {quickInsight}
+                    </p>
                   </div>
-                  <Badge className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white border-0 px-3 py-1">
-                    {loading ? "..." : (stats?.analysesCompleted && stats.analysesCompleted > 0 ? "Available" : "Pending")}
-                  </Badge>
-                </div>
-                <div className="pt-4">
-                  <Button variant="outline" asChild className="w-full bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-950/20 dark:to-amber-950/20 border-orange-200 hover:bg-gradient-to-r hover:from-orange-100 hover:to-amber-100 dark:border-orange-800/30 transition-all duration-300 h-12 text-base font-semibold">
-                    <Link href="/analyze">Upload More Documents</Link>
-                  </Button>
+                  <Zap className="h-6 w-6 text-purple-500" />
                 </div>
               </CardContent>
             </Card>
           </div>
-        </div>
 
-        {/* Chat Widget */}
+          {/* Main Content Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Left Column: Insight Stream */}
+            <div className="lg:col-span-2 space-y-6">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold flex items-center gap-2">
+                  <BrainCircuit className="h-5 w-5 text-indigo-600" />
+                  Latest Analysis
+                </h2>
+                <Button variant="ghost" size="sm" className="text-indigo-600">
+                  View All <ArrowRight className="ml-1 h-4 w-4" />
+                </Button>
+              </div>
+
+              {stats?.uploadedDocuments && stats.uploadedDocuments > 0 ? (
+                <RecentActivity />
+              ) : (
+                /* Empty State CTA */
+                <Card className="border-2 border-dashed border-slate-200 dark:border-slate-800 bg-transparent">
+                  <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                    <div className="p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-full mb-4">
+                      <Sparkles className="h-8 w-8 text-indigo-600 dark:text-indigo-400" />
+                    </div>
+                    <h3 className="text-lg font-bold">Unlock Your Intelligence Stream</h3>
+                    <p className="text-muted-foreground max-w-xs mx-auto mt-2 mb-6">
+                      Upload your first policy to see AI-driven risks, gaps, and savings opportunities.
+                    </p>
+                    <Link href="/upload">
+                      <Button className="bg-indigo-600 hover:bg-indigo-700 text-white">
+                        Upload Your First Policy
+                      </Button>
+                    </Link>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+
+            {/* Right Column: Intelligence Tools */}
+            <div className="space-y-6">
+              <h2 className="text-xl font-bold">Intelligence Tools</h2>
+              <Card className="border-none shadow-md bg-white dark:bg-slate-900">
+                <CardContent className="p-4 space-y-3">
+                  <Link href="/upload" className="block">
+                    <Button className="w-full justify-start h-12 bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-white border-none">
+                      <Plus className="mr-3 h-5 w-5 text-indigo-400" />
+                      <div className="text-left">
+                        <div className="text-sm font-bold">Scan New Policy</div>
+                        <div className="text-[10px] text-slate-400">Extract data instantly</div>
+                      </div>
+                      <ArrowRight className="ml-auto h-4 w-4 opacity-50" />
+                    </Button>
+                  </Link>
+                  
+                  <Link href="/analyze" className="block">
+                    <Button variant="outline" className="w-full justify-start h-12 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800">
+                      <FileSearch className="mr-3 h-5 w-5 text-indigo-600" />
+                      <div className="text-left">
+                        <div className="text-sm font-bold">Deep Dive Analysis</div>
+                        <div className="text-[10px] text-muted-foreground">Find hidden exclusions</div>
+                      </div>
+                    </Button>
+                  </Link>
+
+                  <Link href="/chat" className="block">
+                    <Button variant="outline" className="w-full justify-start h-12 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800">
+                      <MessageSquare className="mr-3 h-5 w-5 text-indigo-600" />
+                      <div className="text-left">
+                        <div className="text-sm font-bold">Ask AI Advisor</div>
+                        <div className="text-[10px] text-muted-foreground">Query your coverage</div>
+                      </div>
+                    </Button>
+                  </Link>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </main>
         <ChatWidget />
       </div>
     </ProtectedRoute>
