@@ -50,6 +50,7 @@ logging.basicConfig(level=logging.INFO)
 # CORS middleware to allow cross-origin requests
 origins = [
     "https://claimwise-fht9.vercel.app",
+    "https://claimwise-8eeg.vercel.app",
     "http://localhost:3000",
     "http://localhost:3001"
 ]
