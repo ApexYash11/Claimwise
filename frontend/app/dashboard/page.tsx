@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { createApiUrlWithLogging } from "@/lib/url-utils"
+import { RecentActivity } from "@/components/dashboard/recent-activity"
 import { 
   BrainCircuit, 
   ShieldAlert, 
@@ -74,13 +75,19 @@ export default function DashboardPage() {
     comparisonsRun: number
   } | null>(null)
 
-  // Mock data for the new "Intelligence" focus
-  const protectionScore = stats?.uploadedDocuments ? 78 : 0
-  const risksFound = stats?.uploadedDocuments ? 3 : 0
-  const totalCoverage = "₹50.00 Lakh"
-  const quickInsight = stats?.uploadedDocuments 
-    ? "You could save 15% on premiums by switching to HDFC Ergo."
-    : "Scan your first policy to get personalized savings insights."
+  const [metrics, setMetrics] = useState<{
+    protectionScore: number
+    risksFound: number
+    totalCoverage: string
+    quickInsight: string
+    policiesCount: number
+  } | null>(null)
+
+  // Data for the new "Intelligence" focus
+  const protectionScore = metrics?.protectionScore ?? 0
+  const risksFound = metrics?.risksFound ?? 0
+  const totalCoverage = metrics?.totalCoverage ?? "₹0 Lakh"
+  const quickInsight = metrics?.quickInsight ?? "Scan your first policy to get personalized savings insights."
 
   const fetchStats = useCallback(async () => {
     setLoading(true)
@@ -89,6 +96,7 @@ export default function DashboardPage() {
       let session = sessionResult.data.session
       let token = session?.access_token
 
+      // Fetch stats
       let res;
       if (token) {
         const statsUrl = createApiUrlWithLogging("/dashboard/stats");
@@ -111,6 +119,33 @@ export default function DashboardPage() {
         analysesCompleted: data.analysesCompleted || 0,
         comparisonsRun: data.comparisonsRun || 0,
       })
+
+      // Fetch metrics from database
+      let metricsRes;
+      if (token) {
+        const metricsUrl = createApiUrlWithLogging("/dashboard/metrics");
+        metricsRes = await fetch(metricsUrl, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (metricsRes.status === 401 || metricsRes.status === 404) {
+          const devMetricsUrl = createApiUrlWithLogging("/dashboard/metrics-dev");
+          metricsRes = await fetch(devMetricsUrl)
+        }
+      } else {
+        const devMetricsUrl = createApiUrlWithLogging("/dashboard/metrics-dev");
+        metricsRes = await fetch(devMetricsUrl)
+      }
+      
+      if (metricsRes.ok) {
+        const metricsData = await metricsRes.json()
+        setMetrics({
+          protectionScore: metricsData.protectionScore || 0,
+          risksFound: metricsData.risksFound || 0,
+          totalCoverage: metricsData.totalCoverage || "₹0 Lakh",
+          quickInsight: metricsData.quickInsight || "Scan your first policy to get insights.",
+          policiesCount: metricsData.policiesCount || 0,
+        })
+      }
     } catch (e) {
       setStats({ uploadedDocuments: 0, documentsProcessed: 0, analysesCompleted: 0, comparisonsRun: 0 })
     } finally {
@@ -239,38 +274,7 @@ export default function DashboardPage() {
               </div>
 
               {stats?.uploadedDocuments && stats.uploadedDocuments > 0 ? (
-                <div className="space-y-4">
-                  {/* Mock Analysis Items */}
-                  {[
-                    { title: "Star Health Premier", outcome: "Analysis Complete - 2 Gaps Found", time: "2 hours ago", status: "warning" },
-                    { title: "HDFC Ergo Optima", outcome: "Risk Assessment - High Coverage", time: "Yesterday", status: "success" },
-                    { title: "ICICI Lombard", outcome: "Policy Scanned - Waiting for Deep Dive", time: "3 days ago", status: "info" }
-                  ].map((item, i) => (
-                    <Card key={i} className="border-none shadow-sm hover:shadow-md transition-shadow bg-white dark:bg-slate-900">
-                      <CardContent className="p-4 flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                          <div className={cn(
-                            "p-2 rounded-full",
-                            item.status === "warning" ? "bg-amber-100 text-amber-600" : 
-                            item.status === "success" ? "bg-emerald-100 text-emerald-600" : "bg-blue-100 text-blue-600"
-                          )}>
-                            <SearchCheck className="h-5 w-5" />
-                          </div>
-                          <div>
-                            <h4 className="font-bold text-sm">{item.title}</h4>
-                            <p className="text-xs text-muted-foreground">{item.outcome}</p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">{item.time}</p>
-                          <Button variant="link" size="sm" className="h-auto p-0 text-indigo-600 text-xs">
-                            Details
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
+                <RecentActivity />
               ) : (
                 /* Empty State CTA */
                 <Card className="border-2 border-dashed border-slate-200 dark:border-slate-800 bg-transparent">

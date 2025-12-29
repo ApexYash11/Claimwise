@@ -33,6 +33,8 @@ export interface PolicySummary {
     exclusions?: string
     claim_process?: string
     claim_readiness_score?: number
+    waiting_period?: string
+    copay?: string
   }
 }
 

@@ -64,8 +64,12 @@ const generateInsights = (policies: PolicySummary[]) => {
   
   // Expiration warnings
   const expiringSoon = policies.filter(p => {
+    if (!p.expirationDate) return false
+    const expDate = new Date(p.expirationDate)
+    if (isNaN(expDate.getTime())) return false
+    
     const daysUntilExpiration = Math.ceil(
-      (new Date(p.expirationDate).getTime() - new Date().getTime()) / (1000 * 3600 * 24)
+      (expDate.getTime() - new Date().getTime()) / (1000 * 3600 * 24)
     )
     return daysUntilExpiration <= 60
   })
@@ -391,16 +395,26 @@ export default function AnalyzePage() {
     if (!policy) return insights
     
     // Expiration analysis
-    const daysUntilExpiration = Math.ceil(
-      (new Date(policy.expirationDate).getTime() - new Date().getTime()) / (1000 * 3600 * 24)
-    )
+    let daysUntilExpiration = NaN
+    if (policy.expirationDate) {
+      const expDate = new Date(policy.expirationDate)
+      if (!isNaN(expDate.getTime())) {
+        daysUntilExpiration = Math.ceil(
+          (expDate.getTime() - new Date().getTime()) / (1000 * 3600 * 24)
+        )
+      }
+    }
     
-    if (daysUntilExpiration <= 30) {
-      insights.push(`Policy expires in ${daysUntilExpiration} days - urgent renewal required`)
-    } else if (daysUntilExpiration <= 60) {
-      insights.push(`Policy expires in ${daysUntilExpiration} days - start planning renewal`)
+    if (!isNaN(daysUntilExpiration)) {
+      if (daysUntilExpiration <= 30) {
+        insights.push(`Policy expires in ${daysUntilExpiration} days - urgent renewal required`)
+      } else if (daysUntilExpiration <= 60) {
+        insights.push(`Policy expires in ${daysUntilExpiration} days - start planning renewal`)
+      } else {
+        insights.push(`Policy valid for ${daysUntilExpiration} days - renewal timeline is comfortable`)
+      }
     } else {
-      insights.push(`Policy valid for ${daysUntilExpiration} days - renewal timeline is comfortable`)
+      insights.push("Expiration date not found - please check your policy document")
     }
     
     // Premium analysis
@@ -428,7 +442,24 @@ export default function AnalyzePage() {
     }
     
     // Provider analysis
-    insights.push(`Policy provided by ${policy.provider} - research their claim settlement ratio and customer reviews`)
+    const providerName = policy.provider
+    const invalidProviderNames = ["unknown provider", "not specified", "analysis unavailable", "insurance provider name not found in policy"]
+    
+    if (providerName && !invalidProviderNames.includes(providerName.toLowerCase())) {
+      insights.push(`Policy provided by ${providerName} - research their claim settlement ratio and customer reviews`)
+    } else {
+      insights.push("Provider name could not be verified - check policy document for insurer details")
+    }
+
+    // Add insights from raw analysis if available
+    if (policy.rawAnalysis) {
+      if (policy.rawAnalysis.waiting_period && policy.rawAnalysis.waiting_period !== "Not specified") {
+         insights.push(`Note waiting period: ${policy.rawAnalysis.waiting_period}`)
+      }
+      if (policy.rawAnalysis.copay && policy.rawAnalysis.copay !== "Not specified" && policy.rawAnalysis.copay !== "None") {
+         insights.push(`Be aware of copay: ${policy.rawAnalysis.copay}`)
+      }
+    }
     
     return insights
   }
@@ -778,8 +809,8 @@ export default function AnalyzePage() {
                                 <AccordionContent>
                                   <div className="text-sm text-muted-foreground leading-relaxed pb-4">
                                     {/* Attempt to find waiting periods in raw analysis or show generic message */}
-                                    {(currentPolicy.rawAnalysis as any)?.waiting_periods ? (
-                                       <div className="whitespace-pre-line">{(currentPolicy.rawAnalysis as any).waiting_periods}</div>
+                                    {currentPolicy.rawAnalysis?.waiting_period ? (
+                                       <div className="whitespace-pre-line">{currentPolicy.rawAnalysis.waiting_period}</div>
                                     ) : (
                                       <p className="italic">Waiting periods not explicitly extracted. Please check the full policy document.</p>
                                     )}
