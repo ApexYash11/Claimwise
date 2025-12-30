@@ -52,8 +52,16 @@ origins = [
     "https://claimwise-fht9.vercel.app",
     "https://claimwise-8eeg.vercel.app",
     "http://localhost:3000",
-    "http://localhost:3001"
+    "http://localhost:3001",
+    "http://localhost:8000",  # Local backend
+    # Render deployments (add your actual Render URL when deployed)
+    os.getenv("FRONTEND_URL", ""),  # Dynamic frontend URL from env
 ]
+
+# Filter out empty strings
+origins = [url for url in origins if url]
+
+logging.info(f"CORS origins configured: {origins}")
 
 app.add_middleware(
     CORSMiddleware,
@@ -196,7 +204,34 @@ async def upload_policy(
         try:
             # Use service-role client for writes if available
             svc = supabase_storage or supabase
+
+            # Verify that a corresponding user profile exists in the database to
+            # avoid foreign key constraint failures (gives a clearer error to client)
+            try:
+                user_check = svc.table("users").select("id").eq("id", user_id).execute()
+                if not (user_check and getattr(user_check, "data", None)):
+                    logging.error("User id %s not found in users table before policy insert", user_id)
+                    raise HTTPException(status_code=403, detail="User profile not found. Please re-authenticate.")
+            except HTTPException:
+                raise
+            except Exception:
+                # If the check itself failed (permissions/missing table), log and continue
+                logging.warning("Could not verify user existence prior to insert; continuing and relying on DB constraints")
+
             response = svc.table("policies").insert(data).execute()
+
+            # Handle client-level errors returned by the Supabase client
+            resp_err = getattr(response, "error", None)
+            if resp_err:
+                logging.error("Supabase insert error: %s", resp_err)
+                err_msg = getattr(resp_err, "message", str(resp_err))
+                err_code = getattr(resp_err, "code", "")
+                # Detect foreign key violation (user missing)
+                if "foreign key" in str(err_msg).lower() or err_code == "23503":
+                    raise HTTPException(status_code=403, detail="Invalid user or authentication state. Please re-authenticate.")
+                else:
+                    raise HTTPException(status_code=500, detail="Failed to save policy.")
+
             if not (response and getattr(response, "data", None)):
                 raise HTTPException(status_code=500, detail="Failed to save policy.")
 
@@ -241,8 +276,16 @@ async def upload_policy(
                 status="indexing_started",
                 indexing_mode=indexing_mode
             )
+        except HTTPException:
+            # Re-raise HTTPExceptions we intentionally raised above
+            raise
         except Exception as db_error:
-            raise HTTPException(status_code=500, detail=f"Database save failed: {str(db_error)}")
+            # Log full exception server-side but do not leak DB internals to clients
+            logging.exception("Database save error: %s", db_error)
+            err_str = str(db_error).lower()
+            if "foreign key" in err_str or "violates foreign key" in err_str or "23503" in err_str:
+                raise HTTPException(status_code=403, detail="Invalid user or authentication state. Please re-authenticate.")
+            raise HTTPException(status_code=500, detail="Database save failed.")
     except HTTPException:
         raise
     except Exception as e:
@@ -290,7 +333,21 @@ def analyze(policy_id: str = Form(...), user_id: str = Depends(get_current_user)
             metadata = {}
         metadata['analysis_result'] = analysis
         
-        supabase.table("policies").update({"validation_metadata": metadata}).eq("id", policy_id).execute()
+        # Calculate validation score based on analysis
+        # Lower score = more risks, Higher score = fewer risks
+        gaps_count = len(analysis.get('gaps_and_risks', []))
+        exclusions_count = len(analysis.get('exclusions', []))
+        total_risks = gaps_count + exclusions_count
+        
+        # Score formula: Start at 100%, deduct for each risk (max deduction 90%)
+        # This ensures at least 10% score even with many risks
+        risk_impact = min(total_risks * 0.5, 90)  # Each risk = 0.5% deduction, capped at 90%
+        validation_score = max((100 - risk_impact) / 100, 0.1)  # Score 0-1, min 0.1
+        
+        supabase.table("policies").update({
+            "validation_metadata": metadata,
+            "validation_score": validation_score
+        }).eq("id", policy_id).execute()
         
         # Log the analysis activity
         log_activity(

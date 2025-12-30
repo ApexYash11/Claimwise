@@ -56,22 +56,28 @@ const syncUserToDatabase = async (user: User, providedName?: string) => {
 
 export const signInWithProvider = async (provider: 'google' | 'github') => {
   try {
+    const redirectUrl = process.env.NEXT_PUBLIC_SUPABASE_REDIRECT_URL || `${window.location.origin}/dashboard`
+    console.log(`[Auth] Initiating ${provider} OAuth with redirect:`, redirectUrl)
+    
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: process.env.NEXT_PUBLIC_SUPABASE_REDIRECT_URL || `${window.location.origin}/dashboard`,
+        redirectTo: redirectUrl,
         queryParams: {
           source: "social_auth"
         }
       },
     })
 
-    // Note: For OAuth, user sync happens after redirect in the callback
-    // We don't sync here since the user object isn't immediately available
+    if (error) {
+      console.error(`[Auth] ${provider} OAuth error:`, error)
+    } else {
+      console.log(`[Auth] ${provider} OAuth initiated, redirecting...`)
+    }
     
     return { data, error }
   } catch (err) {
-    console.error('Social login error:', err)
+    console.error(`[Auth] Social login exception:`, err)
     return { 
       data: null, 
       error: { 
@@ -190,8 +196,44 @@ export const signIn = async (email: string, password: string) => {
 }
 
 export const signOut = async () => {
-  const { error } = await supabase.auth.signOut()
-  return { error }
+  try {
+    const { error } = await supabase.auth.signOut()
+
+    if (error) {
+      console.warn("supabase.auth.signOut error:", error)
+      // Attempt a best-effort client-side cleanup and reload so the auth state
+      // is re-evaluated by the `AuthProvider` subscription.
+      try {
+        // Force a session check; if session still present, reload the page
+        const { data } = await supabase.auth.getSession()
+        if (data?.session) {
+          window.location.reload()
+        }
+      } catch (e) {
+        // If anything goes wrong, still reload as a fallback
+        try { window.location.reload() } catch (_) {}
+      }
+
+      return { error }
+    }
+
+    // No error from signOut — give the auth subscription a moment to update.
+    try {
+      const { data } = await supabase.auth.getSession()
+      if (data?.session) {
+        // If a session remains for some reason, force reload to clear cached state
+        window.location.reload()
+      }
+    } catch (_) {
+      // Ignore and continue
+    }
+
+    return { error: null }
+  } catch (err) {
+    console.error("Unexpected error during signOut:", err)
+    try { window.location.reload() } catch (_) {}
+    return { error: err }
+  }
 }
 
 export const getCurrentUser = async () => {

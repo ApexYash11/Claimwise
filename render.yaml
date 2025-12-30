@@ -1,0 +1,34 @@
+# Render Deployment Configuration
+# Deploy to Render: https://dashboard.render.com
+
+services:
+  - type: web
+    name: claimwise-backend
+    env: python
+    plan: free  # Change to starter for production
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: cd backend && uvicorn src.main:app --host 0.0.0.0 --port $PORT
+    
+    # Environment variables (set these in Render dashboard)
+    envVars:
+      - key: SUPABASE_URL
+        scope: build,runtime
+      - key: SUPABASE_KEY
+        scope: build,runtime
+      - key: SUPABASE_JWT_SECRET
+        scope: build,runtime
+      - key: SUPABASE_SERVICE_KEY
+        scope: build,runtime
+      - key: GROQ_API_KEY
+        scope: build,runtime
+      - key: GEMINI_API_KEY
+        scope: build,runtime
+      - key: FRONTEND_URL
+        scope: build,runtime
+        value: https://claimwise.vercel.app  # Update to your Vercel URL
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: JWT_EXPIRATION_HOURS
+        value: "24"
+      - key: SUPABASE_STORAGE_BUCKET
+        value: proeject
