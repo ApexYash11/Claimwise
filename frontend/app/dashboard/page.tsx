@@ -1,15 +1,14 @@
 "use client"
 
+import dynamic from "next/dynamic"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { Header } from "@/components/layout/header"
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, Suspense } from "react"
 import { useAuth } from "@/hooks/use-auth"
-import { ChatWidget } from "@/components/chat/chat-widget"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { createApiUrlWithLogging } from "@/lib/url-utils"
-import { RecentActivity } from "@/components/dashboard/recent-activity"
 import { 
   BrainCircuit, 
   ShieldAlert, 
@@ -26,6 +25,17 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
+
+// Lazy load heavy components
+const ChatWidget = dynamic(() => import("@/components/chat/chat-widget").then(mod => mod.ChatWidget), {
+  loading: () => <div className="h-12 bg-slate-200 rounded animate-pulse" />,
+  ssr: false,
+})
+
+const RecentActivity = dynamic(() => import("@/components/dashboard/recent-activity").then(mod => mod.RecentActivity), {
+  loading: () => <div className="h-64 bg-slate-200 rounded animate-pulse" />,
+  ssr: false,
+})
 
 // Circular Progress Component for Protection Score
 function CircularProgress({ value, size = 60, strokeWidth = 6 }: { value: number, size?: number, strokeWidth?: number }) {

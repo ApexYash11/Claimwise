@@ -6,15 +6,7 @@ import { Shield, Menu, X, LogOut, Sun, Moon } from "lucide-react"
 import { useTheme } from "next-themes"
 import { useState, useEffect } from "react"
 import { useAuth } from "@/hooks/use-auth"
-import { signOut } from "@/lib/auth"
 import { useRouter } from "next/navigation"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 
 export function Header() {
@@ -28,11 +20,6 @@ export function Header() {
   useEffect(() => {
     setMounted(true)
   }, [])
-
-  const handleSignOut = async () => {
-    await signOut()
-    router.push("/")
-  }
 
   const userName = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User"
   const userInitials = userName
@@ -101,28 +88,13 @@ export function Header() {
               )}
             </Button>
             {user ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="relative h-9 w-9 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800">
-                    <Avatar className="h-8 w-8">
-                      <AvatarFallback className="bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300 text-xs font-medium">{userInitials}</AvatarFallback>
-                    </Avatar>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 shadow-lg" align="end" forceMount>
-                  <div className="flex items-center justify-start gap-2 p-3">
-                    <div className="flex flex-col space-y-1 leading-none">
-                      <p className="font-medium text-sm text-slate-900 dark:text-slate-50">{userName}</p>
-                      <p className="w-[200px] truncate text-xs text-slate-500 dark:text-slate-400">{user.email}</p>
-                    </div>
-                  </div>
-                  <DropdownMenuSeparator className="bg-slate-200 dark:bg-slate-800" />
-                  <DropdownMenuItem onClick={handleSignOut} className="text-red-600 dark:text-red-400 focus:bg-red-50 dark:focus:bg-red-950/20 cursor-pointer">
-                    <LogOut className="mr-2 h-4 w-4" />
-                    <span>Sign out</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <Link href="/profile">
+                <Button variant="ghost" className="relative h-9 w-9 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800">
+                  <Avatar className="h-8 w-8">
+                    <AvatarFallback className="bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300 text-xs font-medium">{userInitials}</AvatarFallback>
+                  </Avatar>
+                </Button>
+              </Link>
             ) : (
               <>
                 <Button variant="ghost" asChild className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800">
@@ -217,19 +189,23 @@ export function Header() {
               <div className="flex flex-col space-y-3 pt-4 border-t border-slate-200 dark:border-slate-800">
                 {user ? (
                   <>
-                    <div className="flex items-center space-x-3 px-2 py-1">
-                      <Avatar className="h-8 w-8">
-                        <AvatarFallback className="bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300 text-xs">{userInitials}</AvatarFallback>
-                      </Avatar>
-                      <div className="flex flex-col">
-                        <span className="text-sm font-medium text-slate-900 dark:text-slate-50">{userName}</span>
-                        <span className="text-xs text-slate-500 dark:text-slate-400">{user.email}</span>
+                    <Link href="/profile" onClick={() => setIsMenuOpen(false)}>
+                      <div className="flex items-center space-x-3 px-2 py-1">
+                        <Avatar className="h-8 w-8">
+                          <AvatarFallback className="bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300 text-xs">{userInitials}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex flex-col">
+                          <span className="text-sm font-medium text-slate-900 dark:text-slate-50">{userName}</span>
+                          <span className="text-xs text-slate-500 dark:text-slate-400">{user.email}</span>
+                        </div>
                       </div>
-                    </div>
-                    <Button variant="ghost" onClick={handleSignOut} className="justify-start text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20">
-                      <LogOut className="mr-2 h-4 w-4" />
-                      Sign out
-                    </Button>
+                    </Link>
+                    <Link href="/profile" onClick={() => setIsMenuOpen(false)}>
+                      <Button variant="ghost" className="w-full justify-start text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20">
+                        <LogOut className="mr-2 h-4 w-4" />
+                        Sign out
+                      </Button>
+                    </Link>
                   </>
                 ) : (
                   <>

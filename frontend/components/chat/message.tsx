@@ -4,7 +4,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Copy, ThumbsUp, ThumbsDown, User, Bot, FileText } from "lucide-react"
-import { useState } from "react"
+import { useState, memo } from "react"
 
 // Component to format assistant responses with proper styling
 function FormattedContent({ content }: { content: string }) {
@@ -236,3 +236,5 @@ export function Message({ message, onCopy, onFeedback }: MessageProps) {
     </div>
   )
 }
+
+export default memo(Message)
