@@ -47,7 +47,7 @@ def make_llm_request(prompt: str, max_retries: int = 3, delay: float = 1.0, pref
     Args:
         prompt: Text prompt for the LLM
         max_retries: Number of retry attempts per provider
-        delay: Initial delay for retries  
+        delay: Initial delay for retries
         prefer_groq: Override global preference (None = use PREFER_GROQ setting)
         
     Returns:

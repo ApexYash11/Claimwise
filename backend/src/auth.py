@@ -43,7 +43,7 @@ def decode_token(token: str) -> str:
         logger = logging.getLogger(__name__)
         logger.debug("Decoding token")
         jwt_secret: str = SUPABASE_JWT_SECRET  # type: ignore
-        payload = jwt.decode(token, jwt_secret, algorithms=ALGORITHM, options={"verify_aud": False})
+        payload = jwt.decode(token, jwt_secret, algorithms=ALGORITHM, options={"verify_aud": True}, audience="authenticated")
         logger.debug("Decoded payload keys: %s", list(payload.keys()))
         user_id = payload.get("sub")
         if user_id is None:

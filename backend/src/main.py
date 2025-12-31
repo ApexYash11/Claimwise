@@ -47,7 +47,9 @@ app = FastAPI()
 logging.basicConfig(level=logging.INFO)
 
 # CORS middleware to allow cross-origin requests
+frontend_url = os.getenv("FRONTEND_URL", "https://claimwise.vercel.app")
 origins = [
+    frontend_url,
     "https://claimwise-fht9.vercel.app",
     "http://localhost:3000",
     "http://localhost:3001"
@@ -365,7 +367,7 @@ def compare(policy_1_id: str, policy_2_id: str, user_id: str = Depends(get_curre
         raise HTTPException(status_code=500, detail=f"Error comparing policies: {str(e)}")
 
 @app.get("/debug/gemini-config")
-def debug_gemini_config():
+def debug_gemini_config(user_id: str = Depends(get_current_user)):
     """
     Check Gemini API configuration and model access.
     """
@@ -385,12 +387,15 @@ def debug_gemini_config():
         test_prompt = "Respond with exactly: 'Gemini Pro API working correctly'"
         response = make_llm_request(test_prompt)
         
+        # Ensure response is a string for Pylance
+        response_str = str(response) if response is not None else ""
+        
         return {
             "status": "success",
-            "model": "gemini-1.5-pro",
+            "model": "gemini-3-flash",
             "api_key_status": key_status,
-            "test_response": response[:100] + "..." if len(response) > 100 else response,
-            "response_length": len(response),
+            "test_response": response_str[:100] + "..." if len(response_str) > 100 else response_str,
+            "response_length": len(response_str),
             "message": "Gemini Pro API is working correctly with your student account!"
         }
         
@@ -412,7 +417,7 @@ def debug_gemini_config():
         }
 
 @app.get("/debug/api-status")
-def debug_api_status():
+def debug_api_status(user_id: str = Depends(get_current_user)):
     """
     Check API status for both Groq and Gemini.
     """
@@ -576,8 +581,7 @@ def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
         # Call optimized LLM (prefers Groq, falls back to Gemini) if available
         try:
             from src.llm import make_llm_request
-            resp = make_llm_request(final_prompt)
-            answer = getattr(resp, 'text', str(resp))
+            answer = make_llm_request(final_prompt)
         except Exception as e:
             logging.exception("Gemini generation failed, using fallback chat_with_policy: %s", e)
             try:
@@ -605,10 +609,10 @@ def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
             "user_id": user_id,
             "policy_id": policy_id,
             "question": question,
-            "answer": answer
+            "answer": str(answer) if answer is not None else ""
         }).execute()
 
-        return ChatResponse(answer=answer, citations=citations)
+        return ChatResponse(answer=str(answer) if answer is not None else "", citations=citations)
     except IndexError:
         raise HTTPException(status_code=404, detail="Policy not found for this user.")
     except Exception as e:
@@ -938,11 +942,10 @@ def dashboard_stats(user_id: str = Depends(get_current_user)):
 
 
 @app.get("/dashboard/stats-dev")
-def dashboard_stats_dev():
+def dashboard_stats_dev(user_id: str = Depends(get_current_user)):
     """
-    Development-only unauthenticated stats endpoint.
+    Development-only authenticated stats endpoint.
     Returns sample aggregated counts or attempts to compute global counts.
-    Useful for local frontend debugging when auth tokens aren't present.
     """
     try:
         uploaded_count = 0
@@ -1023,7 +1026,7 @@ def create_test_comparison(user_id: str = Depends(get_current_user)):
 
 
 @app.get("/test-comparisons-table")
-def test_comparisons_table():
+def test_comparisons_table(user_id: str = Depends(get_current_user)):
     """
     Test endpoint to check if comparisons table exists and what data is in it.
     """
@@ -1085,7 +1088,7 @@ from .gemini_files import upload_pdf, poll_file_status, extract_text
 router = APIRouter()
 
 @router.post("/test-gemini")
-async def test_gemini(file: UploadFile):
+async def test_gemini(file: UploadFile, user_id: str = Depends(get_current_user)):
     """
     Test endpoint for Gemini Files API integration.
     """
