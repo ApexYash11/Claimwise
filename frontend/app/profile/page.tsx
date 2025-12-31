@@ -142,7 +142,7 @@ export default function ProfilePage() {
 
             <CardContent className="p-6 space-y-4">
               <p className="text-sm text-slate-600 dark:text-slate-400">
-                When you log out, you will be signed out of all your devices. You'll need to sign back in to access your policies and analysis.
+                When you log out, you will be signed out of all your devices. You&apos;ll need to sign back in to access your policies and analysis.
               </p>
 
               <Button
@@ -155,7 +155,7 @@ export default function ProfilePage() {
               </Button>
 
               <p className="text-xs text-muted-foreground text-center">
-                After logout, you'll be redirected to the home page
+                After logout, you&apos;ll be redirected to the home page
               </p>
             </CardContent>
           </Card>

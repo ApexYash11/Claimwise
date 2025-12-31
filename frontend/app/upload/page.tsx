@@ -9,8 +9,8 @@ import { Header } from "@/components/layout/header"
 import { FileUpload } from "@/components/upload/file-upload"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ArrowLeft, ArrowRight, Shield, FileText, BarChart3, MessageSquare, CheckCircle, Loader2, Zap, Lock } from "lucide-react"
+import { Card, CardContent } from "@/components/ui/card"
+import { ArrowLeft, ArrowRight, Shield, FileText, CheckCircle, Zap, Lock } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 
@@ -174,7 +174,7 @@ export default function UploadPage() {
               Upload Policy Document
             </h1>
             <p className="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
-              Securely upload your insurance policy PDF. We'll analyze it to extract coverage details and find hidden benefits.
+              Securely upload your insurance policy PDF. We&apos;ll analyze it to extract coverage details and find hidden benefits.
             </p>
           </div>
 

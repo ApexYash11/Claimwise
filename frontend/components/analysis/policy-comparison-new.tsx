@@ -64,7 +64,7 @@ export function PolicyComparison({ policies, onRemovePolicy }: PolicyComparisonP
             <div>
               <h3 className="text-lg font-semibold text-blue-900 mb-2">No Policies Selected for Comparison</h3>
               <p className="text-blue-700 mb-4">
-                Go to the <strong>Overview</strong> tab and click <strong>"Compare"</strong> on the policies you want to compare side by side.
+                Go to the <strong>Overview</strong> tab and click <strong>&quot;Compare&quot;</strong> on the policies you want to compare side by side.
               </p>
               <Badge className="bg-blue-200 text-blue-800">
                 💡 Tip: Select 2-3 policies to see the best comparison insights

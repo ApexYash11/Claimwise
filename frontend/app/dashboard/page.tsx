@@ -3,9 +3,9 @@
 import dynamic from "next/dynamic"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { Header } from "@/components/layout/header"
-import { useEffect, useState, useCallback, Suspense } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { useAuth } from "@/hooks/use-auth"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { createApiUrlWithLogging } from "@/lib/url-utils"
@@ -14,17 +14,13 @@ import {
   ShieldAlert, 
   Shield, 
   Zap, 
-  SearchCheck, 
   Plus, 
   Sparkles, 
   MessageSquare, 
   ArrowRight,
-  FileSearch,
-  Clock,
-  AlertCircle
+  FileSearch
 } from "lucide-react"
 import Link from "next/link"
-import { cn } from "@/lib/utils"
 
 // Lazy load heavy components
 const ChatWidget = dynamic(() => import("@/components/chat/chat-widget").then(mod => mod.ChatWidget), {
@@ -102,9 +98,9 @@ export default function DashboardPage() {
   const fetchStats = useCallback(async () => {
     setLoading(true)
     try {
-      let sessionResult = await (await import("@/lib/supabase")).supabase.auth.getSession()
-      let session = sessionResult.data.session
-      let token = session?.access_token
+      const sessionResult = await (await import("@/lib/supabase")).supabase.auth.getSession()
+      const session = sessionResult.data.session
+      const token = session?.access_token
 
       // Fetch stats
       let res;

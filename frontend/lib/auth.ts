@@ -33,14 +33,13 @@ const syncUserToDatabase = async (user: User, providedName?: string) => {
     console.log('👤 Creating user profile with name:', userName)
 
     // User doesn't exist, create them
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('users')
       .insert({
         id: user.id,
         email: user.email,
         name: userName
       })
-      .select()
 
     if (error) {
       console.warn('⚠️ Failed to sync user to database:', error.message)
@@ -209,9 +208,9 @@ export const signOut = async () => {
         if (data?.session) {
           window.location.reload()
         }
-      } catch (e) {
+      } catch {
         // If anything goes wrong, still reload as a fallback
-        try { window.location.reload() } catch (_) {}
+        try { window.location.reload() } catch { }
       }
 
       return { error }
@@ -224,14 +223,14 @@ export const signOut = async () => {
         // If a session remains for some reason, force reload to clear cached state
         window.location.reload()
       }
-    } catch (_) {
+    } catch {
       // Ignore and continue
     }
 
     return { error: null }
   } catch (err) {
     console.error("Unexpected error during signOut:", err)
-    try { window.location.reload() } catch (_) {}
+    try { window.location.reload() } catch { }
     return { error: err }
   }
 }

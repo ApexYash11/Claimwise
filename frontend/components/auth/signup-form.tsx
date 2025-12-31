@@ -179,7 +179,7 @@ export function SignupForm() {
           <CardContent className="space-y-4">
             <div className="p-4 bg-teal-50 dark:bg-teal-900/20 rounded-lg border border-teal-200 dark:border-teal-800">
               <p className="text-sm text-teal-800 dark:text-teal-200">
-                📧 <strong>Check your email</strong> if you don't get redirected automatically. 
+                📧 <strong>Check your email</strong> if you don&apos;t get redirected automatically. 
                 Some email providers may require you to confirm your account.
               </p>
             </div>

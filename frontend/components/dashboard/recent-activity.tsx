@@ -37,7 +37,7 @@ export function RecentActivity() {
     const fetchActivities = async () => {
       try {
         // Wait for Supabase session to load, and refresh if needed
-        let sessionResult = await supabase.auth.getSession()
+        const sessionResult = await supabase.auth.getSession()
         let session = sessionResult.data.session
         let token = session?.access_token
 

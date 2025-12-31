@@ -8,7 +8,7 @@ import { Footer } from "@/components/layout/footer"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import Link from "next/link"
-import { Shield, FileText, BarChart3, MessageSquare, CheckCircle, ArrowRight, Brain, Clock, Users, Loader2 } from "lucide-react"
+import { Shield, FileText, BarChart3, CheckCircle, ArrowRight, Loader2 } from "lucide-react"
 
 export default function HomePage() {
   const { user, loading } = useAuth()
