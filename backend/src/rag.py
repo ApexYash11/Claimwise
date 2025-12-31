@@ -132,7 +132,7 @@ def index_documents(text: str, document_id: str, chunk_size: int = 500, overlap:
   return result
 
 
-def retrieve_top_k(query: str, k: int = 5) -> List[Tuple[int, str, float]]:
+def retrieve_top_k(query: str, k: int = 5, policy_id: Optional[str] = None) -> List[Tuple[int, str, float]]:
   """
   Retrieve the top-k most relevant document chunks for the given query.
 
@@ -145,8 +145,12 @@ def retrieve_top_k(query: str, k: int = 5) -> List[Tuple[int, str, float]]:
 
   service_client = supabase_storage or supabase
   try:
+    params = {"query_embedding": q_emb, "limit_count": k}
+    if policy_id:
+        params["filter_policy_id"] = policy_id
+        
     res = service_client.postgrest.rpc(
-      "vector_search_document_chunks", {"query_embedding": q_emb, "limit_count": k}
+      "vector_search_document_chunks", params
     ).execute()
     rows = res.data or []
     return [(r.get("id"), r.get("content"), r.get("score")) for r in rows]

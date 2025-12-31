@@ -696,7 +696,7 @@ def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
         # Retrieve top chunks for the question
         top = []
         try:
-            top = retrieve_top_k(question, k=5)
+            top = retrieve_top_k(question, k=5, policy_id=policy_id)
         except Exception as e:
             logging.exception("retrieve_top_k failed: %s", e)
 

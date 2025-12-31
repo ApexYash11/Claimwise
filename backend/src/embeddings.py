@@ -67,6 +67,50 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
     def get_embedding_dimension(self) -> int:
         return self.dimension
 
+class GeminiEmbeddingProvider(EmbeddingProvider):
+    """Gemini embedding provider using google-generativeai"""
+    
+    def __init__(self, api_key: str, model_name: str = "models/embedding-001"):
+        super().__init__("gemini")
+        self.api_key = api_key
+        self.model_name = model_name
+        self.dimension = 768
+        self._genai: Any = None
+        
+    def _load_client(self):
+        if self._genai is None:
+            try:
+                import google.generativeai as genai
+                genai.configure(api_key=self.api_key)  # type: ignore
+                self._genai = genai
+            except ImportError:
+                raise ProcessingError(
+                    message="google-generativeai library not installed",
+                    operation="load_embedding_model"
+                )
+
+    async def embed_texts(self, texts: List[str]) -> List[List[float]]:
+        self._load_client()
+        try:
+            # Gemini supports batch embedding
+            result = self._genai.embed_content(  # type: ignore
+                model=self.model_name,
+                content=texts,
+                task_type="retrieval_document"
+            )
+            # Ensure we return a list of lists as expected by the interface
+            embeddings = result['embedding']
+            return embeddings  # type: ignore
+        except Exception as e:
+            raise ExternalAPIError(
+                message=f"Gemini embedding failed: {str(e)}",
+                operation="generate_embeddings",
+                original_exception=e
+            )
+            
+    def get_embedding_dimension(self) -> int:
+        return self.dimension
+
 class SentenceTransformerProvider(EmbeddingProvider):
     """Local sentence transformer embedding provider"""
     
@@ -211,6 +255,17 @@ class EmbeddingManager:
                 logger.info("Initialized OpenAI embedding provider")
             except Exception as e:
                 logger.warning(f"Failed to initialize OpenAI provider: {e}")
+        
+        # Try to initialize Gemini provider
+        gemini_key = os.getenv("GEMINI_API_KEY")
+        if gemini_key:
+            try:
+                self.providers["gemini"] = GeminiEmbeddingProvider(gemini_key)
+                if self.default_provider is None:
+                    self.default_provider = "gemini"
+                logger.info("Initialized Gemini embedding provider")
+            except Exception as e:
+                logger.warning(f"Failed to initialize Gemini provider: {e}")
         
         # Try to initialize Sentence Transformer provider
         try:
