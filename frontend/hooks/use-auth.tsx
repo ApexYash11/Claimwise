@@ -41,9 +41,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const {
           data: { session },
         } = await supabase.auth.getSession()
+        console.log("[AuthProvider] Initial session:", session ? `User: ${session.user.email}` : "No session")
         setUser(session?.user ?? null)
       } catch (error) {
-        console.warn("Failed to get session:", error)
+        console.warn("[AuthProvider] Failed to get session:", error)
         setUser(null)
       }
       setLoading(false)
@@ -51,12 +52,43 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     getInitialSession()
 
-    // Listen for auth changes
+    // Listen for auth changes (OAuth redirects, email signups, etc.)
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("[AuthProvider] Auth state change:", event, "User:", session?.user?.email ?? "None")
       setUser(session?.user ?? null)
       setLoading(false)
+
+      // Auto-sync user to database after OAuth or email signup
+      if ((event === "SIGNED_IN" || event === "USER_UPDATED") && session?.user) {
+        try {
+          const { data: existingUser } = await supabase
+            .from("users")
+            .select("id")
+            .eq("id", session.user.id)
+            .single()
+          
+          if (!existingUser) {
+            const userName =
+              session.user.user_metadata?.full_name ||
+              session.user.user_metadata?.name ||
+              session.user.email?.split("@")[0] ||
+              "Unknown User"
+            
+            console.log("[AuthProvider] Creating user profile:", session.user.email)
+            await supabase
+              .from("users")
+              .insert({
+                id: session.user.id,
+                email: session.user.email,
+                name: userName,
+              })
+          }
+        } catch (err) {
+          console.warn("[AuthProvider] User sync failed (non-critical):", err)
+        }
+      }
     })
 
     return () => subscription.unsubscribe()

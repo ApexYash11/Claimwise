@@ -27,7 +27,7 @@ ALGORITHM = ["HS256"]  # Supabase Legacy JWT uses HS256 for signing
 def decode_token(token: str) -> str:
     """
     Decode and verify a Supabase-issued JWT token.
-    Supports tokens from email/password and social authentication.
+    Supports tokens from email/password and social authentication (Google, GitHub).
 
     Args: 
         token (str): The JWT token to decode and verify.
@@ -39,7 +39,6 @@ def decode_token(token: str) -> str:
         JWTError: if token is invalid or verification fails
     """
     try:
-        # Debug logging for troubleshooting - don't log secrets
         logger = logging.getLogger(__name__)
         logger.debug("Decoding token")
         jwt_secret: str = SUPABASE_JWT_SECRET  # type: ignore
@@ -47,36 +46,50 @@ def decode_token(token: str) -> str:
         logger.debug("Decoded payload keys: %s", list(payload.keys()))
         user_id = payload.get("sub")
         if user_id is None:
-            logger.debug("No 'sub' claim in payload")
+            logger.warning("[Auth] Missing 'sub' claim in JWT payload")
             raise JWTError("Invalid authentication credentials: missing 'sub' claim")
+        
+        logger.debug("[Auth] User ID extracted from token: %s", user_id)
         return str(user_id)
     except JWTError as e:
-        logging.getLogger(__name__).exception("JWTError: %s", str(e))
+        logging.getLogger(__name__).exception("[Auth] JWTError during token decode: %s", str(e))
         raise
     
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> str:
     """
-    verify jwt token and extract user id
+    Verify JWT token and extract user ID.
+    Works with both email/password and OAuth (Google/GitHub) tokens.
 
-    args :
-    token (str) jwt from Authorization header
+    Args:
+        token (str): JWT from Authorization header
 
-    returins :
-    str : user id 
+    Returns:
+        str: User ID
 
-    raised error : if token is invalid
+    Raises:
+        HTTPException: If token is invalid or verification fails
     """
     try:
-        user_id=decode_token(token)
-        logging.getLogger(__name__).debug("get_current_user: user_id=%s", user_id)
+        logger = logging.getLogger(__name__)
+        logger.debug("[Auth] get_current_user called")
+        
+        user_id = decode_token(token)
+        logger.debug("[Auth] User authenticated: %s", user_id)
         return user_id
     except JWTError as e:
-        logging.getLogger(__name__).exception("JWTError in get_current_user: %s", e)
-        import traceback
-        traceback.print_exc()
+        logger = logging.getLogger(__name__)
+        logger.warning("[Auth] JWT verification failed: %s", str(e))
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials",
+            detail="Invalid or expired authentication token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except Exception as e:
+        logger = logging.getLogger(__name__)
+        logger.exception("[Auth] Unexpected error in get_current_user: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication failed",
             headers={"WWW-Authenticate": "Bearer"},
         )
 

@@ -59,3 +59,26 @@ CREATE TRIGGER on_auth_user_created
 GRANT USAGE ON SCHEMA public TO anon, authenticated;
 GRANT ALL ON public.users TO authenticated;
 GRANT SELECT ON public.users TO anon;
+
+-- Ensure activities table has Row Level Security and appropriate policies
+ALTER TABLE public.activities ENABLE ROW LEVEL SECURITY;
+
+-- Drop any existing policies on activities to avoid conflicts
+DROP POLICY IF EXISTS "Users can insert activities" ON public.activities;
+DROP POLICY IF EXISTS "Users can view their activities" ON public.activities;
+
+-- Allow users to select their own activities
+CREATE POLICY "Users can view their activities" ON public.activities
+  FOR SELECT USING (auth.uid() = user_id);
+
+-- Allow users to insert activities only for their own user_id
+-- Note: for INSERT rules, use WITH CHECK to validate the row being inserted
+CREATE POLICY "Users can insert activities" ON public.activities
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+-- Optionally allow update/delete by owner
+DROP POLICY IF EXISTS "Users can modify their activities" ON public.activities;
+CREATE POLICY "Users can modify their activities" ON public.activities
+  FOR UPDATE, DELETE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.activities TO authenticated;

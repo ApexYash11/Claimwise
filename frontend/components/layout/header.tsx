@@ -6,15 +6,7 @@ import { Shield, Menu, X, LogOut, Sun, Moon } from "lucide-react"
 import { useTheme } from "next-themes"
 import { useState, useEffect } from "react"
 import { useAuth } from "@/hooks/use-auth"
-import { signOut } from "@/lib/auth"
 import { useRouter } from "next/navigation"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 
 export function Header() {
@@ -29,11 +21,6 @@ export function Header() {
     setMounted(true)
   }, [])
 
-  const handleSignOut = async () => {
-    await signOut()
-    router.push("/")
-  }
-
   const userName = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User"
   const userInitials = userName
     .split(" ")
@@ -42,30 +29,30 @@ export function Header() {
     .toUpperCase()
 
   return (
-    <header className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-800/50 sticky top-0 z-50 shadow-sm">
+    <header className="bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
           <Link href={user ? "/dashboard" : "/"} className="flex items-center space-x-3 group">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform duration-200">
-              <Shield className="w-6 h-6 text-white" />
+            <div className="w-8 h-8 bg-teal-600 rounded-lg flex items-center justify-center group-hover:bg-teal-700 transition-colors">
+              <Shield className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-bold text-gray-900 dark:text-white">ClaimWise</span>
+            <span className="text-xl font-serif font-bold text-slate-900 dark:text-slate-50">ClaimWise</span>
           </Link>
 
           {/* Desktop Navigation */}
           {user && (
             <nav className="hidden md:flex items-center space-x-1">
-              <Link href="/dashboard" className="px-4 py-2 rounded-xl text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/20 transition-all duration-200 font-medium">
+              <Link href="/dashboard" className="px-4 py-2 rounded-md text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-all">
                 Dashboard
               </Link>
-              <Link href="/upload" className="px-4 py-2 rounded-xl text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/20 transition-all duration-200 font-medium">
+              <Link href="/upload" className="px-4 py-2 rounded-md text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-all">
                 Upload
               </Link>
-              <Link href="/analyze" className="px-4 py-2 rounded-xl text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/20 transition-all duration-200 font-medium">
+              <Link href="/analyze" className="px-4 py-2 rounded-md text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-all">
                 Analyze
               </Link>
-              <Link href="/chat" className="px-4 py-2 rounded-xl text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/20 transition-all duration-200 font-medium">
+              <Link href="/chat" className="px-4 py-2 rounded-md text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-all">
                 Chat
               </Link>
             </nav>
@@ -73,10 +60,10 @@ export function Header() {
 
           {!user && (
             <nav className="hidden md:flex items-center space-x-1">
-              <Link href="#features" className="px-4 py-2 rounded-xl text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/20 transition-all duration-200 font-medium">
+              <Link href="#features" className="px-4 py-2 rounded-md text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-all">
                 Features
               </Link>
-              <Link href="#demo" className="px-4 py-2 rounded-xl text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/20 transition-all duration-200 font-medium">
+              <Link href="#demo" className="px-4 py-2 rounded-md text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-all">
                 How it Works
               </Link>
             </nav>
@@ -89,46 +76,31 @@ export function Header() {
               size="icon"
               aria-label="Toggle theme"
               onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-              className="rounded-xl w-10 h-10 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200"
+              className="rounded-md w-9 h-9 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
             >
               {!mounted ? (
                 // Show a neutral icon during hydration
                 <div className="w-5 h-5" />
               ) : resolvedTheme === "dark" ? (
-                <Sun className="w-5 h-5 text-yellow-500" />
+                <Sun className="w-5 h-5" />
               ) : (
-                <Moon className="w-5 h-5 text-gray-600" />
+                <Moon className="w-5 h-5" />
               )}
             </Button>
             {user ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="relative h-10 w-10 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200">
-                    <Avatar className="h-8 w-8">
-                      <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white text-sm font-semibold">{userInitials}</AvatarFallback>
-                    </Avatar>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-gray-200/50 dark:border-gray-800/50 shadow-xl" align="end" forceMount>
-                  <div className="flex items-center justify-start gap-2 p-3">
-                    <div className="flex flex-col space-y-1 leading-none">
-                      <p className="font-semibold text-gray-900 dark:text-white">{userName}</p>
-                      <p className="w-[200px] truncate text-sm text-gray-500 dark:text-gray-400">{user.email}</p>
-                    </div>
-                  </div>
-                  <DropdownMenuSeparator className="bg-gray-200/50 dark:bg-gray-700/50" />
-                  <DropdownMenuItem onClick={handleSignOut} className="hover:bg-red-50 dark:hover:bg-red-950/20 text-red-600 dark:text-red-400 focus:bg-red-50 dark:focus:bg-red-950/20">
-                    <LogOut className="mr-2 h-4 w-4" />
-                    <span>Sign out</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <Link href="/profile">
+                <Button variant="ghost" className="relative h-9 w-9 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800">
+                  <Avatar className="h-8 w-8">
+                    <AvatarFallback className="bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300 text-xs font-medium">{userInitials}</AvatarFallback>
+                  </Avatar>
+                </Button>
+              </Link>
             ) : (
               <>
-                <Button variant="ghost" asChild className="rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200">
+                <Button variant="ghost" asChild className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800">
                   <Link href="/login">Sign in</Link>
                 </Button>
-                <Button asChild className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl px-6 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105">
+                <Button asChild className="bg-teal-600 hover:bg-teal-700 text-white shadow-sm">
                   <Link href="/signup">Get Started</Link>
                 </Button>
               </>
@@ -142,53 +114,53 @@ export function Header() {
               size="icon"
               aria-label="Toggle theme"
               onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-              className="rounded-full"
+              className="rounded-md text-slate-500"
             >
               {!mounted ? (
                 // Show a neutral icon during hydration
                 <div className="w-5 h-5" />
               ) : resolvedTheme === "dark" ? (
-                <Sun className="w-5 h-5 text-yellow-400" />
+                <Sun className="w-5 h-5" />
               ) : (
-                <Moon className="w-5 h-5 text-gray-700" />
+                <Moon className="w-5 h-5" />
               )}
             </Button>
-            <button className="p-2" onClick={() => setIsMenuOpen(!isMenuOpen)}>
-              {isMenuOpen ? <X className="w-6 h-6 text-gray-600" /> : <Menu className="w-6 h-6 text-gray-600" />}
+            <button className="p-2 text-slate-600 dark:text-slate-300" onClick={() => setIsMenuOpen(!isMenuOpen)}>
+              {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
           </div>
         </div>
 
         {/* Mobile Menu */}
         {isMenuOpen && (
-          <div className="md:hidden py-4 border-t border-gray-200">
+          <div className="md:hidden py-4 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 absolute left-0 right-0 px-4 shadow-lg">
             <nav className="flex flex-col space-y-4">
               {user ? (
                 <>
                   <Link
                     href="/dashboard"
-                    className="text-gray-600 hover:text-blue-600 transition-colors"
+                    className="text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 font-medium"
                     onClick={() => setIsMenuOpen(false)}
                   >
                     Dashboard
                   </Link>
                   <Link
                     href="/upload"
-                    className="text-gray-600 hover:text-blue-600 transition-colors"
+                    className="text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 font-medium"
                     onClick={() => setIsMenuOpen(false)}
                   >
                     Upload
                   </Link>
                   <Link
                     href="/analyze"
-                    className="text-gray-600 hover:text-blue-600 transition-colors"
+                    className="text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 font-medium"
                     onClick={() => setIsMenuOpen(false)}
                   >
                     Analyze
                   </Link>
                   <Link
                     href="/chat"
-                    className="text-gray-600 hover:text-blue-600 transition-colors"
+                    className="text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 font-medium"
                     onClick={() => setIsMenuOpen(false)}
                   >
                     Chat
@@ -199,48 +171,48 @@ export function Header() {
                 <>
                   <Link
                     href="#features"
-                    className="text-gray-600 hover:text-blue-600 transition-colors"
+                    className="text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 font-medium"
                     onClick={() => setIsMenuOpen(false)}
                   >
                     Features
                   </Link>
                   <Link
-                    href="#how-it-works"
-                    className="text-gray-600 hover:text-blue-600 transition-colors"
+                    href="#demo"
+                    className="text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 font-medium"
                     onClick={() => setIsMenuOpen(false)}
                   >
                     How it Works
                   </Link>
-                  <Link
-                    href="#pricing"
-                    className="text-gray-600 hover:text-blue-600 transition-colors"
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    Pricing
-                  </Link>
                 </>
               )}
 
-              <div className="flex flex-col space-y-2 pt-4 border-t border-gray-200">
+              <div className="flex flex-col space-y-3 pt-4 border-t border-slate-200 dark:border-slate-800">
                 {user ? (
                   <>
-                    <div className="flex items-center space-x-2 px-2 py-1">
-                      <Avatar className="h-6 w-6">
-                        <AvatarFallback className="bg-blue-600 text-white text-xs">{userInitials}</AvatarFallback>
-                      </Avatar>
-                      <span className="text-sm font-medium text-gray-900">{userName}</span>
-                    </div>
-                    <Button variant="ghost" onClick={handleSignOut} className="justify-start">
-                      <LogOut className="mr-2 h-4 w-4" />
-                      Sign out
-                    </Button>
+                    <Link href="/profile" onClick={() => setIsMenuOpen(false)}>
+                      <div className="flex items-center space-x-3 px-2 py-1">
+                        <Avatar className="h-8 w-8">
+                          <AvatarFallback className="bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300 text-xs">{userInitials}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex flex-col">
+                          <span className="text-sm font-medium text-slate-900 dark:text-slate-50">{userName}</span>
+                          <span className="text-xs text-slate-500 dark:text-slate-400">{user.email}</span>
+                        </div>
+                      </div>
+                    </Link>
+                    <Link href="/profile" onClick={() => setIsMenuOpen(false)}>
+                      <Button variant="ghost" className="w-full justify-start text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20">
+                        <LogOut className="mr-2 h-4 w-4" />
+                        Sign out
+                      </Button>
+                    </Link>
                   </>
                 ) : (
                   <>
-                    <Button variant="ghost" asChild>
+                    <Button variant="ghost" asChild className="justify-start">
                       <Link href="/login">Sign in</Link>
                     </Button>
-                    <Button asChild className="bg-blue-600 hover:bg-blue-700">
+                    <Button asChild className="bg-teal-600 hover:bg-teal-700 text-white">
                       <Link href="/signup">Get Started</Link>
                     </Button>
                   </>

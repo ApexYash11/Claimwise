@@ -33,6 +33,8 @@ export interface PolicySummary {
     exclusions?: string
     claim_process?: string
     claim_readiness_score?: number
+    waiting_period?: string
+    copay?: string
   }
 }
 
@@ -68,7 +70,7 @@ export const uploadPolicies = async (files: File[], userId: string): Promise<Pol
 
 export const getAnalysisStatus = async (analysisId: string): Promise<PolicyAnalysisResponse> => {
   try {
-    const apiUrl = createApiUrlWithLogging(`/api/analysis/${analysisId}`);
+    const apiUrl = createApiUrlWithLogging(`/analysis/${analysisId}`);
     const response = await fetch(apiUrl)
 
     if (!response.ok) {
@@ -84,7 +86,7 @@ export const getAnalysisStatus = async (analysisId: string): Promise<PolicyAnaly
 
 export const comparePolicies = async (policyIds: string[]): Promise<any> => {
   try {
-    const apiUrl = createApiUrlWithLogging("/api/compare-policies");
+    const apiUrl = createApiUrlWithLogging("/compare-policies");
     const response = await fetch(apiUrl, {
       method: "POST",
       headers: {

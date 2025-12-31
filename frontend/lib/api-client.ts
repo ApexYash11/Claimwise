@@ -48,7 +48,9 @@ class RequestCache {
     // Clean old entries if at limit
     if (this.cache.size >= this.maxEntries) {
       const oldestKey = this.cache.keys().next().value;
-      this.cache.delete(oldestKey);
+      if (oldestKey) {
+        this.cache.delete(oldestKey);
+      }
     }
 
     const now = Date.now();
@@ -135,7 +137,7 @@ export class ApiClient {
     // Check cache first (only for GET requests)
     if ((config.method || 'GET') === 'GET' && config.cache !== false) {
       const cacheKey = this.generateCacheKey(fullUrl, config);
-      const cachedData = this.cache.get(cacheKey);
+      const cachedData = this.cache.get(cacheKey) as ApiResponse<T> | null;
       
       if (cachedData) {
         return {
@@ -152,7 +154,7 @@ export class ApiClient {
     }, config.timeout || 30000);
 
     try {
-      const headers = {
+      const headers: Record<string, string> = {
         ...this.defaultHeaders,
         ...config.headers,
         'X-Request-ID': `req_${this.requestCount}_${Date.now()}`,
@@ -223,9 +225,11 @@ export class ApiClient {
           {
             userMessage: 'Request is taking too long. Please try again.',
             details: { 
-              url: fullUrl, 
-              timeout: config.timeout || 30000,
-              attempt 
+              metadata: {
+                url: fullUrl, 
+                timeout: config.timeout || 30000,
+                attempt 
+              }
             }
           }
         );
@@ -250,7 +254,12 @@ export class ApiClient {
         error instanceof Error ? error.message : 'Unknown network error',
         {
           userMessage: 'Network error occurred. Please check your connection and try again.',
-          details: { url: fullUrl, attempt }
+          details: { 
+            metadata: {
+              url: fullUrl, 
+              attempt 
+            }
+          }
         }
       );
       this.errorLogger.logError(unknownError);
@@ -365,5 +374,3 @@ export class ApiClient {
 // Create default instance
 export const apiClient = new ApiClient();
 
-// Export types
-export type { RequestConfig, ApiResponse };
