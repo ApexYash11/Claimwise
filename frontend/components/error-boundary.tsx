@@ -21,11 +21,16 @@ interface State {
 }
 
 export class ErrorBoundary extends Component<Props, State> {
-  private errorLogger = ErrorLogger.getInstance();
+  private errorLogger: ErrorLogger | null = null;
 
   constructor(props: Props) {
     super(props);
     this.state = { hasError: false, error: null, eventId: null };
+  }
+  
+  componentDidMount() {
+    // Initialize error logger only in browser
+    this.errorLogger = ErrorLogger.getInstance();
   }
 
   static getDerivedStateFromError(error: Error): State {
@@ -38,8 +43,7 @@ export class ErrorBoundary extends Component<Props, State> {
           ErrorSeverity.HIGH,
           {
             details: { 
-              originalError: error.name,
-              stack: error.stack 
+              originalError: error.name
             }
           }
         );
@@ -52,8 +56,8 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    // Log error
-    if (this.state.error) {
+    // Log error (only if errorLogger is initialized)
+    if (this.state.error && this.errorLogger) {
       this.errorLogger.logError(this.state.error);
     }
 
@@ -75,7 +79,7 @@ export class ErrorBoundary extends Component<Props, State> {
   };
 
   handleReportError = () => {
-    if (this.state.error) {
+    if (this.state.error && typeof window !== 'undefined') {
       const subject = encodeURIComponent(`Error Report - ${this.state.error.category}`);
       const body = encodeURIComponent(`
 Error Details:

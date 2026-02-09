@@ -68,35 +68,25 @@ export const uploadPolicies = async (files: File[], userId: string): Promise<Pol
   }
 }
 
-export const getAnalysisStatus = async (analysisId: string): Promise<PolicyAnalysisResponse> => {
-  try {
-    const apiUrl = createApiUrlWithLogging(`/analysis/${analysisId}`);
-    const response = await fetch(apiUrl)
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
-
-    return await response.json()
-  } catch (error) {
-    console.error("Error getting analysis status:", error)
-    throw error
-  }
-}
-
 export const comparePolicies = async (policyIds: string[]): Promise<any> => {
+  // Get Supabase JWT
+  const session = await supabase.auth.getSession()
+  const token = session.data.session?.access_token
+
   try {
     const apiUrl = createApiUrlWithLogging("/compare-policies");
     const response = await fetch(apiUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: JSON.stringify({ policy_ids: policyIds }),
     })
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
+      const errorText = await response.text()
+      throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`)
     }
 
     return await response.json()
@@ -107,23 +97,23 @@ export const comparePolicies = async (policyIds: string[]): Promise<any> => {
 }
 
 export const getPolicies = async (userId: string): Promise<PolicySummary[]> => {
-  // This would typically fetch from your backend
-  // For now, returning empty array since we don't have this endpoint implemented
   try {
     // Get Supabase JWT
     const session = await supabase.auth.getSession()
     const token = session.data.session?.access_token
 
-    const apiUrl = createApiUrlWithLogging(`/api/policies/${userId}`);
+    const apiUrl = createApiUrlWithLogging(`/policies`);
     const response = await fetch(apiUrl, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     })
 
     if (!response.ok) {
+      console.warn(`Failed to fetch policies: ${response.status}`)
       return []
     }
 
-    return await response.json()
+    const data = await response.json()
+    return data.policies || []
   } catch (error) {
     console.error("Error fetching policies:", error)
     return []
@@ -131,12 +121,17 @@ export const getPolicies = async (userId: string): Promise<PolicySummary[]> => {
 }
 
 export const chatWithPolicies = async (message: string, policyIds: string[]): Promise<any> => {
+  // Get Supabase JWT
+  const session = await supabase.auth.getSession()
+  const token = session.data.session?.access_token
+
   try {
-    const apiUrl = createApiUrlWithLogging("/api/chat");
+    const apiUrl = createApiUrlWithLogging("/chat");
     const response = await fetch(apiUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: JSON.stringify({
         message,
@@ -145,7 +140,8 @@ export const chatWithPolicies = async (message: string, policyIds: string[]): Pr
     })
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
+      const errorText = await response.text()
+      throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`)
     }
 
     return await response.json()

@@ -320,18 +320,23 @@ export function parseNetworkError(error: Error): NetworkError {
 export class ErrorLogger {
   private static instance: ErrorLogger;
   private errorQueue: ClaimWiseError[] = [];
-  private isOnline = navigator.onLine;
+  private isOnline = true; // Default to online
 
   private constructor() {
-    // Listen for online/offline events
-    window.addEventListener('online', () => {
-      this.isOnline = true;
-      this.flushErrorQueue();
-    });
-    
-    window.addEventListener('offline', () => {
-      this.isOnline = false;
-    });
+    // Only set up event listeners in browser environment
+    if (typeof window !== 'undefined') {
+      this.isOnline = navigator.onLine;
+      
+      // Listen for online/offline events
+      window.addEventListener('online', () => {
+        this.isOnline = true;
+        this.flushErrorQueue();
+      });
+      
+      window.addEventListener('offline', () => {
+        this.isOnline = false;
+      });
+    }
   }
 
   public static getInstance(): ErrorLogger {
@@ -391,6 +396,11 @@ export class ErrorLogger {
 
 // Global error handler setup
 export function setupGlobalErrorHandling(): void {
+  // Only set up in browser environment
+  if (typeof window === 'undefined') {
+    return;
+  }
+  
   const errorLogger = ErrorLogger.getInstance();
 
   // Handle unhandled promise rejections

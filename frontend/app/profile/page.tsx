@@ -29,10 +29,12 @@ export default function ProfilePage() {
     try {
       const { error } = await signOut()
       if (error) {
-        console.warn("Logout error:", error)
+        console.error("Logout error:", error)
+        setIsLoggingOut(false)
+        return
       }
-      // The signOut function may trigger a reload, but we also navigate just in case
-      router.replace("/")
+      // Auth state will change and ProtectedRoute will handle the redirect to /login
+      // No need to manually navigate - the auth state subscription will trigger it
     } catch (err) {
       console.error("Logout failed:", err)
       setIsLoggingOut(false)
@@ -148,14 +150,14 @@ export default function ProfilePage() {
               <Button
                 onClick={handleLogout}
                 disabled={isLoggingOut}
-                className="w-full bg-red-600 hover:bg-red-700 text-white h-12 text-base font-semibold flex items-center justify-center gap-2"
+                className="w-full bg-red-600 hover:bg-red-700 text-white h-12 text-base font-semibold flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <LogOut className="h-5 w-5" />
                 {isLoggingOut ? "Signing out..." : "Sign Out"}
               </Button>
 
               <p className="text-xs text-muted-foreground text-center">
-                After logout, you&apos;ll be redirected to the home page
+                You will be redirected to the home page
               </p>
             </CardContent>
           </Card>

@@ -17,7 +17,8 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   useEffect(() => {
     if (!loading && !user) {
-      router.push("/login")
+      // Redirect to home page on logout/unauthorized access
+      router.push("/")
     }
   }, [user, loading, router])
 

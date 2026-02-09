@@ -71,14 +71,15 @@ def index_documents(text: str, document_id: str, chunk_size: int = 500, overlap:
   
   result: List[Tuple[str, Optional[List[float]]]] = []
 
-  # Step 5: Attempt to embed quality chunks; if embeddings fail for any reason, fall back to
-  # storing chunks without embeddings (so retrieval can still be performed
-  # later once embeddings are available).
+  # Step 5: Attempt to embed quality chunks; raise exceptions on embedding failures
+  # to ensure the caller knows that RAG indexing failed.
   try:
     embs = embed_texts_with_cache(quality_chunks)
+    if embs is None:
+      raise RuntimeError("Embedding API returned None - check GEMINI_API_KEY and API status")
   except Exception as e:
-    logger.warning("Embedding call failed or GEMINI_API_KEY missing: %s", e)
-    embs = [None] * len(quality_chunks)
+    logger.error("Embedding call failed: %s", e)
+    raise RuntimeError(f"Failed to generate embeddings for document {document_id}: {str(e)}") from e
 
   # Normalize embeddings list length
   if embs is None:
@@ -123,11 +124,12 @@ def index_documents(text: str, document_id: str, chunk_size: int = 500, overlap:
     except Exception as e:
       # If foreign key constraint fails, it might be schema mismatch
       if "foreign key constraint" in str(e).lower():
-        logger.warning("Document chunks table foreign key constraint failed for policy %s - skipping RAG indexing", document_id)
+        logger.error("Document chunks table foreign key constraint failed for policy %s - RAG indexing cannot proceed", document_id)
         logger.debug("Full error: %s", e)
-        break  # Skip remaining chunks for this document
+        raise RuntimeError(f"Cannot index document {document_id}: foreign key constraint failure. Ensure the policy exists in the policies table.") from e
       else:
         logger.exception("Exception inserting chunk %d for doc %s: %s", idx, document_id, e)
+        raise RuntimeError(f"Failed to insert document chunk {idx} for document {document_id}: {str(e)}") from e
 
   return result
 

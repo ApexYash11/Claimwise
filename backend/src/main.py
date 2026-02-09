@@ -14,8 +14,8 @@ import tempfile
 import logging
 from supabase import create_client
 
-from src.models import UploadResponse, ChatRequest, ChatResponse, PolicyAnalysisResponse, ComparisonResponse
-from typing import Union, Dict
+from src.models import UploadResponse, ChatRequest, ChatResponse, PolicyAnalysisResponse, ComparisonResponse, CompareRequest
+from typing import Union, Dict, List
 from fastapi import BackgroundTasks
 
 
@@ -48,20 +48,22 @@ app = FastAPI()
 logging.basicConfig(level=logging.INFO)
 
 # CORS middleware to allow cross-origin requests
-frontend_url = os.getenv("FRONTEND_URL", "https://claimwise.vercel.app")
+frontend_url = os.getenv("FRONTEND_URL", "https://claimwise-fht9.vercel.app")
+
+# Use environment variable for production, localhost for development
 origins = [
-    frontend_url,
-    "https://claimwise-fht9.vercel.app",
-    "https://claimwise-8eeg.vercel.app",
     "http://localhost:3000",
     "http://localhost:3001",
-    "http://localhost:8000",  # Local backend
-    # Render deployments (add your actual Render URL when deployed)
-    os.getenv("FRONTEND_URL", ""),  # Dynamic frontend URL from env
+    "http://localhost:8000",
 ]
 
-# Filter out empty strings
-origins = [url for url in origins if url]
+# Add production frontend URL if set
+if frontend_url:
+    origins.append(frontend_url)
+    logging.info(f"Production frontend URL: {frontend_url}")
+
+# Filter out empty strings and duplicates
+origins = list(set([url for url in origins if url]))
 
 logging.info(f"CORS origins configured: {origins}")
 
@@ -426,20 +428,25 @@ def delete_policy(
         raise HTTPException(status_code=500, detail=f"Error deleting policy: {str(e)}")
 
 @app.post("/compare-policies")
-def compare(policy_1_id: str, policy_2_id: str, user_id: str = Depends(get_current_user)):
+def compare(request: CompareRequest, user_id: str = Depends(get_current_user)):
     """
-    Compare two policies using LLM and store the result.
+    Compare multiple policies using LLM and store the result.
+    Accepts 2-10 policy IDs and performs pairwise comparison.
     
     Args:
-        policy_1_id (str): ID of the first policy.
-        policy_2_id (str): ID of the second policy.
+        request (CompareRequest): JSON body with policy_ids array
         user_id (str): ID of the authenticated user.
     
     Returns:
         dict: Comparison result.
     """
     try:
-        logging.debug("Starting comparison for user %s, policies %s vs %s", user_id, policy_1_id, policy_2_id)
+        policy_ids = request.policy_ids
+        logging.debug(f"Starting comparison for user {user_id}, policies: {policy_ids}")
+
+        # For now, compare first two policies (can be extended to compare all)
+        policy_1_id = policy_ids[0]
+        policy_2_id = policy_ids[1]
 
         res1 = supabase.table("policies").select("extracted_text", "policy_number", "policy_name").eq("id", policy_1_id).eq("user_id", user_id).execute()
         res2 = supabase.table("policies").select("extracted_text", "policy_number", "policy_name").eq("id", policy_2_id).eq("user_id", user_id).execute()
@@ -476,7 +483,8 @@ def compare(policy_1_id: str, policy_2_id: str, user_id: str = Depends(get_curre
                 "policy_1_id": policy_1_id,
                 "policy_2_id": policy_2_id,
                 "policy_1_name": pol1.get('policy_name', 'Policy 1'),
-                "policy_2_name": pol2.get('policy_name', 'Policy 2')
+                "policy_2_name": pol2.get('policy_name', 'Policy 2'),
+                "total_policies": len(policy_ids)
             }
         )
 
@@ -489,13 +497,45 @@ def compare(policy_1_id: str, policy_2_id: str, user_id: str = Depends(get_curre
         return {"comparison": comparison_result_text, "comparison_id": result.data[0].get('id') if result.data else None}
 
     except IndexError:
-        logging.debug("Policy not found - policy_1_id: %s, policy_2_id: %s, user_id: %s", policy_1_id, policy_2_id, user_id)
+        policy_ids_str = str(request.policy_ids) if 'request' in locals() else 'unknown'
+        logging.debug(f"Policy not found - policy_ids: {policy_ids_str}, user_id: {user_id}")
         raise HTTPException(status_code=404, detail="One or both policies not found for this user.")
+    except HTTPException:
+        raise
     except Exception as e:
         logging.exception("Error in compare-policies: %s", str(e))
-        import traceback
-        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error comparing policies: {str(e)}")
+
+@app.get("/policies")
+def get_user_policies(user_id: str = Depends(get_current_user)):
+    """
+    Get all policies for the authenticated user.
+    
+    Args:
+        user_id (str): ID of the authenticated user.
+    
+    Returns:
+        dict: List of user policies with essential fields.
+    """
+    try:
+        logging.debug(f"Fetching policies for user {user_id}")
+        
+        result = supabase.table("policies").select(
+            "id, policy_name, policy_number, provider, policy_type, created_at, updated_at, analysis"
+        ).eq("user_id", user_id).order("created_at", desc=True).execute()
+        
+        policies = result.data if result.data else []
+        logging.debug(f"Found {len(policies)} policies for user {user_id}")
+        
+        return {
+            "policies": policies,
+            "total": len(policies),
+            "success": True
+        }
+        
+    except Exception as e:
+        logging.exception(f"Error fetching policies for user {user_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching policies: {str(e)}")
 
 @app.get("/debug/gemini-config")
 def debug_gemini_config(user_id: str = Depends(get_current_user)):

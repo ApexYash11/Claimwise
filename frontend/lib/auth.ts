@@ -196,42 +196,21 @@ export const signIn = async (email: string, password: string) => {
 
 export const signOut = async () => {
   try {
+    console.log('[Auth] Signing out...')
     const { error } = await supabase.auth.signOut()
 
     if (error) {
-      console.warn("supabase.auth.signOut error:", error)
-      // Attempt a best-effort client-side cleanup and reload so the auth state
-      // is re-evaluated by the `AuthProvider` subscription.
-      try {
-        // Force a session check; if session still present, reload the page
-        const { data } = await supabase.auth.getSession()
-        if (data?.session) {
-          window.location.reload()
-        }
-      } catch {
-        // If anything goes wrong, still reload as a fallback
-        try { window.location.reload() } catch { }
-      }
-
+      console.error('[Auth] Sign out error:', error)
       return { error }
     }
 
-    // No error from signOut — give the auth subscription a moment to update.
-    try {
-      const { data } = await supabase.auth.getSession()
-      if (data?.session) {
-        // If a session remains for some reason, force reload to clear cached state
-        window.location.reload()
-      }
-    } catch {
-      // Ignore and continue
-    }
-
+    console.log('[Auth] Sign out successful')
+    // Auth state change will be handled by the AuthProvider subscription
+    // which will trigger the ProtectedRoute redirect
     return { error: null }
   } catch (err) {
-    console.error("Unexpected error during signOut:", err)
-    try { window.location.reload() } catch { }
-    return { error: err }
+    console.error('[Auth] Unexpected error during signOut:', err)
+    return { error: err as any }
   }
 }
 

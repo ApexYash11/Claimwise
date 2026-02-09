@@ -35,19 +35,34 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       return
     }
 
+    let isMounted = true
+
     // Get initial session
     const getInitialSession = async () => {
       try {
         const {
           data: { session },
         } = await supabase.auth.getSession()
-        console.log("[AuthProvider] Initial session:", session ? `User: ${session.user.email}` : "No session")
-        setUser(session?.user ?? null)
+        
+        if (isMounted) {
+          console.log("[AuthProvider] Initial session:", session ? `User: ${session.user.email}` : "No session")
+          setUser(session?.user ?? null)
+        }
       } catch (error) {
-        console.warn("[AuthProvider] Failed to get session:", error)
-        setUser(null)
+        // Ignore AbortError during cleanup
+        if (error instanceof Error && error.name === 'AbortError') {
+          console.debug("[AuthProvider] Session request aborted (cleanup)")
+          return
+        }
+        if (isMounted) {
+          console.warn("[AuthProvider] Failed to get session:", error)
+          setUser(null)
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false)
+        }
       }
-      setLoading(false)
     }
 
     getInitialSession()
@@ -56,6 +71,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!isMounted) return
+      
       console.log("[AuthProvider] Auth state change:", event, "User:", session?.user?.email ?? "None")
       setUser(session?.user ?? null)
       setLoading(false)
@@ -69,7 +86,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             .eq("id", session.user.id)
             .single()
           
-          if (!existingUser) {
+          if (!existingUser && isMounted) {
             const userName =
               session.user.user_metadata?.full_name ||
               session.user.user_metadata?.name ||
@@ -86,12 +103,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               })
           }
         } catch (err) {
-          console.warn("[AuthProvider] User sync failed (non-critical):", err)
+          if (isMounted) {
+            console.warn("[AuthProvider] User sync failed (non-critical):", err)
+          }
         }
       }
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      isMounted = false
+      subscription.unsubscribe()
+    }
   }, [])
 
   return <AuthContext.Provider value={{ user, loading }}>{children}</AuthContext.Provider>

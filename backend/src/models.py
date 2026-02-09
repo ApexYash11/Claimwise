@@ -34,6 +34,9 @@ class ComparisonResponse(BaseModel):
     comparison: str
     comparison_id: Optional[str] = None
 
+class CompareRequest(BaseModel):
+    policy_ids: List[str] = Field(..., min_length=2, max_length=10, description="List of policy IDs to compare (2-10 policies)")
+
 class ActivityResponse(BaseModel):
     id: str
     type: str
