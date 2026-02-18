@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 import os
 # Load environment variables early so db.py can use them on import
 load_dotenv()
-STORAGE_BUCKET = os.getenv("SUPABASE_STORAGE_BUCKET", "proeject")
+STORAGE_BUCKET = os.getenv("SUPABASE_STORAGE_BUCKET", "project")
 from src.db import supabase, supabase_storage
 from src.llm_groq import analyze_policy, compare_policies, chat_with_policy, chat_with_multiple_policies, get_api_status
 from src.auth import get_current_user, refresh_token, oauth2_scheme
@@ -521,7 +521,7 @@ def get_user_policies(user_id: str = Depends(get_current_user)):
         logging.debug(f"Fetching policies for user {user_id}")
         
         result = supabase.table("policies").select(
-            "id, policy_name, policy_number, provider, policy_type, created_at, updated_at, analysis"
+            "id, policy_name, policy_number, provider, policy_type, created_at, updated_at, validation_score, validation_metadata"
         ).eq("user_id", user_id).order("created_at", desc=True).execute()
         
         policies = result.data if result.data else []
@@ -758,17 +758,22 @@ def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
         final_prompt = f"You are an insurance expert. Use the provided context to answer the question. Context:\n{context_str}\n\nQuestion: {question}\n\nAnswer succinctly and cite chunks by id when referenced."
 
         # Call optimized LLM (prefers Groq, falls back to Gemini) if available
+        answer = None
         try:
             from src.llm import make_llm_request
             answer = make_llm_request(final_prompt)
         except Exception as e:
-            logging.exception("Gemini generation failed, using fallback chat_with_policy: %s", e)
+            logging.exception("Gemini generation failed, trying fallback: %s", e)
             try:
                 from src.llm_groq import chat_with_policy as fallback_chat
                 answer = fallback_chat(extracted_text, question, policy.get('policy_number'))
             except Exception as e2:
                 logging.exception("Fallback chat failed: %s", e2)
-                answer = "Service temporarily unavailable. Please try again later."
+                answer = None
+        
+        # Validate answer before returning
+        if not answer:
+            answer = "I could not generate a response. Please try again or rephrase your question."
 
         # Log chat activity
         log_activity(
@@ -798,7 +803,7 @@ def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
         logging.exception("Chat error for policy %s: %s", getattr(request, 'policy_id', 'unknown'), str(e))
         raise HTTPException(status_code=500, detail=f"Error processing chat: {str(e)}")
 
-@app.post("/chat-multiple")
+@app.post("/chat-multiple", response_model=ChatResponse)
 def chat_multiple_policies(question: str, user_id: str = Depends(get_current_user)):
     """
     Answer a question based on all user's policies.
@@ -829,20 +834,36 @@ def chat_multiple_policies(question: str, user_id: str = Depends(get_current_use
         # Get comprehensive answer across all policies
         answer = chat_with_multiple_policies(policies_data, question)
         
+        # Validate answer before using
+        if not answer:
+            answer = "I could not generate a comprehensive response across your policies. Please try again."
+        
+        answer_str = str(answer) if answer is not None else ""
+        
         # Log the multi-policy chat
         supabase.table("chat_logs").insert({
             "user_id": user_id,
             "policy_id": None,  # NULL for multi-policy chats
             "question": question,
-            "answer": answer,
+            "answer": answer_str,
             "chat_type": "multiple_policies"
         }).execute()
         
-        return {
-            "answer": answer,
-            "policies_count": len(policies),
-            "policy_references": [p['policy_number'] for p in policies_data]
-        }
+        # Log activity
+        log_activity(
+            user_id=user_id,
+            activity_type="chat",
+            title="Asked across all policies",
+            description=f"AI assistant answered multi-policy question",
+            details={
+                "question": question[:100] + "..." if len(question) > 100 else question,
+                "policies_count": len(policies),
+                "chat_type": "multiple_policies"
+            }
+        )
+        
+        # Return ChatResponse with answer and empty citations for multi-policy queries
+        return ChatResponse(answer=answer_str, citations=[])
         
     except HTTPException:
         raise

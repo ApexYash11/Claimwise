@@ -102,21 +102,26 @@ export const getPolicies = async (userId: string): Promise<PolicySummary[]> => {
     const session = await supabase.auth.getSession()
     const token = session.data.session?.access_token
 
+    if (!token) {
+      throw new Error("Not authenticated. Please log in.")
+    }
+
     const apiUrl = createApiUrlWithLogging(`/policies`);
     const response = await fetch(apiUrl, {
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      headers: { Authorization: `Bearer ${token}` },
     })
 
     if (!response.ok) {
-      console.warn(`Failed to fetch policies: ${response.status}`)
-      return []
+      const errorDetail = await response.text()
+      throw new Error(`Failed to fetch policies: ${response.status} - ${errorDetail}`)
     }
 
     const data = await response.json()
     return data.policies || []
   } catch (error) {
     console.error("Error fetching policies:", error)
-    return []
+    // Re-throw to allow caller to handle the error
+    throw error
   }
 }
 
