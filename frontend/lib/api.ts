@@ -50,7 +50,7 @@ const mapPolicyFromBackend = (policy: any): PolicySummary => {
     premium: analysis.premium || "Not specified",
     deductible: analysis.deductible || "Not specified",
     keyFeatures: Array.isArray(analysis.key_features) ? analysis.key_features : [],
-    expirationDate: analysis.expiration_date || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+    expirationDate: analysis.expiration_date || "Not specified",
     rawAnalysis: analysis,
   }
 }
@@ -152,6 +152,10 @@ export const chatWithPolicies = async (message: string, policyIds: string[]): Pr
   const token = session.data.session?.access_token
 
   try {
+    if (policyIds.length > 1 && !policyIds.includes("all")) {
+      throw new Error("Multiple specific policy IDs are not supported in a single request. Select one policy or use 'all'.")
+    }
+
     const isMultiPolicy = policyIds.length === 0 || policyIds.includes("all")
     const apiUrl = isMultiPolicy
       ? createApiUrlWithLogging("/chat-multiple")
@@ -249,7 +253,7 @@ export const getActivityHistory = async (): Promise<HistoryResponse> => {
 
     if (!response.ok) {
       const errorText = await response.text()
-      throw new Error(`HTTP error! status: ${response.status}`)
+      throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`)
     }
 
     const data = await response.json()

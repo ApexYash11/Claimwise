@@ -76,26 +76,26 @@ This document explains how data moves through the app page-by-page, what each pa
 
 ## 2) Core End-to-End Flows
 
-## Auth flow
+### Auth flow
 1. User logs in via Supabase auth.
 2. Frontend stores session.
 3. Protected routes enforce authenticated access.
 4. Backend validates JWT and resolves `user_id`.
 
-## Upload and Index flow
+### Upload and Index flow
 1. Client uploads policy file.
 2. Backend validates and extracts text.
 3. Policy row saved with private storage path.
 4. Text chunking + embedding + vector storage.
 5. Policy becomes available for analysis/chat/compare.
 
-## Chat flow (single policy)
+### Chat flow (single policy)
 1. User sends question with selected policy.
 2. Backend fetches policy text and top chunks via vector RPC.
 3. LLM answers with context and citations.
 4. Response stored in `chat_logs` and returned.
 
-## Chat flow (all policies)
+### Chat flow (all policies)
 1. User sends question once.
 2. Backend pulls all user policies.
 3. LLM returns consolidated answer.
@@ -115,19 +115,19 @@ This document explains how data moves through the app page-by-page, what each pa
 
 ## 4) Current Issues and Better Direction
 
-## A) Data consistency
+### A) Data consistency
 - Some pages previously used direct table reads and custom parsing.
 - **Better:** Use backend APIs as single source of truth for all business data.
 
-## B) Security and privacy
+### B) Security and privacy
 - Debug/dev pathways need strict boundaries.
 - **Better:** Keep admin-only checks and avoid sensitive data in URL query params.
 
-## C) Latency
+### C) Latency
 - Sequential calls and fan-out patterns can delay UI.
 - **Better:** Use single backend aggregate endpoints where possible, plus cancellation/timeouts.
 
-## D) UX reliability
+### D) UX reliability
 - Some actions were incomplete or weakly guarded.
 - **Better:** Ensure every action has clear success/error paths and role checks.
 

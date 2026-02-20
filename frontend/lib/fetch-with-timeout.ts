@@ -8,27 +8,37 @@ export async function fetchWithTimeout(
 ): Promise<Response> {
   const { timeoutMs = 15000, signal, ...init } = options
 
-  const timeoutController = new AbortController()
-  const timeoutId = setTimeout(() => timeoutController.abort(), timeoutMs)
-
-  const onAbort = () => timeoutController.abort()
-  if (signal) {
-    if (signal.aborted) {
-      clearTimeout(timeoutId)
-      throw new DOMException("Request aborted", "AbortError")
+  const requestController = new AbortController()
+  const abortRequest = (reason?: unknown) => {
+    if (!requestController.signal.aborted) {
+      requestController.abort(reason)
     }
-    signal.addEventListener("abort", onAbort, { once: true })
+  }
+
+  const timeoutId = setTimeout(() => {
+    abortRequest(new DOMException("Request timeout", "TimeoutError"))
+  }, timeoutMs)
+
+  const onExternalAbort = () => {
+    abortRequest(signal?.reason ?? new DOMException("Request aborted", "AbortError"))
+  }
+
+  if (signal) {
+    signal.addEventListener("abort", onExternalAbort, { once: true })
+    if (signal.aborted) {
+      onExternalAbort()
+    }
   }
 
   try {
     return await fetch(input, {
       ...init,
-      signal: timeoutController.signal,
+      signal: requestController.signal,
     })
   } finally {
     clearTimeout(timeoutId)
     if (signal) {
-      signal.removeEventListener("abort", onAbort)
+      signal.removeEventListener("abort", onExternalAbort)
     }
   }
 }

@@ -212,8 +212,8 @@ async def upload_policy(
             if file_type not in ALLOWED_UPLOAD_EXTENSIONS:
                 raise HTTPException(status_code=400, detail="Only PDF files are supported.")
 
-            content_type = (file.content_type or "").lower()
-            if content_type and content_type not in ALLOWED_UPLOAD_MIME_TYPES:
+            content_type = (file.content_type or "").lower().strip()
+            if content_type not in ALLOWED_UPLOAD_MIME_TYPES:
                 raise HTTPException(status_code=400, detail="Unsupported file content type.")
 
             declared_size = file.headers.get("content-length") if file.headers else None
@@ -307,10 +307,6 @@ async def upload_policy(
                 raise HTTPException(status_code=500, detail="File storage failed.")
 
         logging.debug("Saving to database...")
-        if policy_name:
-            duplicate_check = supabase.table("policies").select("id").eq("user_id", user_id).eq("policy_name", policy_name).limit(1).execute()
-            if duplicate_check and getattr(duplicate_check, "data", None):
-                raise HTTPException(status_code=409, detail=f"A policy named '{policy_name}' already exists.")
 
         data = {
             "user_id": user_id,
@@ -347,6 +343,8 @@ async def upload_policy(
                 # Detect foreign key violation (user missing)
                 if "foreign key" in str(err_msg).lower() or err_code == "23503":
                     raise HTTPException(status_code=403, detail="Invalid user or authentication state. Please re-authenticate.")
+                if err_code == "23505" or "duplicate key" in str(err_msg).lower() or "already exists" in str(err_msg).lower():
+                    raise HTTPException(status_code=409, detail=f"A policy named '{policy_name or 'Policy'}' already exists.")
                 else:
                     raise HTTPException(status_code=500, detail="Failed to save policy.")
 
@@ -403,6 +401,8 @@ async def upload_policy(
             err_str = str(db_error).lower()
             if "foreign key" in err_str or "violates foreign key" in err_str or "23503" in err_str:
                 raise HTTPException(status_code=403, detail="Invalid user or authentication state. Please re-authenticate.")
+            if "23505" in err_str or "duplicate key" in err_str or "already exists" in err_str:
+                raise HTTPException(status_code=409, detail=f"A policy named '{policy_name or 'Policy'}' already exists.")
             raise HTTPException(status_code=500, detail="Database save failed.")
     except HTTPException:
         raise
@@ -1042,14 +1042,19 @@ def get_comprehensive_history(
             policies = []
 
         # Get chat logs
+        total_chat_logs = 0
         try:
             chat_logs = supabase.table("chat_logs").select(
                 "id", "policy_id", "question", "answer", "created_at", "chat_type"
             ).eq("user_id", user_id).order("created_at", desc=True).range(offset, offset + page_size - 1).execute().data
             logging.debug("Found %d chat logs", len(chat_logs) if chat_logs else 0)
+
+            chat_logs_all = supabase.table("chat_logs").select("id").eq("user_id", user_id).execute().data
+            total_chat_logs = len(chat_logs_all) if chat_logs_all else 0
         except Exception as e:
             logging.exception("Error fetching chat logs: %s", e)
             chat_logs = []
+            total_chat_logs = 0
 
         # Get comparisons
         try:
@@ -1156,7 +1161,7 @@ def get_comprehensive_history(
         }
 
         has_more_activities = offset + page_size < total_activities
-        has_more_chat_logs = len(chat_logs) >= page_size
+        has_more_chat_logs = offset + page_size < total_chat_logs
 
         logging.debug("Returning %d paginated activities with stats: %s", len(paginated_activities), stats)
 
@@ -1172,7 +1177,7 @@ def get_comprehensive_history(
                 "has_more_chat_logs": has_more_chat_logs,
                 "next_page": page + 1 if (has_more_activities or has_more_chat_logs) else None,
                 "total_activities": total_activities,
-                "total_chat_logs": None,
+                "total_chat_logs": total_chat_logs,
             },
             "success": True
         }

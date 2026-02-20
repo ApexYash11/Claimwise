@@ -20,6 +20,7 @@ RETURNS TABLE (
 )
 LANGUAGE sql
 STABLE
+SECURITY INVOKER
 AS $$
 	SELECT
 		dc.id,
@@ -31,5 +32,8 @@ AS $$
 	WHERE dc.embedding IS NOT NULL
 		AND (filter_policy_id IS NULL OR dc.policy_id = filter_policy_id)
 	ORDER BY dc.embedding <=> query_embedding
-	LIMIT GREATEST(COALESCE(limit_count, 5), 1);
+	LIMIT LEAST(GREATEST(COALESCE(limit_count, 5), 1), 50);
 $$;
+
+REVOKE ALL ON FUNCTION public.vector_search_document_chunks(vector(384), integer, uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.vector_search_document_chunks(vector(384), integer, uuid) TO authenticated;

@@ -12,22 +12,6 @@ logger = logging.getLogger(__name__)
 EXPECTED_EMBED_DIM = int(os.getenv("EMBEDDING_DIM", "384"))
 
 
-def _normalize_embedding_dimension(embedding: List[float], expected_dim: int) -> List[float]:
-  if expected_dim <= 0:
-    return embedding
-
-  if len(embedding) == expected_dim:
-    return embedding
-
-  if len(embedding) > expected_dim:
-    logger.warning("Truncating embedding from %d to %d dimensions", len(embedding), expected_dim)
-    return embedding[:expected_dim]
-
-  pad_size = expected_dim - len(embedding)
-  logger.warning("Padding embedding from %d to %d dimensions", len(embedding), expected_dim)
-  return embedding + ([0.0] * pad_size)
-
-
 def chunk_texts(texts: List[str], chunk_size: int = 500, overlap: int = 50) -> List[str]:
   """
   Split one or more input texts into word-based chunks with a fixed overlap.
@@ -111,14 +95,16 @@ def index_documents(text: str, document_id: str, chunk_size: int = 500, overlap:
     # Validate embedding dimensionality if present
     if emb is not None:
       if EXPECTED_EMBED_DIM and len(emb) != EXPECTED_EMBED_DIM:
-        logger.warning(
-          "Embedding dimension mismatch for doc %s chunk %d: got %d expected %d - normalizing",
+        logger.error(
+          "Embedding dimension mismatch for doc %s chunk %d: got %d expected %d",
           document_id,
           idx,
           len(emb),
           EXPECTED_EMBED_DIM,
         )
-        emb = _normalize_embedding_dimension(emb, EXPECTED_EMBED_DIM)
+        raise RuntimeError(
+          f"Embedding dimension mismatch for doc {document_id} chunk {idx}: got {len(emb)} expected {EXPECTED_EMBED_DIM}"
+        )
 
     row = {
       "policy_id": document_id,  # Use policy_id instead of document_id
@@ -161,7 +147,12 @@ def retrieve_top_k(query: str, k: int = 5, policy_id: Optional[str] = None) -> L
     return []
   q_emb = q_embs[0]
   if q_emb is not None and EXPECTED_EMBED_DIM and len(q_emb) != EXPECTED_EMBED_DIM:
-    q_emb = _normalize_embedding_dimension(q_emb, EXPECTED_EMBED_DIM)
+    logger.error(
+      "Query embedding dimension mismatch: got %d expected %d",
+      len(q_emb),
+      EXPECTED_EMBED_DIM,
+    )
+    return []
 
   service_client = supabase_storage or supabase
   try:

@@ -31,6 +31,8 @@
 #### Analyze Page (`app/analyze/page.tsx`)
 **Before**: 1019 modules, 2.1s compilation
 ```tsx
+import dynamic from "next/dynamic"
+
 import { InsightsPanel } from "@/components/analysis/insights-panel"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
@@ -84,14 +86,17 @@ const PolicyComparison = dynamic(() => import("@/components/analysis/policy-comp
 
 ### 2. **Next.js Configuration Enhancements** (`next.config.mjs`)
 
-#### Added Compilation Caching
+#### Updated Build Configuration (Next.js 13+ compatible)
 ```javascript
-onDemandEntries: {
-  maxInactiveAge: 60 * 1000,  // Keep pages in buffer for 60s
-  pagesBufferLength: 5,        // Cache up to 5 pages simultaneously
+experimental: {
+  optimizePackageImports: [
+    "lucide-react",
+    "@radix-ui/react-accordion",
+    // ...other heavy client packages
+  ],
 }
 ```
-**Benefit**: Faster page switches, reduced re-compilation
+**Benefit**: Better tree-shaking and module loading behavior in modern Next.js.
 
 #### Optimized Package Imports
 ```javascript
@@ -119,6 +124,10 @@ config.cache = {
 
 #### React Deduplication
 ```javascript
+import { createRequire } from "module"
+
+const require = createRequire(import.meta.url)
+
 config.resolve.alias = {
   ...config.resolve.alias,
   'react': require.resolve('react'),

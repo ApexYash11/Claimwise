@@ -36,12 +36,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const resolveUserRole = async (user: User): Promise<{ role: string | null; isAdmin: boolean }> => {
     try {
-      const metadataRole = String(user.user_metadata?.role || "").toLowerCase()
-      const metadataAdmin = Boolean(user.user_metadata?.is_admin)
-      if (metadataAdmin || metadataRole === "admin") {
-        return { role: metadataRole || "admin", isAdmin: true }
-      }
-
       const { data: userRow } = await supabase
         .from("users")
         .select("role, is_admin")
@@ -115,17 +109,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       
       console.log("[AuthProvider] Auth state change:", event, "User:", session?.user?.email ?? "None")
       setUser(session?.user ?? null)
-      setLoading(false)
+      setLoading(true)
 
       if (session?.user) {
         const roleInfo = await resolveUserRole(session.user)
         if (isMounted) {
           setUserRole(roleInfo.role)
           setIsAdmin(roleInfo.isAdmin)
+          setLoading(false)
         }
       } else {
         setUserRole(null)
         setIsAdmin(false)
+        setLoading(false)
       }
 
       // Auto-sync user to database after OAuth or email signup

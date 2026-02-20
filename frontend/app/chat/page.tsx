@@ -86,7 +86,7 @@ export default function ChatPage() {
         coverageAmount: analysis.coverage_amount || "Not specified",
         deductible: analysis.deductible || "Not specified",
         keyFeatures: Array.isArray(analysis.key_features) ? analysis.key_features : [],
-        expirationDate: analysis.expiration_date || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+        expirationDate: analysis.expiration_date || "Not specified",
         rawAnalysis: analysis,
       }
     }
@@ -195,7 +195,10 @@ export default function ChatPage() {
       const nextPage = historyPage + 1
       const session = await supabase.auth.getSession()
       const token = session.data.session?.access_token
-      if (!token) return
+      if (!token) {
+        setError("Authentication expired. Please sign in again.")
+        return
+      }
 
       const historyUrl = `${createApiUrlWithLogging("/history")}?page=${nextPage}&page_size=25`
       const response = await fetchWithTimeout(historyUrl, {
@@ -203,7 +206,11 @@ export default function ChatPage() {
         timeoutMs: 12000,
       })
 
-      if (!response.ok) return
+      if (!response.ok) {
+        const errorText = await response.text()
+        setError(errorText || "Could not load older chat history.")
+        return
+      }
 
       const historyData = await response.json()
       const olderMessages = mapServerHistoryToMessages(historyData)
@@ -222,6 +229,7 @@ export default function ChatPage() {
       setHasMoreHistory(Boolean(historyData?.pagination?.has_more_chat_logs))
     } catch (err) {
       console.error("Failed to load older history:", err)
+      setError("Failed to load older chat history. Please try again.")
     } finally {
       setLoadingMoreHistory(false)
     }

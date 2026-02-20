@@ -223,7 +223,7 @@ export default function AnalyzePage() {
             premium: analysis.premium || "Not specified",
             deductible: analysis.deductible || "Not specified",
             keyFeatures: Array.isArray(analysis.key_features) ? analysis.key_features : [analysis.coverage || "Basic coverage"],
-            expirationDate: analysis.expiration_date || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+            expirationDate: analysis.expiration_date || "Not specified",
             rawAnalysis: analysis,
           }
         })
