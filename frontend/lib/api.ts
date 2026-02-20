@@ -1,6 +1,7 @@
 // API utilities for backend communication
 import { supabase } from "./supabase"
 import { createApiUrlWithLogging } from "./url-utils"
+import { fetchWithTimeout } from "./fetch-with-timeout"
 
 export interface PolicyAnalysisRequest {
   files: File[]
@@ -38,6 +39,22 @@ export interface PolicySummary {
   }
 }
 
+const mapPolicyFromBackend = (policy: any): PolicySummary => {
+  const analysis = policy?.validation_metadata?.analysis_result || {}
+  return {
+    id: policy.id,
+    fileName: policy.policy_name || (policy.policy_number ? `Policy ${policy.policy_number}` : `Policy ${String(policy.id).slice(-8)}`),
+    policyType: analysis.policy_type || policy.policy_type || "Unknown",
+    provider: analysis.provider || policy.provider || "Unknown Provider",
+    coverageAmount: analysis.coverage_amount || "Not specified",
+    premium: analysis.premium || "Not specified",
+    deductible: analysis.deductible || "Not specified",
+    keyFeatures: Array.isArray(analysis.key_features) ? analysis.key_features : [],
+    expirationDate: analysis.expiration_date || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+    rawAnalysis: analysis,
+  }
+}
+
 export const uploadPolicies = async (files: File[], userId: string): Promise<PolicyAnalysisResponse> => {
   const formData = new FormData()
   files.forEach((file, index) => {
@@ -51,10 +68,11 @@ export const uploadPolicies = async (files: File[], userId: string): Promise<Pol
 
   try {
     const apiUrl = createApiUrlWithLogging("/analyze-policy");
-    const response = await fetch(apiUrl, {
+    const response = await fetchWithTimeout(apiUrl, {
       method: "POST",
       body: formData,
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      timeoutMs: 15000,
     })
 
     if (!response.ok) {
@@ -75,13 +93,14 @@ export const comparePolicies = async (policyIds: string[]): Promise<any> => {
 
   try {
     const apiUrl = createApiUrlWithLogging("/compare-policies");
-    const response = await fetch(apiUrl, {
+    const response = await fetchWithTimeout(apiUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: JSON.stringify({ policy_ids: policyIds }),
+      timeoutMs: 15000,
     })
 
     if (!response.ok) {
@@ -96,7 +115,7 @@ export const comparePolicies = async (policyIds: string[]): Promise<any> => {
   }
 }
 
-export const getPolicies = async (userId: string): Promise<PolicySummary[]> => {
+export const getPolicies = async (_userId?: string): Promise<PolicySummary[]> => {
   try {
     // Get Supabase JWT
     const session = await supabase.auth.getSession()
@@ -107,8 +126,9 @@ export const getPolicies = async (userId: string): Promise<PolicySummary[]> => {
     }
 
     const apiUrl = createApiUrlWithLogging(`/policies`);
-    const response = await fetch(apiUrl, {
+    const response = await fetchWithTimeout(apiUrl, {
       headers: { Authorization: `Bearer ${token}` },
+      timeoutMs: 12000,
     })
 
     if (!response.ok) {
@@ -117,7 +137,8 @@ export const getPolicies = async (userId: string): Promise<PolicySummary[]> => {
     }
 
     const data = await response.json()
-    return data.policies || []
+    const backendPolicies = Array.isArray(data?.policies) ? data.policies : []
+    return backendPolicies.map(mapPolicyFromBackend)
   } catch (error) {
     console.error("Error fetching policies:", error)
     // Re-throw to allow caller to handle the error
@@ -131,17 +152,26 @@ export const chatWithPolicies = async (message: string, policyIds: string[]): Pr
   const token = session.data.session?.access_token
 
   try {
-    const apiUrl = createApiUrlWithLogging("/chat");
-    const response = await fetch(apiUrl, {
+    const isMultiPolicy = policyIds.length === 0 || policyIds.includes("all")
+    const apiUrl = isMultiPolicy
+      ? createApiUrlWithLogging("/chat-multiple")
+      : createApiUrlWithLogging("/chat")
+
+    const response = await fetchWithTimeout(apiUrl, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        message,
-        policy_ids: policyIds,
-      }),
+      ...(isMultiPolicy
+        ? { body: JSON.stringify({ question: message }) }
+        : {
+            body: JSON.stringify({
+              question: message,
+              policy_id: policyIds[0],
+            }),
+          }),
+      timeoutMs: 15000,
     })
 
     if (!response.ok) {
@@ -185,40 +215,44 @@ export interface HistoryResponse {
     totalPolicies: number
   }
   policies: any[]
+  pagination?: {
+    page: number
+    page_size: number
+    has_more_activities: boolean
+    has_more_chat_logs: boolean
+    next_page: number | null
+    total_activities: number
+    total_chat_logs: number
+  }
   success: boolean
 }
 
 export const getActivityHistory = async (): Promise<HistoryResponse> => {
   try {
-    console.log("DEBUG: Starting getActivityHistory request")
     // Get Supabase JWT
     const session = await supabase.auth.getSession()
     const token = session.data.session?.access_token
 
-    console.log("DEBUG: Token available:", !!token)
     if (!token) {
       throw new Error("No authentication token available")
     }
 
     const apiUrl = createApiUrlWithLogging("/history");
-    console.log("DEBUG: Making request to:", apiUrl);
-    const response = await fetch(apiUrl, {
+    const response = await fetchWithTimeout(apiUrl, {
       method: "GET",
       headers: {
         "Authorization": `Bearer ${token}`,
         "Content-Type": "application/json",
       },
+      timeoutMs: 12000,
     })
 
-    console.log("DEBUG: Response status:", response.status)
     if (!response.ok) {
       const errorText = await response.text()
-      console.log("DEBUG: Error response:", errorText)
       throw new Error(`HTTP error! status: ${response.status}`)
     }
 
     const data = await response.json()
-    console.log("DEBUG: Successfully received data:", data)
     return data
   } catch (error) {
     console.error("Error fetching activity history:", error)

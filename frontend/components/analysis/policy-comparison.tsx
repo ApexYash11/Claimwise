@@ -8,6 +8,7 @@ import { CheckCircle, X, AlertTriangle, TrendingUp, TrendingDown, DollarSign, Sh
 import type { PolicySummary } from "@/lib/api"
 import { supabase } from "@/lib/supabase"
 import { createApiUrlWithLogging } from "@/lib/url-utils"
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
 
 interface PolicyComparisonProps {
   policies: PolicySummary[]
@@ -33,16 +34,16 @@ export function PolicyComparison({ policies, onRemovePolicy }: PolicyComparisonP
       
       if (token && policies.length >= 2) {
         const compareUrl = createApiUrlWithLogging("/compare-policies");
-        const response = await fetch(compareUrl, {
+        const response = await fetchWithTimeout(compareUrl, {
           method: "POST",
           headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
+            "Content-Type": "application/json",
             "Authorization": `Bearer ${token}`
           },
-          body: new URLSearchParams({
-            policy_1_id: policies[0].id,
-            policy_2_id: policies[1].id
-          })
+          body: JSON.stringify({
+            policy_ids: policies.slice(0, 2).map((policy) => policy.id)
+          }),
+          timeoutMs: 12000,
         })
         
         if (response.ok) {

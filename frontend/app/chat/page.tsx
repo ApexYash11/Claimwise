@@ -17,6 +17,7 @@ import { supabase } from "@/lib/supabase"
 import type { PolicySummary } from "@/lib/api"
 
 import { createApiUrlWithLogging } from "@/lib/url-utils"
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
 
 interface ChatMessage {
   id: string
@@ -35,7 +36,33 @@ export default function ChatPage() {
   const [error, setError] = useState("")
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([])
   const [loadingPolicies, setLoadingPolicies] = useState(true)
+  const [historyPage, setHistoryPage] = useState(1)
+  const [hasMoreHistory, setHasMoreHistory] = useState(false)
+  const [loadingMoreHistory, setLoadingMoreHistory] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  const mapServerHistoryToMessages = (historyData: any): ChatMessage[] => {
+    const serverMessages: ChatMessage[] = []
+    if (historyData?.chat_logs && Array.isArray(historyData.chat_logs)) {
+      historyData.chat_logs.forEach((chat: any) => {
+        serverMessages.push({
+          id: `user_${chat.id}`,
+          content: chat.question,
+          role: "user",
+          timestamp: new Date(chat.created_at),
+          policyId: chat.policy_id,
+        })
+        serverMessages.push({
+          id: `assistant_${chat.id}`,
+          content: chat.answer,
+          role: "assistant",
+          timestamp: new Date(chat.created_at),
+          policyId: chat.policy_id,
+        })
+      })
+    }
+    return serverMessages
+  }
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -47,9 +74,26 @@ export default function ChatPage() {
 
   // Load user policies and chat history on component mount
   useEffect(() => {
+    const controller = new AbortController()
+    const mapPolicyFromBackend = (policy: any): PolicySummary => {
+      const analysis = policy?.validation_metadata?.analysis_result || {}
+      return {
+        id: policy.id,
+        fileName: policy.policy_name || (policy.policy_number ? `Policy ${policy.policy_number}` : `Policy ${String(policy.id).slice(-8)}`),
+        policyType: analysis.policy_type || policy.policy_type || "Unknown",
+        provider: analysis.provider || policy.provider || "Unknown Provider",
+        premium: analysis.premium || "Not specified",
+        coverageAmount: analysis.coverage_amount || "Not specified",
+        deductible: analysis.deductible || "Not specified",
+        keyFeatures: Array.isArray(analysis.key_features) ? analysis.key_features : [],
+        expirationDate: analysis.expiration_date || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+        rawAnalysis: analysis,
+      }
+    }
+
     const loadPoliciesAndHistory = async () => {
       try {
-        // Load policies directly from database
+        // Load policies via backend API
         const session = await supabase.auth.getSession()
         const token = session.data.session?.access_token
         const user = session.data.session?.user
@@ -60,127 +104,63 @@ export default function ChatPage() {
           return
         }
 
-        // Fetch policies from database
-        const { data: dbPolicies, error: dbError } = await supabase
-          .from("policies")
-          .select("id, policy_name, policy_number, created_at, extracted_text")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false })
+        const policiesUrl = createApiUrlWithLogging("/policies")
+        const policiesResponse = await fetchWithTimeout(policiesUrl, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          timeoutMs: 12000,
+          signal: controller.signal,
+        })
 
-        if (dbError) {
-          console.error("Database error:", dbError)
-          setError("Failed to load policies from database")
+        if (!policiesResponse.ok) {
+          setError("Failed to load policies")
           setLoadingPolicies(false)
           return
         }
 
-        console.log(`Found ${dbPolicies.length} policies in database`)
+        const policyPayload = await policiesResponse.json()
+        const backendPolicies = Array.isArray(policyPayload?.policies) ? policyPayload.policies : []
+        const loadedPolicies = backendPolicies.map(mapPolicyFromBackend)
+        setPolicies(loadedPolicies)
 
-        if (dbPolicies.length > 0) {
-          // Check if we have real policy content or just test data
-          const hasRealContent = dbPolicies.some(p => {
-            const text = p.extracted_text || ""
-            return text.length > 100 && !text.includes("test insurance policy for automated testing")
-          })
-
-          if (!hasRealContent) {
-            console.warn("All policies appear to be test data with minimal content")
-            setError("Your policies contain minimal content. Please upload actual insurance policy documents for meaningful chat interactions.")
-            setPolicies([])
-            setLoadingPolicies(false)
-            return
-          }
-
-          // Analyze policies to get details
-          const policyPromises = dbPolicies.map(async (policy) => {
-            try {
-              const formData = new FormData()
-              formData.append("policy_id", policy.id)
-              const analyzeUrl = createApiUrlWithLogging("/analyze-policy");
-              const response = await fetch(analyzeUrl, {
-                method: "POST",
-                headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-                body: formData,
-              })
-              
-              if (response.ok) {
-                const data = await response.json()
-                return {
-                  id: policy.id,
-                  fileName: policy.policy_name || (data.analysis.policy_number ? `Policy ${data.analysis.policy_number}` : `Policy ${policy.id.slice(-8)}`),
-                  policyType: data.analysis.policy_type || "Unknown",
-                  provider: data.analysis.provider || "Unknown Provider",
-                  premium: data.analysis.premium || "Not specified",
-                  coverageAmount: data.analysis.coverage_amount || "Not specified",
-                  deductible: data.analysis.deductible || "Not specified",
-                  keyFeatures: data.analysis.key_features || [],
-                  expirationDate: data.analysis.expiration_date || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-                  rawAnalysis: data.analysis
-                }
-              }
-              return null
-            } catch (e) {
-              console.error(`Error loading policy ${policy.id}:`, e)
-              return null
-            }
-          })
-
-          const loadedPolicies = (await Promise.all(policyPromises)).filter(Boolean) as PolicySummary[]
-          setPolicies(loadedPolicies)
-          
-          // Set first policy as selected by default if we have policies
-          if (loadedPolicies.length > 0) {
-            setSelectedPolicyId(loadedPolicies[0].id)
-          }
+        if (loadedPolicies.length > 0) {
+          setSelectedPolicyId(loadedPolicies[0].id)
         }
 
         // Load chat history from server first, with localStorage fallback
         try {
           console.log("Loading chat history from server...")
-          const chatHistoryUrl = createApiUrlWithLogging("/history")
-          const historyResponse = await fetch(chatHistoryUrl, {
+          const chatHistoryUrl = `${createApiUrlWithLogging("/history")}?page=1&page_size=25`
+          const historyResponse = await fetchWithTimeout(chatHistoryUrl, {
             headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+            timeoutMs: 12000,
+            signal: controller.signal,
           })
           
           if (historyResponse.ok) {
             const historyData = await historyResponse.json()
-            // Extract chat messages from the history response
-            const serverMessages: ChatMessage[] = []
-            
-            if (historyData.chat_logs && Array.isArray(historyData.chat_logs)) {
-              historyData.chat_logs.forEach((chat: any) => {
-                // Add user message
-                serverMessages.push({
-                  id: `user_${chat.id}`,
-                  content: chat.question,
-                  role: "user",
-                  timestamp: new Date(chat.created_at),
-                  policyId: chat.policy_id
-                })
-                // Add assistant message
-                serverMessages.push({
-                  id: `assistant_${chat.id}`,
-                  content: chat.answer,
-                  role: "assistant",
-                  timestamp: new Date(chat.created_at),
-                  policyId: chat.policy_id
-                })
-              })
-            }
+            const serverMessages = mapServerHistoryToMessages(historyData)
             
             setChatHistory(serverMessages)
             setMessages(serverMessages)
+            setHistoryPage(1)
+            setHasMoreHistory(Boolean(historyData?.pagination?.has_more_chat_logs))
             console.log(`Loaded ${serverMessages.length} messages from server`)
           } else {
             console.warn("Failed to load chat history from server, using localStorage fallback")
             loadFromLocalStorage(user.id)
           }
         } catch (e) {
+          if (e instanceof Error && e.name === "AbortError") {
+            return
+          }
           console.error("Error loading server chat history:", e)
           loadFromLocalStorage(user.id)
         }
 
       } catch (e) {
+        if (e instanceof Error && e.name === "AbortError") {
+          return
+        }
         console.error("Error loading policies and history:", e)
         setError("Failed to load policies and chat history")
       } finally {
@@ -204,7 +184,48 @@ export default function ChatPage() {
     }
 
     loadPoliciesAndHistory()
+    return () => controller.abort()
   }, [])
+
+  const handleLoadOlderHistory = async () => {
+    if (loadingMoreHistory || !hasMoreHistory) return
+
+    try {
+      setLoadingMoreHistory(true)
+      const nextPage = historyPage + 1
+      const session = await supabase.auth.getSession()
+      const token = session.data.session?.access_token
+      if (!token) return
+
+      const historyUrl = `${createApiUrlWithLogging("/history")}?page=${nextPage}&page_size=25`
+      const response = await fetchWithTimeout(historyUrl, {
+        headers: { Authorization: `Bearer ${token}` },
+        timeoutMs: 12000,
+      })
+
+      if (!response.ok) return
+
+      const historyData = await response.json()
+      const olderMessages = mapServerHistoryToMessages(historyData)
+
+      if (olderMessages.length === 0) {
+        setHasMoreHistory(false)
+        return
+      }
+
+      setMessages((prev) => {
+        const existingIds = new Set(prev.map((message) => message.id))
+        const dedupedOlder = olderMessages.filter((message) => !existingIds.has(message.id))
+        return [...dedupedOlder, ...prev]
+      })
+      setHistoryPage(nextPage)
+      setHasMoreHistory(Boolean(historyData?.pagination?.has_more_chat_logs))
+    } catch (err) {
+      console.error("Failed to load older history:", err)
+    } finally {
+      setLoadingMoreHistory(false)
+    }
+  }
 
   // Smart policy selection based on question content
   const getSmartPolicySelection = (question: string): string => {
@@ -269,62 +290,26 @@ export default function ChatPage() {
       let assistantMessage: ChatMessage
 
       if (selectedPolicyId === "all") {
-        // Multi-policy chat - ask across all policies
-        const allPolicyResponses = await Promise.all(
-          policies.map(async (policy) => {
-            try {
-              const chatUrl = createApiUrlWithLogging("/chat");
-              const res = await fetch(chatUrl, {
-                method: "POST",
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                  policy_id: policy.id,
-                  question: content,
-                }),
-              })
-              
-              if (res.ok) {
-                const data = await res.json()
-                return {
-                  policyName: policy.fileName,
-                  policyType: policy.policyType,
-                  answer: data.answer,
-                  policyId: policy.id
-                }
-              }
-              return null
-            } catch (e) {
-              return null
-            }
-          })
-        )
-
-        const validResponses = allPolicyResponses.filter(Boolean)
-        
-        if (validResponses.length === 0) {
-          throw new Error("No policies contain enough information to answer your question. Please ensure you have uploaded complete insurance policy documents.")
-        }
-
-        // Combine responses intelligently
-        let combinedAnswer = "Based on your uploaded policies:\n\n"
-        const policyRefs: string[] = []
-        
-        validResponses.forEach((resp, index) => {
-          if (resp && resp.answer && 
-              !resp.answer.includes("Error") && 
-              !resp.answer.includes("This information is not available") &&
-              !resp.answer.includes("Error answering Question") &&
-              resp.answer.length > 50) {
-            combinedAnswer += `**${resp.policyName} (${resp.policyType}):**\n${resp.answer}\n\n`
-            policyRefs.push(`${resp.policyName}`)
-          }
+        const multiChatUrl = createApiUrlWithLogging("/chat-multiple")
+        const multiResponse = await fetch(multiChatUrl, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ question: content }),
         })
 
-        if (policyRefs.length === 0) {
-          throw new Error("The uploaded policies don't contain sufficient information to answer this question. This may be because the policies are test documents or the OCR extraction didn't capture the relevant details.")
+        if (!multiResponse.ok) {
+          throw new Error("Failed to get answer across all policies")
+        }
+
+        const multiData = await multiResponse.json()
+        const combinedAnswer = String(multiData?.answer || "")
+        const policyRefs: string[] = policies.map((policy) => policy.fileName).slice(0, 5)
+
+        if (!combinedAnswer) {
+          throw new Error("No policies contain enough information to answer your question. Please ensure you have uploaded complete insurance policy documents.")
         }
 
         assistantMessage = {
@@ -600,6 +585,13 @@ export default function ChatPage() {
                     </div>
                   ) : (
                     <div className="space-y-8 max-w-4xl mx-auto">
+                      {hasMoreHistory && (
+                        <div className="flex justify-center">
+                          <Button variant="outline" size="sm" onClick={handleLoadOlderHistory} disabled={loadingMoreHistory}>
+                            {loadingMoreHistory ? "Loading..." : "Load older history"}
+                          </Button>
+                        </div>
+                      )}
                       {messages.map((message) => (
                         <Message key={message.id} message={message} onCopy={handleCopy} onFeedback={handleFeedback} />
                       ))}

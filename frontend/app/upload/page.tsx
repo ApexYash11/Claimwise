@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { createApiUrlWithLogging } from "@/lib/url-utils"
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
 import { useRouter } from "next/navigation"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { Header } from "@/components/layout/header"
@@ -89,30 +90,21 @@ export default function UploadPage() {
       const session = await supabase.auth.getSession()
       const token = session.data.session?.access_token
       
-      // Check for duplicates
-      if (session.data.session?.user?.id) {
-        const { data: existingPolicies } = await supabase
-          .from('policies')
-          .select('policy_name')
-          .eq('user_id', session.data.session.user.id)
-          .eq('policy_name', files[0].name)
-        
-        if (existingPolicies && existingPolicies.length > 0) {
-          setError(`A policy with the name "${files[0].name}" already exists.`)
-          setUploading(false)
-          return
-        }
-      }
-      
       const uploadUrl = createApiUrlWithLogging("/upload-policy");
-      const response = await fetch(uploadUrl, {
+      const response = await fetchWithTimeout(uploadUrl, {
         method: "POST",
         body: formData,
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        timeoutMs: 20000,
       })
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
+        if (response.status === 409) {
+          setError(`A policy with the name "${files[0].name}" already exists.`)
+          setUploading(false)
+          return
+        }
         throw new Error(errorData.detail || `Upload failed with status ${response.status}`)
       }
 

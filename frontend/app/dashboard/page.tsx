@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { createApiUrlWithLogging } from "@/lib/url-utils"
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
 import { 
   BrainCircuit, 
   ShieldAlert, 
@@ -101,47 +102,33 @@ export default function DashboardPage() {
       const sessionResult = await (await import("@/lib/supabase")).supabase.auth.getSession()
       const session = sessionResult.data.session
       const token = session?.access_token
-
-      // Fetch stats
-      let res;
-      if (token) {
-        const statsUrl = createApiUrlWithLogging("/dashboard/stats");
-        res = await fetch(statsUrl, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (res.status === 401 || res.status === 404) {
-          const devUrl = createApiUrlWithLogging("/dashboard/stats-dev");
-          res = await fetch(devUrl)
-        }
-      } else {
-        const devUrl = createApiUrlWithLogging("/dashboard/stats-dev");
-        res = await fetch(devUrl)
+      if (!token) {
+        throw new Error("Authentication required")
       }
-      if (!res.ok) throw new Error("Failed to fetch stats")
-      const data = await res.json()
+
+      const authHeaders = { Authorization: `Bearer ${token}` }
+      const statsUrl = createApiUrlWithLogging("/dashboard/stats")
+      const metricsUrl = createApiUrlWithLogging("/dashboard/metrics")
+
+      const fetchStatsRequest = async () => {
+        return fetchWithTimeout(statsUrl, { headers: authHeaders, timeoutMs: 12000 })
+      }
+
+      const fetchMetricsRequest = async () => {
+        return fetchWithTimeout(metricsUrl, { headers: authHeaders, timeoutMs: 12000 })
+      }
+
+      const [statsRes, metricsRes] = await Promise.all([fetchStatsRequest(), fetchMetricsRequest()])
+
+      if (!statsRes.ok) throw new Error("Failed to fetch stats")
+      const statsData = await statsRes.json()
       setStats({
-        uploadedDocuments: data.uploadedDocuments || 0,
-        documentsProcessed: data.documentsProcessed || 0,
-        analysesCompleted: data.analysesCompleted || 0,
-        comparisonsRun: data.comparisonsRun || 0,
+        uploadedDocuments: statsData.uploadedDocuments || 0,
+        documentsProcessed: statsData.documentsProcessed || 0,
+        analysesCompleted: statsData.analysesCompleted || 0,
+        comparisonsRun: statsData.comparisonsRun || 0,
       })
 
-      // Fetch metrics from database
-      let metricsRes;
-      if (token) {
-        const metricsUrl = createApiUrlWithLogging("/dashboard/metrics");
-        metricsRes = await fetch(metricsUrl, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (metricsRes.status === 401 || metricsRes.status === 404) {
-          const devMetricsUrl = createApiUrlWithLogging("/dashboard/metrics-dev");
-          metricsRes = await fetch(devMetricsUrl)
-        }
-      } else {
-        const devMetricsUrl = createApiUrlWithLogging("/dashboard/metrics-dev");
-        metricsRes = await fetch(devMetricsUrl)
-      }
-      
       if (metricsRes.ok) {
         const metricsData = await metricsRes.json()
         setMetrics({

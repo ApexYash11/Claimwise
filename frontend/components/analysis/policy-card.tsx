@@ -53,9 +53,17 @@ export function PolicyCard({ policy, onViewDetails, onCompare, isSelected }: Pol
     if (!policy.expirationDate) return false
     
     const expirationDate = new Date(policy.expirationDate)
+    if (Number.isNaN(expirationDate.getTime())) return false
     const today = new Date()
     const daysUntilExpiration = Math.ceil((expirationDate.getTime() - today.getTime()) / (1000 * 3600 * 24))
     return daysUntilExpiration <= 30
+  }
+
+  const getExpirationLabel = () => {
+    if (!policy.expirationDate) return 'Not specified'
+    const expirationDate = new Date(policy.expirationDate)
+    if (Number.isNaN(expirationDate.getTime())) return 'Not specified'
+    return expirationDate.toLocaleDateString()
   }
 
   return (
@@ -131,7 +139,7 @@ export function PolicyCard({ policy, onViewDetails, onCompare, isSelected }: Pol
           <div className="min-w-0 flex-1">
             <p className="text-sm text-gray-500 dark:text-gray-300">Expires</p>
             <p className="font-medium text-gray-900 dark:text-gray-100 break-words text-sm leading-tight">
-              {policy.expirationDate ? new Date(policy.expirationDate).toLocaleDateString() : 'Not specified'}
+              {getExpirationLabel()}
             </p>
           </div>
         </div>

@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/table"
 
 import { createApiUrlWithLogging } from "@/lib/url-utils"
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
 
 interface ActivityItem {
   id: string
@@ -51,11 +52,12 @@ export function RecentActivity() {
         let response;
         if (token) {
           const activitiesUrl = createApiUrlWithLogging("/activities");
-          response = await fetch(activitiesUrl, {
+          response = await fetchWithTimeout(activitiesUrl, {
             headers: {
               "Authorization": `Bearer ${token}`,
               "Content-Type": "application/json",
             },
+            timeoutMs: 12000,
           })
         }
         

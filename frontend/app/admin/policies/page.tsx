@@ -10,6 +10,8 @@ import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, Edit2, Save, X } from "lucide-react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
+import { useAuth } from "@/hooks/use-auth"
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
 
 import { createApiUrlWithLogging } from "@/lib/url-utils"
 
@@ -23,6 +25,7 @@ interface PolicyDebugInfo {
 }
 
 export default function PolicyManagerPage() {
+  const { isAdmin, loading: authLoading } = useAuth()
   const [policies, setPolicies] = useState<PolicyDebugInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -42,8 +45,13 @@ export default function PolicyManagerPage() {
   ]
 
   useEffect(() => {
-    fetchPolicies()
-  }, [])
+    if (!authLoading && isAdmin) {
+      fetchPolicies()
+    }
+    if (!authLoading && !isAdmin) {
+      setLoading(false)
+    }
+  }, [authLoading, isAdmin])
 
   const fetchPolicies = async () => {
     try {
@@ -56,10 +64,11 @@ export default function PolicyManagerPage() {
       }
 
       const debugUrl = createApiUrlWithLogging("/debug/policies");
-      const response = await fetch(debugUrl, {
+      const response = await fetchWithTimeout(debugUrl, {
         headers: {
           Authorization: `Bearer ${token}`
-        }
+        },
+        timeoutMs: 12000,
       })
 
       if (response.ok) {
@@ -81,11 +90,12 @@ export default function PolicyManagerPage() {
       if (!token) return
 
       const debugUrl = createApiUrlWithLogging(`/debug/update-policy-name/${policyId}?new_name=${encodeURIComponent(name)}`);
-      const response = await fetch(debugUrl, {
+      const response = await fetchWithTimeout(debugUrl, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`
-        }
+        },
+        timeoutMs: 12000,
       })
 
       if (response.ok) {
@@ -127,6 +137,26 @@ export default function PolicyManagerPage() {
           <Header />
           <div className="max-w-4xl mx-auto px-4 py-8">
             <div className="text-center">Loading policies...</div>
+          </div>
+        </div>
+      </ProtectedRoute>
+    )
+  }
+
+  if (!isAdmin) {
+    return (
+      <ProtectedRoute>
+        <div className="min-h-screen bg-gray-50">
+          <Header />
+          <div className="max-w-4xl mx-auto px-4 py-8">
+            <Card>
+              <CardContent className="text-center py-8">
+                <p className="text-gray-700">Admin access is required to view this page.</p>
+                <Button asChild className="mt-4">
+                  <Link href="/dashboard">Go to Dashboard</Link>
+                </Button>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </ProtectedRoute>

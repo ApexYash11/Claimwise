@@ -14,9 +14,67 @@ import tempfile
 import logging
 from supabase import create_client
 
-from src.models import UploadResponse, ChatRequest, ChatResponse, PolicyAnalysisResponse, ComparisonResponse, CompareRequest
-from typing import Union, Dict, List
+from src.models import UploadResponse, ChatRequest, MultiPolicyChatRequest, ChatResponse, PolicyAnalysisResponse, ComparisonResponse, CompareRequest
+from typing import Union, Dict, List, Any
 from fastapi import BackgroundTasks
+from src.document_validator import validate_insurance_document
+from src.rate_limiting import rate_limiter
+from src.monitoring import monitor, performance_middleware, get_health_status, start_monitoring
+
+
+APP_ENV = os.getenv("APP_ENV", os.getenv("ENVIRONMENT", "development")).lower()
+MAX_UPLOAD_SIZE_MB = int(os.getenv("MAX_UPLOAD_SIZE_MB", "10"))
+MAX_UPLOAD_BYTES = MAX_UPLOAD_SIZE_MB * 1024 * 1024
+ALLOWED_UPLOAD_EXTENSIONS = {"pdf"}
+ALLOWED_UPLOAD_MIME_TYPES = {"application/pdf"}
+ENABLE_DOCUMENT_VALIDATION = os.getenv("ENABLE_DOCUMENT_VALIDATION", "true").lower() == "true"
+SIGNED_URL_TTL_SECONDS = int(os.getenv("SIGNED_URL_TTL_SECONDS", "3600"))
+ALLOW_DEBUG_ROUTES = os.getenv("ALLOW_DEBUG_ROUTES", "false").lower() == "true"
+
+
+def _configured_admin_user_ids() -> set[str]:
+    raw_ids = os.getenv("CLAIMWISE_ADMIN_USER_IDS", "")
+    return {admin_id.strip() for admin_id in raw_ids.split(",") if admin_id.strip()}
+
+
+def _is_admin_user(user_id: str) -> bool:
+    if not user_id:
+        return False
+
+    if user_id in _configured_admin_user_ids():
+        return True
+
+    try:
+        role_row = supabase.table("users").select("role, is_admin").eq("id", user_id).limit(1).execute()
+        if role_row and getattr(role_row, "data", None):
+            row = role_row.data[0]
+            role = str(row.get("role", "")).strip().lower()
+            is_admin = bool(row.get("is_admin", False))
+            return is_admin or role == "admin"
+    except Exception:
+        logging.debug("Admin check via users table unavailable; using env allowlist only")
+
+    return False
+
+
+def _require_admin_user(user_id: str) -> None:
+    if not _is_admin_user(user_id):
+        raise HTTPException(status_code=403, detail="Admin access required.")
+
+
+def _enforce_user_rate_limit(limit_name: str, user_id: str, endpoint: str) -> None:
+    result = rate_limiter.check_rate_limit(limit_name=limit_name, identifier=user_id, endpoint=endpoint)
+    if not result.allowed:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Rate limit exceeded. Retry after {result.retry_after or 1} seconds.",
+            headers=result.to_headers(),
+        )
+
+
+def _require_debug_routes_enabled() -> None:
+    if APP_ENV == "production" and not ALLOW_DEBUG_ROUTES:
+        raise HTTPException(status_code=404, detail="Not found")
 
 
 def log_activity(user_id: str, activity_type: str, title: str, description: str, details: Union[Dict, None] = None):
@@ -75,6 +133,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.middleware("http")(performance_middleware())
+
+
+@app.on_event("startup")
+async def startup_monitoring() -> None:
+    start_monitoring()
+
 @app.get("/")
 def root():
     return {"message": "ClaimWise Backend"}
@@ -84,6 +149,24 @@ def root():
 def healthz():
     """Simple health endpoint for load balancers and platform health checks."""
     return {"status": "ok"}
+
+
+@app.get("/monitoring/summary")
+def monitoring_summary(user_id: str = Depends(get_current_user)):
+    _require_admin_user(user_id)
+    return monitor.get_performance_summary()
+
+
+@app.get("/monitoring/endpoints")
+def monitoring_endpoints(user_id: str = Depends(get_current_user)):
+    _require_admin_user(user_id)
+    return monitor.get_endpoint_stats()
+
+
+@app.get("/monitoring/health")
+async def monitoring_health(user_id: str = Depends(get_current_user)):
+    _require_admin_user(user_id)
+    return await get_health_status()
 
 @app.post("/upload-policy", response_model=UploadResponse)
 async def upload_policy(
@@ -112,6 +195,8 @@ async def upload_policy(
     if file:
         logging.debug("file.filename=%s, file.content_type=%s", file.filename, file.content_type)
     try:
+        _enforce_user_rate_limit("upload", user_id, "/upload-policy")
+
         if file and text_input:
             raise HTTPException(status_code=400, detail="Provide either a file or text, not both.")
         elif not file and not text_input:
@@ -120,12 +205,27 @@ async def upload_policy(
         extracted_text = None
         file_bytes = None
         if file:
+            if not file.filename:
+                raise HTTPException(status_code=400, detail="File must have a valid filename")
+
+            file_type = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ""
+            if file_type not in ALLOWED_UPLOAD_EXTENSIONS:
+                raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+
+            content_type = (file.content_type or "").lower()
+            if content_type and content_type not in ALLOWED_UPLOAD_MIME_TYPES:
+                raise HTTPException(status_code=400, detail="Unsupported file content type.")
+
+            declared_size = file.headers.get("content-length") if file.headers else None
+            if declared_size and declared_size.isdigit() and int(declared_size) > MAX_UPLOAD_BYTES:
+                raise HTTPException(status_code=413, detail=f"File is too large. Max allowed size is {MAX_UPLOAD_SIZE_MB}MB.")
+
             logging.debug("Reading file bytes...")
             file_bytes = await file.read()
             logging.debug("Read %d bytes from file", len(file_bytes))
-            if not file.filename:
-                raise HTTPException(status_code=400, detail="File must have a valid filename")
-            file_type = file.filename.split('.')[-1].lower()
+            if len(file_bytes) > MAX_UPLOAD_BYTES:
+                raise HTTPException(status_code=413, detail=f"File is too large. Max allowed size is {MAX_UPLOAD_SIZE_MB}MB.")
+
             logging.debug("Processing %s file via Gemini Files API...", file_type)
 
             # Save to a temporary file so the Gemini SDK can upload it
@@ -160,6 +260,15 @@ async def upload_policy(
         else:
             extracted_text = text_input
 
+        if ENABLE_DOCUMENT_VALIDATION and extracted_text:
+            source_name = (file.filename if file and file.filename else "text_input")
+            validation_report = validate_insurance_document(extracted_text, source_name)
+            if not validation_report.is_valid:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Uploaded content does not appear to be a valid insurance policy document.",
+                )
+
         # Upload to Supabase storage (if we have a file)
         logging.debug("Uploading to Supabase storage...")
         file_url = None
@@ -169,8 +278,8 @@ async def upload_policy(
                 # Try to upload, if duplicate exists, generate unique name
                 try:
                     supabase_storage.storage.from_(STORAGE_BUCKET).upload(storage_path, file_bytes)
-                    file_url = supabase_storage.storage.from_(STORAGE_BUCKET).get_public_url(storage_path)
-                    logging.debug("File uploaded to: %s", file_url)
+                    file_url = storage_path
+                    logging.debug("File uploaded to private storage path: %s", storage_path)
                 except Exception as upload_error:
                     error_str = str(upload_error)
                     if "Duplicate" in error_str or "already exists" in error_str:
@@ -189,15 +298,20 @@ async def upload_policy(
                         storage_path = f"policies/{user_id}/{unique_filename}"
                         logging.debug("File exists, trying with unique name: %s", unique_filename)
                         supabase_storage.storage.from_(STORAGE_BUCKET).upload(storage_path, file_bytes)
-                        file_url = supabase_storage.storage.from_(STORAGE_BUCKET).get_public_url(storage_path)
-                        logging.debug("File uploaded with unique name to: %s", file_url)
+                        file_url = storage_path
+                        logging.debug("File uploaded with unique name to private path: %s", storage_path)
                     else:
                         raise upload_error
             except Exception as storage_error:
                 logging.exception("Storage Error: %s", storage_error)
-                raise HTTPException(status_code=500, detail=f"File storage failed: {str(storage_error)}")
+                raise HTTPException(status_code=500, detail="File storage failed.")
 
         logging.debug("Saving to database...")
+        if policy_name:
+            duplicate_check = supabase.table("policies").select("id").eq("user_id", user_id).eq("policy_name", policy_name).limit(1).execute()
+            if duplicate_check and getattr(duplicate_check, "data", None):
+                raise HTTPException(status_code=409, detail=f"A policy named '{policy_name}' already exists.")
+
         data = {
             "user_id": user_id,
             "policy_name": policy_name,
@@ -294,7 +408,7 @@ async def upload_policy(
         raise
     except Exception as e:
         logging.exception("Unexpected Error while processing upload_policy: %s", e)
-        raise HTTPException(status_code=500, detail=f"Error processing input: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error processing input.")
 
 from fastapi import Form
 
@@ -302,6 +416,8 @@ from fastapi import Form
 def debug_user_policies(user_id: str = Depends(get_current_user)):
     """Debug endpoint to check user's policies"""
     try:
+        _require_debug_routes_enabled()
+        _require_admin_user(user_id)
         policies = supabase.table("policies").select("id", "policy_name", "user_id", "created_at").eq("user_id", user_id).execute().data
         return {
             "user_id": user_id,
@@ -309,7 +425,8 @@ def debug_user_policies(user_id: str = Depends(get_current_user)):
             "policies": policies[:5]  # Show first 5
         }
     except Exception as e:
-        return {"error": str(e)}
+        logging.exception("debug_user_policies failed: %s", e)
+        raise HTTPException(status_code=500, detail="Debug endpoint failed.")
 
 @app.post("/analyze-policy")
 def analyze(policy_id: str = Form(...), user_id: str = Depends(get_current_user)):
@@ -324,6 +441,7 @@ def analyze(policy_id: str = Form(...), user_id: str = Depends(get_current_user)
         dict: LLM analysis result.
     """
     try:
+        _enforce_user_rate_limit("analysis", user_id, "/analyze-policy")
         result = supabase.table("policies").select("extracted_text", "policy_number", "policy_name").eq("id", policy_id).eq("user_id", user_id).execute()
         if not result.data:
             raise HTTPException(status_code=404, detail="Policy not found for this user.")
@@ -371,7 +489,8 @@ def analyze(policy_id: str = Form(...), user_id: str = Depends(get_current_user)
     except IndexError:
         raise HTTPException(status_code=404, detail="Policy not found for this user.")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error analyzing policy: {str(e)}")
+        logging.exception("Analyze policy failed: %s", e)
+        raise HTTPException(status_code=500, detail="Error analyzing policy.")
 
 @app.delete("/policies/{policy_id}")
 def delete_policy(
@@ -425,7 +544,7 @@ def delete_policy(
         raise
     except Exception as e:
         logging.exception(f"Error deleting policy: {e}")
-        raise HTTPException(status_code=500, detail=f"Error deleting policy: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error deleting policy.")
 
 @app.post("/compare-policies")
 def compare(request: CompareRequest, user_id: str = Depends(get_current_user)):
@@ -441,6 +560,7 @@ def compare(request: CompareRequest, user_id: str = Depends(get_current_user)):
         dict: Comparison result.
     """
     try:
+        _enforce_user_rate_limit("analysis", user_id, "/compare-policies")
         policy_ids = request.policy_ids
         logging.debug(f"Starting comparison for user {user_id}, policies: {policy_ids}")
 
@@ -504,7 +624,7 @@ def compare(request: CompareRequest, user_id: str = Depends(get_current_user)):
         raise
     except Exception as e:
         logging.exception("Error in compare-policies: %s", str(e))
-        raise HTTPException(status_code=500, detail=f"Error comparing policies: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error comparing policies.")
 
 @app.get("/policies")
 def get_user_policies(user_id: str = Depends(get_current_user)):
@@ -535,7 +655,7 @@ def get_user_policies(user_id: str = Depends(get_current_user)):
         
     except Exception as e:
         logging.exception(f"Error fetching policies for user {user_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Error fetching policies: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error fetching policies.")
 
 @app.get("/debug/gemini-config")
 def debug_gemini_config(user_id: str = Depends(get_current_user)):
@@ -543,6 +663,8 @@ def debug_gemini_config(user_id: str = Depends(get_current_user)):
     Check Gemini API configuration and model access.
     """
     try:
+        _require_debug_routes_enabled()
+        _require_admin_user(user_id)
         from src.llm import make_llm_request
         import os
         
@@ -571,11 +693,12 @@ def debug_gemini_config(user_id: str = Depends(get_current_user)):
         }
         
     except Exception as e:
+        logging.exception("debug_gemini_config failed: %s", e)
         error_str = str(e)
         
         return {
             "status": "error",
-            "error": error_str,
+            "error": "Gemini API diagnostic check failed",
             "is_quota_error": "429" in error_str or "quota" in error_str.lower(),
             "is_auth_error": "401" in error_str or "unauthorized" in error_str.lower(),
             "is_model_error": "model" in error_str.lower(),
@@ -593,12 +716,15 @@ def debug_api_status(user_id: str = Depends(get_current_user)):
     Check API status for both Groq and Gemini.
     """
     try:
+        _require_debug_routes_enabled()
+        _require_admin_user(user_id)
         from src.llm_groq import get_api_status
         return get_api_status()
     except Exception as e:
+        logging.exception("debug_api_status failed: %s", e)
         return {
             "status": "error",
-            "error": str(e),
+            "error": "Failed to check API status",
             "message": "Failed to check API status"
         }
 
@@ -608,6 +734,8 @@ def debug_list_policies(user_id: str = Depends(get_current_user)):
     List all policies with their current names for debugging.
     """
     try:
+        _require_debug_routes_enabled()
+        _require_admin_user(user_id)
         policies = supabase.table("policies").select("id, policy_name, policy_number, created_at, extracted_text").eq("user_id", user_id).execute().data
         
         return {
@@ -626,7 +754,8 @@ def debug_list_policies(user_id: str = Depends(get_current_user)):
         }
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching policies: {str(e)}")
+        logging.exception("debug_list_policies failed: %s", e)
+        raise HTTPException(status_code=500, detail="Error fetching policies.")
 
 @app.post("/debug/update-policy-name/{policy_id}")
 def debug_update_policy_name(policy_id: str, new_name: str, user_id: str = Depends(get_current_user)):
@@ -634,6 +763,8 @@ def debug_update_policy_name(policy_id: str, new_name: str, user_id: str = Depen
     Update a specific policy name for debugging.
     """
     try:
+        _require_debug_routes_enabled()
+        _require_admin_user(user_id)
         # Verify the policy belongs to the user
         result = supabase.table("policies").select("id, policy_name").eq("id", policy_id).eq("user_id", user_id).execute()
         
@@ -655,7 +786,8 @@ def debug_update_policy_name(policy_id: str, new_name: str, user_id: str = Depen
         }
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error updating policy name: {str(e)}")
+        logging.exception("debug_update_policy_name failed: %s", e)
+        raise HTTPException(status_code=500, detail="Error updating policy name.")
 
 @app.get("/debug/policy-content/{policy_id}")
 def debug_policy_content(policy_id: str, user_id: str = Depends(get_current_user)):
@@ -663,6 +795,8 @@ def debug_policy_content(policy_id: str, user_id: str = Depends(get_current_user
     Debug endpoint to check policy content for chat troubleshooting.
     """
     try:
+        _require_debug_routes_enabled()
+        _require_admin_user(user_id)
         result = supabase.table("policies").select("*").eq("id", policy_id).eq("user_id", user_id).execute()
         if not result.data:
             raise HTTPException(status_code=404, detail="Policy not found")
@@ -695,7 +829,8 @@ def debug_policy_content(policy_id: str, user_id: str = Depends(get_current_user
     except IndexError:
         raise HTTPException(status_code=404, detail="Policy not found")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Debug error: {str(e)}")
+        logging.exception("debug_policy_content failed: %s", e)
+        raise HTTPException(status_code=500, detail="Debug endpoint failed.")
 
 @app.post("/chat", response_model=ChatResponse)
 def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
@@ -711,6 +846,7 @@ def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
         dict: Chat response.
     """
     try:
+        _enforce_user_rate_limit("chat", user_id, "/chat")
         policy_id = request.policy_id
         question = request.question
         
@@ -801,10 +937,10 @@ def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Policy not found for this user.")
     except Exception as e:
         logging.exception("Chat error for policy %s: %s", getattr(request, 'policy_id', 'unknown'), str(e))
-        raise HTTPException(status_code=500, detail=f"Error processing chat: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error processing chat.")
 
 @app.post("/chat-multiple", response_model=ChatResponse)
-def chat_multiple_policies(question: str, user_id: str = Depends(get_current_user)):
+def chat_multiple_policies(request: MultiPolicyChatRequest, user_id: str = Depends(get_current_user)):
     """
     Answer a question based on all user's policies.
     
@@ -816,6 +952,8 @@ def chat_multiple_policies(question: str, user_id: str = Depends(get_current_use
         dict: Chat response from multiple policies.
     """
     try:
+        _enforce_user_rate_limit("chat", user_id, "/chat-multiple")
+        question = request.question
         # Get all policies for the user
         policies = supabase.table("policies").select("id", "extracted_text", "policy_number").eq("user_id", user_id).execute().data
         
@@ -868,10 +1006,15 @@ def chat_multiple_policies(question: str, user_id: str = Depends(get_current_use
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing multi-policy chat: {str(e)}")
+        logging.exception("chat_multiple_policies failed: %s", e)
+        raise HTTPException(status_code=500, detail="Error processing multi-policy chat.")
 
 @app.get("/history")
-def get_comprehensive_history(user_id: str = Depends(get_current_user)):
+def get_comprehensive_history(
+    page: int = 1,
+    page_size: int = 50,
+    user_id: str = Depends(get_current_user),
+):
     """
     Retrieve comprehensive activity history including uploads, analyses, chats, and comparisons.
     
@@ -882,6 +1025,10 @@ def get_comprehensive_history(user_id: str = Depends(get_current_user)):
         dict: Comprehensive activity history with detailed metadata.
     """
     try:
+        _enforce_user_rate_limit("user_general", user_id, "/history")
+        page = max(1, page)
+        page_size = max(1, min(page_size, 100))
+        offset = (page - 1) * page_size
         logging.debug("Fetching history for user_id: %s", user_id)
 
         # Get policy uploads
@@ -898,7 +1045,7 @@ def get_comprehensive_history(user_id: str = Depends(get_current_user)):
         try:
             chat_logs = supabase.table("chat_logs").select(
                 "id", "policy_id", "question", "answer", "created_at", "chat_type"
-            ).eq("user_id", user_id).order("created_at", desc=True).execute().data
+            ).eq("user_id", user_id).order("created_at", desc=True).range(offset, offset + page_size - 1).execute().data
             logging.debug("Found %d chat logs", len(chat_logs) if chat_logs else 0)
         except Exception as e:
             logging.exception("Error fetching chat logs: %s", e)
@@ -942,7 +1089,7 @@ def get_comprehensive_history(user_id: str = Depends(get_current_user)):
                 "id": f"chat_{chat['id']}",
                 "type": "chat",
                 "title": f"{title_suffix}: {chat['question'][:50]}{'...' if len(chat['question']) > 50 else ''}",
-                "description": f"Asked about: {chat['question']}",
+                "description": f"Asked about: {chat['question'][:120]}{'...' if len(chat['question']) > 120 else ''}",
                 "timestamp": chat['created_at'],
                 "status": "completed",
                 "details": {
@@ -994,10 +1141,13 @@ def get_comprehensive_history(user_id: str = Depends(get_current_user)):
         # Merge and sort all activities
         all_activities = activities + analysis_activities
         all_activities.sort(key=lambda x: x['timestamp'], reverse=True)
+
+        total_activities = len(all_activities)
+        paginated_activities = all_activities[offset:offset + page_size]
         
         # Calculate summary statistics
         stats = {
-            "totalActivities": len(all_activities),
+            "totalActivities": total_activities,
             "uploads": len([a for a in all_activities if a['type'] == 'upload']),
             "analyses": len([a for a in all_activities if a['type'] == 'analysis']),
             "chats": len([a for a in all_activities if a['type'] == 'chat']),
@@ -1005,19 +1155,69 @@ def get_comprehensive_history(user_id: str = Depends(get_current_user)):
             "totalPolicies": len(policies)
         }
 
-        logging.debug("Returning %d activities with stats: %s", len(all_activities), stats)
+        has_more_activities = offset + page_size < total_activities
+        has_more_chat_logs = len(chat_logs) >= page_size
+
+        logging.debug("Returning %d paginated activities with stats: %s", len(paginated_activities), stats)
 
         return {
-            "activities": all_activities,
+            "activities": paginated_activities,
             "stats": stats,
             "policies": policies,
+            "chat_logs": chat_logs,
+            "pagination": {
+                "page": page,
+                "page_size": page_size,
+                "has_more_activities": has_more_activities,
+                "has_more_chat_logs": has_more_chat_logs,
+                "next_page": page + 1 if (has_more_activities or has_more_chat_logs) else None,
+                "total_activities": total_activities,
+                "total_chat_logs": None,
+            },
             "success": True
         }
     except Exception as e:
         logging.exception("Exception in get_comprehensive_history: %s", str(e))
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Error fetching comprehensive history: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error fetching comprehensive history.")
+
+
+@app.get("/policies/{policy_id}/file-url")
+def get_policy_file_url(policy_id: str, user_id: str = Depends(get_current_user)):
+    """Return a short-lived signed URL for a policy document stored in private bucket."""
+    try:
+        _enforce_user_rate_limit("user_general", user_id, "/policies/file-url")
+
+        policy_res = supabase.table("policies").select("uploaded_file_url").eq("id", policy_id).eq("user_id", user_id).limit(1).execute()
+        if not policy_res or not getattr(policy_res, "data", None):
+            raise HTTPException(status_code=404, detail="Policy not found.")
+
+        file_path = policy_res.data[0].get("uploaded_file_url")
+        if not file_path:
+            raise HTTPException(status_code=404, detail="No file available for this policy.")
+
+        signed_result: Any = supabase_storage.storage.from_(STORAGE_BUCKET).create_signed_url(file_path, SIGNED_URL_TTL_SECONDS)
+
+        signed_url = None
+        if isinstance(signed_result, dict):
+            signed_url = signed_result.get("signedURL") or signed_result.get("signedUrl")
+        elif hasattr(signed_result, "get"):
+            signed_url = signed_result.get("signedURL") or signed_result.get("signedUrl")
+
+        if not signed_url:
+            raise HTTPException(status_code=500, detail="Could not create signed URL.")
+
+        return {
+            "policy_id": policy_id,
+            "signed_url": signed_url,
+            "expires_in": SIGNED_URL_TTL_SECONDS,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.exception("get_policy_file_url failed: %s", e)
+        raise HTTPException(status_code=500, detail="Error generating file URL.")
 
 @app.get("/activities")
 def get_activities(user_id: str = Depends(get_current_user)):
@@ -1167,7 +1367,7 @@ def dashboard_stats(user_id: str = Depends(get_current_user)):
         }
     except Exception as e:
         logging.exception("Exception in dashboard_stats: %s", str(e))
-        raise HTTPException(status_code=500, detail=f"Error fetching dashboard stats: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error fetching dashboard stats.")
 
 
 @app.get("/dashboard/stats-dev")
@@ -1177,6 +1377,8 @@ def dashboard_stats_dev(user_id: str = Depends(get_current_user)):
     Returns sample aggregated counts or attempts to compute global counts.
     """
     try:
+        _require_debug_routes_enabled()
+        _require_admin_user(user_id)
         uploaded_count = 0
         documents_processed = 0
         analyses_completed = 0
@@ -1329,16 +1531,18 @@ def dashboard_metrics(user_id: str = Depends(get_current_user)):
         }
     except Exception as e:
         logging.exception("Exception in dashboard_metrics: %s", str(e))
-        raise HTTPException(status_code=500, detail=f"Error fetching dashboard metrics: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error fetching dashboard metrics.")
 
 
 @app.get("/dashboard/metrics-dev")
-def dashboard_metrics_dev():
+def dashboard_metrics_dev(user_id: str = Depends(get_current_user)):
     """
-    Development-only unauthenticated dashboard metrics endpoint.
-    Returns sample data for frontend testing without auth.
+    Development-only authenticated dashboard metrics endpoint.
+    Returns sample metrics for admin debugging.
     """
     try:
+        _require_debug_routes_enabled()
+        _require_admin_user(user_id)
         # Fetch all policies regardless of user for dev purposes
         policies_res = supabase.table("policies").select("*").execute()
         policies = policies_res.data if policies_res and policies_res.data else []
@@ -1407,6 +1611,8 @@ def create_test_comparison(user_id: str = Depends(get_current_user)):
     Create a test comparison record for testing dashboard stats.
     """
     try:
+        _require_debug_routes_enabled()
+        _require_admin_user(user_id)
         # Get user's policies to use in comparison
         policies = supabase.table("policies").select("id").eq("user_id", user_id).limit(2).execute().data
         if len(policies) >= 2:
@@ -1433,7 +1639,7 @@ def create_test_comparison(user_id: str = Depends(get_current_user)):
         logging.exception("Error creating test comparison: %s", e)
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Error creating test comparison: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error creating test comparison.")
 
 
 @app.get("/test-comparisons-table")
@@ -1442,6 +1648,8 @@ def test_comparisons_table(user_id: str = Depends(get_current_user)):
     Test endpoint to check if comparisons table exists and what data is in it.
     """
     try:
+        _require_debug_routes_enabled()
+        _require_admin_user(user_id)
         # Try to read from comparisons table
         result = supabase.table("comparisons").select("*").limit(10).execute()
         logging.debug("Comparisons table query result: %s", result)
@@ -1457,7 +1665,7 @@ def test_comparisons_table(user_id: str = Depends(get_current_user)):
         traceback.print_exc()
         return {
             "success": False,
-            "error": str(e),
+            "error": "Query failed",
             "message": "Comparisons table might not exist or has permission issues"
         }
 
@@ -1473,11 +1681,13 @@ def history(user_id: str = Depends(get_current_user)):
         dict: List of policies and comparisons.
     """
     try:
+        _require_debug_routes_enabled()
         policies = supabase.table("policies").select("id", "policy_name", "policy_number", "created_at").eq("user_id", user_id).execute().data
         comparisons = supabase.table("comparisons").select("id", "policy_1_id", "policy_2_id", "created_at", "comparison_result").eq("user_id", user_id).execute().data
         return {"policies": policies, "comparisons": comparisons}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching history: {str(e)}")
+        logging.exception("history_legacy failed: %s", e)
+        raise HTTPException(status_code=500, detail="Error fetching history.")
 
 @app.post("/refresh-token")
 async def refresh(token: str = Form(...)):

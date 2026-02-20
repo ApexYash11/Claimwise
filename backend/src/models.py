@@ -12,6 +12,9 @@ class ChatRequest(BaseModel):
     policy_id: str
     question: str = Field(..., min_length=1, max_length=1000)
 
+class MultiPolicyChatRequest(BaseModel):
+    question: str = Field(..., min_length=1, max_length=1000)
+
 class ChatResponse(BaseModel):
     answer: str
     citations: List[Dict[str, Any]]  # [{"id": int, "excerpt": str, "score": float}]

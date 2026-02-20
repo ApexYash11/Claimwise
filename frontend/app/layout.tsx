@@ -6,6 +6,7 @@ import "./globals.css"
 import { AuthProvider } from "@/hooks/use-auth"
 import { ThemeProvider } from "@/components/theme-provider"
 import { TooltipProvider } from "@/components/ui/tooltip"
+import { ErrorBoundary } from "@/components/error-boundary"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -37,7 +38,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="font-sans bg-slate-50 dark:bg-slate-950">
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
           <TooltipProvider>
-            <AuthProvider>{children}</AuthProvider>
+            <ErrorBoundary>
+              <AuthProvider>{children}</AuthProvider>
+            </ErrorBoundary>
           </TooltipProvider>
         </ThemeProvider>
       </body>

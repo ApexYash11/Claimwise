@@ -9,11 +9,15 @@ import { supabase } from "@/lib/supabase"
 interface AuthContextType {
   user: User | null
   loading: boolean
+  isAdmin: boolean
+  userRole: string | null
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
+  isAdmin: false,
+  userRole: null,
 })
 
 export const useAuth = () => {
@@ -27,6 +31,30 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [userRole, setUserRole] = useState<string | null>(null)
+
+  const resolveUserRole = async (user: User): Promise<{ role: string | null; isAdmin: boolean }> => {
+    try {
+      const metadataRole = String(user.user_metadata?.role || "").toLowerCase()
+      const metadataAdmin = Boolean(user.user_metadata?.is_admin)
+      if (metadataAdmin || metadataRole === "admin") {
+        return { role: metadataRole || "admin", isAdmin: true }
+      }
+
+      const { data: userRow } = await supabase
+        .from("users")
+        .select("role, is_admin")
+        .eq("id", user.id)
+        .single()
+
+      const dbRole = String(userRow?.role || "").toLowerCase() || null
+      const dbAdmin = Boolean(userRow?.is_admin)
+      return { role: dbRole, isAdmin: dbAdmin || dbRole === "admin" }
+    } catch {
+      return { role: null, isAdmin: false }
+    }
+  }
 
   useEffect(() => {
     // Skip auth initialization if we're in a build environment
@@ -47,6 +75,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         if (isMounted) {
           console.log("[AuthProvider] Initial session:", session ? `User: ${session.user.email}` : "No session")
           setUser(session?.user ?? null)
+          if (session?.user) {
+            const roleInfo = await resolveUserRole(session.user)
+            if (isMounted) {
+              setUserRole(roleInfo.role)
+              setIsAdmin(roleInfo.isAdmin)
+            }
+          } else {
+            setUserRole(null)
+            setIsAdmin(false)
+          }
         }
       } catch (error) {
         // Ignore AbortError during cleanup
@@ -57,6 +95,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         if (isMounted) {
           console.warn("[AuthProvider] Failed to get session:", error)
           setUser(null)
+          setUserRole(null)
+          setIsAdmin(false)
         }
       } finally {
         if (isMounted) {
@@ -76,6 +116,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       console.log("[AuthProvider] Auth state change:", event, "User:", session?.user?.email ?? "None")
       setUser(session?.user ?? null)
       setLoading(false)
+
+      if (session?.user) {
+        const roleInfo = await resolveUserRole(session.user)
+        if (isMounted) {
+          setUserRole(roleInfo.role)
+          setIsAdmin(roleInfo.isAdmin)
+        }
+      } else {
+        setUserRole(null)
+        setIsAdmin(false)
+      }
 
       // Auto-sync user to database after OAuth or email signup
       if ((event === "SIGNED_IN" || event === "USER_UPDATED") && session?.user) {
@@ -116,5 +167,5 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   }, [])
 
-  return <AuthContext.Provider value={{ user, loading }}>{children}</AuthContext.Provider>
+  return <AuthContext.Provider value={{ user, loading, isAdmin, userRole }}>{children}</AuthContext.Provider>
 }

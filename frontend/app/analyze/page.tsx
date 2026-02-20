@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils"
 // Dynamic policy data from backend/AI
 import { supabase } from "@/lib/supabase"
 import { createApiUrlWithLogging } from "@/lib/url-utils"
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
 
 // Generate clean insights from policy data
 const generateInsights = (policies: PolicySummary[]) => {
@@ -188,141 +189,50 @@ export default function AnalyzePage() {
           localStorage.removeItem("claimwise_uploaded_policy_infos")
         }
 
-        // Fetch all policies for this user directly from database
-        const { data: policiesData, error: fetchError } = await supabase
-          .from('policies')
-          .select('id, policy_name, extracted_text, created_at, policy_number')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
+        const policiesUrl = createApiUrlWithLogging("/policies")
+        const policiesResponse = await fetchWithTimeout(policiesUrl, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          timeoutMs: 12000,
+        })
 
-        if (fetchError) {
-          console.error('Database error:', fetchError)
-          setError("Could not load policies from database.")
+        if (!policiesResponse.ok) {
+          setError("Could not load policies from server.")
           setLoading(false)
           return
         }
 
-        if (!policiesData || policiesData.length === 0) {
+        const payload = await policiesResponse.json()
+        const backendPolicies = Array.isArray(payload?.policies) ? payload.policies : []
+
+        if (backendPolicies.length === 0) {
           setError("No policies found. Please upload some policies first.")
           setLoading(false)
           return
         }
 
-        // Remove duplicates using multiple criteria (policy_name, policy_number, and content similarity)
-        const uniquePolicies = []
-        const seenKeys = new Set()
-        
-        for (const policy of policiesData) {
-          // Create multiple keys to check for duplicates
-          const nameKey = policy.policy_name?.toLowerCase().trim()
-          const numberKey = policy.policy_number?.trim()
-          const contentStart = policy.extracted_text?.substring(0, 100)?.toLowerCase().trim()
-          
-          // Create a composite key
-          const compositeKey = `${nameKey}_${numberKey || 'no-number'}_${contentStart?.substring(0, 50) || 'no-content'}`
-          
-          if (!seenKeys.has(compositeKey)) {
-            seenKeys.add(compositeKey)
-            uniquePolicies.push(policy)
-          } else {
-            console.log('Skipping duplicate policy:', policy.policy_name, policy.policy_number)
-          }
-        }
-        
-        console.log(`Filtered ${policiesData.length} policies down to ${uniquePolicies.length} unique policies`)
+        const mappedPolicies: PolicySummary[] = backendPolicies.map((policyData: any) => {
+          const analysis = policyData?.validation_metadata?.analysis_result || {}
+          const fileName = policyData.policy_name || (policyData.policy_number ? `Policy ${policyData.policy_number}` : `Policy ${String(policyData.id).slice(0, 8)}`)
 
-        // Update localStorage with current policies
-        const policyIds = uniquePolicies.map(p => p.id)
-        localStorage.setItem("claimwise_uploaded_policy_ids", JSON.stringify(policyIds))
-
-        // Analyze all unique policies in parallel
-        const analysisPromises = uniquePolicies.map(async (policyData) => {
-          try {
-            const formData = new FormData();
-            formData.append("policy_id", policyData.id);
-            const analyzeUrl = createApiUrlWithLogging("/analyze-policy");
-            const response = await fetch(analyzeUrl, {
-              method: "POST",
-              headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-              body: formData,
-            })
-            
-            if (!response.ok) {
-              console.error(`Failed to analyze policy ${policyData.id}: ${response.status}`)
-              // Create basic policy info if analysis fails - prioritize database name
-              const displayName = policyData.policy_name || `Policy ${policyData.id.slice(0, 8)}`
-              return {
-                id: policyData.id,
-                fileName: displayName,
-                policyType: "Insurance",
-                provider: "Analysis unavailable",
-                coverageAmount: "Analysis unavailable",
-                premium: "Analysis unavailable", 
-                deductible: "Analysis unavailable",
-                keyFeatures: ["Analysis failed - basic info only"],
-                expirationDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-                rawAnalysis: undefined
-              }
-            }
-            
-            const data = await response.json()
-            if (data && data.analysis) {
-              // Prioritize database policy name over LLM analysis
-              const displayName = policyData.policy_name && policyData.policy_name !== "Test Policy" 
-                ? policyData.policy_name
-                : data.analysis.policy_number && data.analysis.policy_number !== "Not specified"
-                  ? `Policy ${data.analysis.policy_number}`
-                  : policyData.policy_name || `Policy ${policyData.id.slice(0, 8)}`
-              
-              return {
-                id: policyData.id,
-                fileName: displayName,
-                policyType: data.analysis.policy_type || "Insurance",
-                provider: data.analysis.provider || "Unknown Provider",
-                coverageAmount: data.analysis.coverage_amount || "Not specified",
-                premium: data.analysis.premium || "Not specified",
-                deductible: data.analysis.deductible || "Not specified",
-                keyFeatures: data.analysis.key_features || [data.analysis.coverage || "Basic coverage"],
-                expirationDate: data.analysis.expiration_date || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-                rawAnalysis: data.analysis
-              }
-            } else {
-              // Fallback if no analysis data - prioritize database name
-              const displayName = policyData.policy_name || `Policy ${policyData.id.slice(0, 8)}`
-              return {
-                id: policyData.id,
-                fileName: displayName,
-                policyType: "Insurance",
-                provider: "Unknown Provider",
-                coverageAmount: "Not specified",
-                premium: "Not specified",
-                deductible: "Not specified", 
-                keyFeatures: ["Basic policy information"],
-                expirationDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-                rawAnalysis: undefined
-              }
-            }
-          } catch (e) {
-            console.error(`Error analyzing policy ${policyData.id}:`, e)
-            // Handle errors - prioritize database name
-            const displayName = policyData.policy_name || `Policy ${policyData.id.slice(0, 8)}`
-            return {
-              id: policyData.id,
-              fileName: displayName,
-              policyType: "Insurance", 
-              provider: "Analysis error",
-              coverageAmount: "Analysis error",
-              premium: "Analysis error",
-              deductible: "Analysis error",
-              keyFeatures: ["Analysis failed"],
-              expirationDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-              rawAnalysis: undefined
-            }
+          return {
+            id: policyData.id,
+            fileName,
+            policyType: analysis.policy_type || policyData.policy_type || "Insurance",
+            provider: analysis.provider || policyData.provider || "Unknown Provider",
+            coverageAmount: analysis.coverage_amount || "Not specified",
+            premium: analysis.premium || "Not specified",
+            deductible: analysis.deductible || "Not specified",
+            keyFeatures: Array.isArray(analysis.key_features) ? analysis.key_features : [analysis.coverage || "Basic coverage"],
+            expirationDate: analysis.expiration_date || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+            rawAnalysis: analysis,
           }
         })
 
-        // Wait for all analyses to complete
-        const allPolicies = await Promise.all(analysisPromises)
+        // Update localStorage with current policies
+        const policyIds = mappedPolicies.map(p => p.id)
+        localStorage.setItem("claimwise_uploaded_policy_ids", JSON.stringify(policyIds))
+
+        const allPolicies = mappedPolicies
         
         // Final deduplication pass after analysis - remove any remaining duplicates
         const finalUniquePolicies = []
@@ -373,6 +283,7 @@ export default function AnalyzePage() {
 
 
   const handleCompareToggle = (policyId: string) => {
+    if (!policyId) return
     setSelectedPolicies((prev) =>
       prev.includes(policyId) ? prev.filter((id) => id !== policyId) : [...prev, policyId],
     )
@@ -514,9 +425,10 @@ export default function AnalyzePage() {
       const deleteUrl = createApiUrlWithLogging(`/policies/${policyId}`)
       console.log(`Attempting to delete policy: ${policyId} at ${deleteUrl}`)
       
-      const response = await fetch(deleteUrl, {
+      const response = await fetchWithTimeout(deleteUrl, {
         method: "DELETE",
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        timeoutMs: 12000,
       })
 
       if (!response.ok) {
