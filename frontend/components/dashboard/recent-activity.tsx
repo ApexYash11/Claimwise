@@ -1,7 +1,6 @@
 "use client"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { FileText, MessageSquare, BarChart3, Upload, Clock, ArrowRight } from "lucide-react"
 import { useEffect, useState } from "react"
@@ -25,7 +24,7 @@ interface ActivityItem {
   description: string
   timestamp: string
   status?: "completed" | "processing" | "failed"
-  details?: any
+  details?: Record<string, unknown>
 }
 
 export function RecentActivity() {
@@ -71,7 +70,7 @@ export function RecentActivity() {
         } else {
           setActivities([])
         }
-      } catch (error) {
+      } catch {
         setActivities([])
       } finally {
         setLoading(false)

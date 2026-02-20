@@ -1,9 +1,9 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import dynamic from "next/dynamic"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { Header } from "@/components/layout/header"
-import { InsightsPanel } from "@/components/analysis/insights-panel"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -17,152 +17,25 @@ import { ArrowLeft, BarChart3, FileText, MessageSquare, CheckCircle, Shield, Ale
 import Link from "next/link"
 import type { PolicySummary } from "@/lib/api"
 import { cn } from "@/lib/utils"
+import type { BackendPolicyRecord } from "@/types/policies"
 
 // Dynamic policy data from backend/AI
 import { supabase } from "@/lib/supabase"
 import { createApiUrlWithLogging } from "@/lib/url-utils"
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
 
-// Generate clean insights from policy data
-const generateInsights = (policies: PolicySummary[]) => {
-  const insights: string[] = []
-  
-  if (policies.length === 0) return insights
-  
-  // Premium analysis
-  const validPremiums = policies.map(p => ({
-    policy: p,
-    amount: parseFloat(p.premium.replace(/[^0-9.]/g, "") || "0")
-  })).filter(p => p.amount > 0)
-  
-  if (validPremiums.length >= 2) {
-    const lowest = validPremiums.reduce((min, p) => p.amount < min.amount ? p : min)
-    const highest = validPremiums.reduce((max, p) => p.amount > max.amount ? p : max)
-    const savings = highest.amount - lowest.amount
-    
-    if (savings > 0) {
-      insights.push(`You could save ₹${savings.toLocaleString('en-IN')} annually by switching to ${lowest.policy.provider} (${lowest.policy.fileName})`)
-    }
-  }
-  
-  // Coverage analysis  
-  const validCoverage = policies.map(p => ({
-    policy: p,
-    amount: parseFloat(p.coverageAmount.replace(/[^0-9.]/g, "") || "0")
-  })).filter(p => p.amount > 0)
-  
-  if (validCoverage.length >= 2) {
-    const highest = validCoverage.reduce((max, p) => p.amount > max.amount ? p : max)
-    const lowest = validCoverage.reduce((min, p) => p.amount < min.amount ? p : min)
-    
-    if (highest.amount > lowest.amount * 1.5) {
-      insights.push(`${highest.policy.fileName} offers significantly higher coverage (₹${(highest.amount/100000).toFixed(1)}L vs ₹${(lowest.amount/100000).toFixed(1)}L)`)
-    }
-  }
-  
-  // Expiration warnings
-  const expiringSoon = policies.filter(p => {
-    if (!p.expirationDate) return false
-    const expDate = new Date(p.expirationDate)
-    if (isNaN(expDate.getTime())) return false
-    
-    const daysUntilExpiration = Math.ceil(
-      (expDate.getTime() - new Date().getTime()) / (1000 * 3600 * 24)
-    )
-    return daysUntilExpiration <= 60
-  })
-  
-  if (expiringSoon.length > 0) {
-    if (expiringSoon.length === 1) {
-      insights.push(`${expiringSoon[0].fileName} expires soon - start renewal process early to avoid coverage gaps`)
-    } else {
-      insights.push(`${expiringSoon.length} policies expire within 60 days - review renewal options`)
-    }
-  }
-  
-  // Provider diversity
-  const providers = [...new Set(policies.map(p => p.provider))]
-  if (providers.length === 1 && policies.length > 1) {
-    insights.push(`All policies are with ${providers[0]} - consider diversifying providers for better rates and coverage`)
-  }
-  
-  // Policy type coverage
-  const policyTypes = [...new Set(policies.map(p => p.policyType))]
-  if (policyTypes.includes("Health") && policyTypes.includes("Life")) {
-    insights.push("Good coverage balance - you have both health and life insurance protection")
-  }
-  
-  return insights
-}
-
-// Generate clean recommendations from policy data  
-const generateRecommendations = (policies: PolicySummary[]) => {
-  const recommendations: string[] = []
-  
-  if (policies.length === 0) return recommendations
-  
-  // Always include claim readiness
-  const avgClaimScore = policies.reduce((sum, p) => {
-    const score = p.rawAnalysis?.claim_readiness_score || 70
-    return sum + score
-  }, 0) / policies.length
-  
-  recommendations.push(`Portfolio Average Claim Readiness: ${Math.round(avgClaimScore)}/100`)
-  
-  // Premium optimization
-  const validPremiums = policies.filter(p => parseFloat(p.premium.replace(/[^0-9.]/g, "") || "0") > 0)
-  if (validPremiums.length >= 2) {
-    recommendations.push("Compare premium options annually during renewal to ensure competitive rates")
-  }
-  
-  // Documentation recommendations
-  recommendations.push("Keep all policy documents, ID proofs, and medical records organized for quick claim processing")
-  
-  // Coverage recommendations
-  const hasHealth = policies.some(p => p.policyType.toLowerCase().includes("health"))
-  const hasLife = policies.some(p => p.policyType.toLowerCase().includes("life"))
-  
-  if (!hasHealth) {
-    recommendations.push("Consider adding health insurance for comprehensive medical coverage")
-  }
-  
-  if (!hasLife) {
-    recommendations.push("Consider life insurance to protect your family's financial future")
-  }
-  
-  // Renewal recommendations
-  const expiringSoon = policies.filter(p => {
-    const daysUntilExpiration = Math.ceil(
-      (new Date(p.expirationDate).getTime() - new Date().getTime()) / (1000 * 3600 * 24)
-    )
-    return daysUntilExpiration <= 90
-  })
-  
-  if (expiringSoon.length > 0) {
-    recommendations.push("Set calendar reminders 45-60 days before policy expiration for hassle-free renewal")
-  }
-  
-  // Deductible optimization
-  const highDeductibles = policies.filter(p => {
-    const deductible = parseFloat(p.deductible.replace(/[^0-9.]/g, "") || "0")
-    return deductible > 25000
-  })
-  
-  if (highDeductibles.length > 0) {
-    recommendations.push("Review high deductible policies - ensure you have sufficient emergency funds to cover deductibles")
-  }
-  
-  return recommendations
-}
-
+const InsightsPanel = dynamic(
+  () => import("@/components/analysis/insights-panel").then((mod) => ({ default: mod.InsightsPanel })),
+  {
+    loading: () => <div className="h-48 w-full rounded-lg bg-slate-100 dark:bg-slate-800 animate-pulse" />,
+    ssr: false,
+  },
+)
 
 export default function AnalyzePage() {
   const [policies, setPolicies] = useState<PolicySummary[]>([])
-  const [insights, setInsights] = useState<string[]>([])
-  const [recommendations, setRecommendations] = useState<string[]>([])
-  const [selectedPolicies, setSelectedPolicies] = useState<string[]>([])
+  const [, setSelectedPolicies] = useState<string[]>([])
   const [selectedPolicyId, setSelectedPolicyId] = useState<string>("")
-  const [activeTab, setActiveTab] = useState("analysis")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
 
@@ -202,7 +75,8 @@ export default function AnalyzePage() {
         }
 
         const payload = await policiesResponse.json()
-        const backendPolicies = Array.isArray(payload?.policies) ? payload.policies : []
+        const payloadRecord = payload as { policies?: BackendPolicyRecord[] }
+        const backendPolicies = Array.isArray(payloadRecord?.policies) ? payloadRecord.policies : []
 
         if (backendPolicies.length === 0) {
           setError("No policies found. Please upload some policies first.")
@@ -210,7 +84,7 @@ export default function AnalyzePage() {
           return
         }
 
-        const mappedPolicies: PolicySummary[] = backendPolicies.map((policyData: any) => {
+        const mappedPolicies: PolicySummary[] = backendPolicies.map((policyData) => {
           const analysis = policyData?.validation_metadata?.analysis_result || {}
           const fileName = policyData.policy_name || (policyData.policy_number ? `Policy ${policyData.policy_number}` : `Policy ${String(policyData.id).slice(0, 8)}`)
 
@@ -258,12 +132,7 @@ export default function AnalyzePage() {
         console.log(`Final deduplication: ${allPolicies.length} → ${finalUniquePolicies.length} policies`)
         
         // Generate insights and recommendations
-        const cleanInsights = generateInsights(finalUniquePolicies)
-        const cleanRecommendations = generateRecommendations(finalUniquePolicies)
-        
         setPolicies(finalUniquePolicies)
-        setInsights(cleanInsights)
-        setRecommendations(cleanRecommendations)
         
         // Set first policy as selected
         if (finalUniquePolicies.length > 0) {
@@ -289,11 +158,6 @@ export default function AnalyzePage() {
     )
   }
 
-  const handleRemoveFromComparison = (policyId: string) => {
-    setSelectedPolicies((prev) => prev.filter((id) => id !== policyId))
-  }
-
-  const selectedPolicyData = policies.filter((policy) => selectedPolicies.includes(policy.id))
   const currentPolicy = policies.find((policy) => policy.id === selectedPolicyId)
 
   // Generate insights and recommendations for the currently selected policy only
@@ -436,7 +300,7 @@ export default function AnalyzePage() {
         try {
           const errorData = await response.json()
           errorMessage = errorData.detail || errorMessage
-        } catch (e) {
+        } catch {
           // If not JSON, use status text
           errorMessage = `Error ${response.status}: ${response.statusText}`
         }
@@ -457,9 +321,9 @@ export default function AnalyzePage() {
       localStorage.setItem("claimwise_uploaded_policy_ids", JSON.stringify(policyIds))
       
       console.log("Policy deleted successfully")
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Delete error:", err)
-      alert(err.message || "Failed to delete policy. Please try again.")
+      alert(err instanceof Error ? err.message : "Failed to delete policy. Please try again.")
     }
   }
 

@@ -14,6 +14,7 @@ interface SuggestedQuestionsProps {
 }
 
 export function SuggestedQuestions({ onQuestionSelect, policies = [], selectedPolicyId = "all" }: SuggestedQuestionsProps) {
+  void selectedPolicyId
   // Generate dynamic questions based on loaded policies
   const generateDynamicQuestions = () => {
     const questions = []

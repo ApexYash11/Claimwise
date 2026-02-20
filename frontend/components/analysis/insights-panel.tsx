@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { CheckCircle, AlertTriangle, TrendingUp, Shield, DollarSign, Calendar, AlertCircle, Lightbulb, ArrowRight } from "lucide-react"
+import { CheckCircle, AlertTriangle, TrendingUp, Shield, DollarSign, Calendar, Lightbulb, ArrowRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface InsightsPanelProps {

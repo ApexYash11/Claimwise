@@ -1,6 +1,12 @@
 import { supabase } from "./supabase"
 import type { User } from "@supabase/supabase-js"
 
+interface AuthOperationError {
+  message: string
+  name: string
+  status: number
+}
+
 // Enhanced user sync for existing database schema
 const syncUserToDatabase = async (user: User, providedName?: string) => {
   try {
@@ -83,7 +89,7 @@ export const signInWithProvider = async (provider: 'google' | 'github') => {
         message: 'Social login failed. Please try again or use email signup.',
         name: 'SocialLoginError',
         status: 500
-      } as any
+      } as AuthOperationError
     }
   }
 }
@@ -165,7 +171,7 @@ export const signUp = async (email: string, password: string, fullName: string) 
           message: 'Email signup is temporarily unavailable due to server configuration. Please use Google or GitHub signup instead.',
           name: 'ConfigurationError',
           status: 503
-        } as any
+        } as AuthOperationError
       }
     }
 
@@ -181,7 +187,7 @@ export const signUp = async (email: string, password: string, fullName: string) 
         message: 'Account creation failed due to a system error. Please try using Google or GitHub signup, or contact support.',
         name: 'SignupError',
         status: 500
-      } as any
+      } as AuthOperationError
     }
   }
 }
@@ -210,7 +216,13 @@ export const signOut = async () => {
     return { error: null }
   } catch (err) {
     console.error('[Auth] Unexpected error during signOut:', err)
-    return { error: err as any }
+    return {
+      error: {
+        message: err instanceof Error ? err.message : 'Sign out failed unexpectedly.',
+        name: 'SignOutError',
+        status: 500,
+      } as AuthOperationError,
+    }
   }
 }
 

@@ -21,6 +21,14 @@ interface FileWithPreview extends File {
   status: "uploading" | "success" | "error"
   progress: number
   error?: string
+  _originalFile?: File
+}
+
+interface UploadPolicyResponse {
+  policy_id: string
+  extracted_text?: string
+  status?: string
+  indexing_mode?: string
 }
 
 const PROCESSING_STEPS = [
@@ -51,9 +59,7 @@ const PROCESSING_STEPS = [
 ]
 
 export default function UploadPage() {
-  const [uploadedFiles, setUploadedFiles] = useState<FileWithPreview[]>([])
-  const [policyId, setPolicyId] = useState<string | null>(null)
-  const [policyInfo, setPolicyInfo] = useState<any>(null)
+  const [policyInfo, setPolicyInfo] = useState<UploadPolicyResponse | null>(null)
   const [uploading, setUploading] = useState(false)
   const [currentStep, setCurrentStep] = useState(0)
   const [error, setError] = useState("")
@@ -70,7 +76,6 @@ export default function UploadPage() {
   }, [uploading, currentStep])
 
   const handleFilesUploaded = async (files: FileWithPreview[]) => {
-    setUploadedFiles(files)
     setUploading(true)
     setCurrentStep(0)
     setError("")
@@ -84,7 +89,7 @@ export default function UploadPage() {
       
       const formData = new FormData()
       formData.append("policy_name", files[0].name)
-      const originalFile = (files[0] as any)._originalFile || files[0]
+      const originalFile = files[0]._originalFile || files[0]
       formData.append("file", originalFile, files[0].name)
       
       const session = await supabase.auth.getSession()
@@ -108,8 +113,7 @@ export default function UploadPage() {
         throw new Error(errorData.detail || `Upload failed with status ${response.status}`)
       }
 
-      const data = await response.json()
-      setPolicyId(data.policy_id)
+      const data = (await response.json()) as UploadPolicyResponse
       setPolicyInfo(data)
       
       // Complete the steps
@@ -133,9 +137,9 @@ export default function UploadPage() {
         window.dispatchEvent(new Event("stats:refresh"))
       }
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Upload error:", error)
-      setError(error.message || "Failed to upload policy. Please try again.")
+      setError(error instanceof Error ? error.message : "Failed to upload policy. Please try again.")
       setUploading(false)
     }
   }

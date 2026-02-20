@@ -16,7 +16,7 @@ import { getApiBaseUrl, joinUrl } from './url-utils';
 export interface RequestConfig {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
   headers?: Record<string, string>;
-  body?: any;
+  body?: unknown;
   timeout?: number;
   retries?: number;
   retryDelay?: number;
@@ -24,7 +24,7 @@ export interface RequestConfig {
   cacheTime?: number;
 }
 
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   data: T;
   status: number;
   statusText: string;
@@ -41,7 +41,7 @@ interface CacheEntry<T> {
 }
 
 class RequestCache {
-  private cache = new Map<string, CacheEntry<any>>();
+  private cache = new Map<string, CacheEntry<unknown>>();
   private maxEntries = 100;
 
   set<T>(key: string, data: T, cacheTime: number): void {
@@ -74,7 +74,7 @@ class RequestCache {
       return null;
     }
 
-    return entry.data;
+    return entry.data as T;
   }
 
   clear(): void {
@@ -89,6 +89,10 @@ class RequestCache {
         this.cache.delete(key);
       }
     }
+  }
+
+  size(): number {
+    return this.cache.size;
   }
 }
 
@@ -162,12 +166,13 @@ export class ApiClient {
       };
 
       // Handle FormData body
-      let body = config.body;
-      if (config.body && !(config.body instanceof FormData)) {
-        body = JSON.stringify(config.body);
-      } else if (config.body instanceof FormData) {
+      let body: BodyInit | undefined;
+      if (config.body instanceof FormData) {
+        body = config.body;
         // Remove content-type for FormData, let browser set it
         delete headers['Content-Type'];
+      } else if (config.body !== undefined) {
+        body = JSON.stringify(config.body);
       }
 
       const response = await fetch(fullUrl, {
@@ -185,7 +190,7 @@ export class ApiClient {
       const contentType = response.headers.get('content-type');
       
       if (contentType?.includes('application/json')) {
-        data = await response.json();
+        data = (await response.json()) as T;
       } else {
         data = await response.text() as unknown as T;
       }
@@ -267,7 +272,7 @@ export class ApiClient {
     }
   }
 
-  async request<T = any>(url: string, config: RequestConfig = {}): Promise<ApiResponse<T>> {
+  async request<T = unknown>(url: string, config: RequestConfig = {}): Promise<ApiResponse<T>> {
     const maxRetries = config.retries ?? 3;
     const retryDelay = config.retryDelay ?? 1000;
 
@@ -298,28 +303,28 @@ export class ApiClient {
   }
 
   // Convenience methods
-  async get<T = any>(url: string, config: Omit<RequestConfig, 'method' | 'body'> = {}): Promise<ApiResponse<T>> {
+  async get<T = unknown>(url: string, config: Omit<RequestConfig, 'method' | 'body'> = {}): Promise<ApiResponse<T>> {
     return this.request<T>(url, { ...config, method: 'GET' });
   }
 
-  async post<T = any>(url: string, data?: any, config: Omit<RequestConfig, 'method' | 'body'> = {}): Promise<ApiResponse<T>> {
+  async post<T = unknown>(url: string, data?: unknown, config: Omit<RequestConfig, 'method' | 'body'> = {}): Promise<ApiResponse<T>> {
     return this.request<T>(url, { ...config, method: 'POST', body: data });
   }
 
-  async put<T = any>(url: string, data?: any, config: Omit<RequestConfig, 'method' | 'body'> = {}): Promise<ApiResponse<T>> {
+  async put<T = unknown>(url: string, data?: unknown, config: Omit<RequestConfig, 'method' | 'body'> = {}): Promise<ApiResponse<T>> {
     return this.request<T>(url, { ...config, method: 'PUT', body: data });
   }
 
-  async delete<T = any>(url: string, config: Omit<RequestConfig, 'method' | 'body'> = {}): Promise<ApiResponse<T>> {
+  async delete<T = unknown>(url: string, config: Omit<RequestConfig, 'method' | 'body'> = {}): Promise<ApiResponse<T>> {
     return this.request<T>(url, { ...config, method: 'DELETE' });
   }
 
-  async patch<T = any>(url: string, data?: any, config: Omit<RequestConfig, 'method' | 'body'> = {}): Promise<ApiResponse<T>> {
+  async patch<T = unknown>(url: string, data?: unknown, config: Omit<RequestConfig, 'method' | 'body'> = {}): Promise<ApiResponse<T>> {
     return this.request<T>(url, { ...config, method: 'PATCH', body: data });
   }
 
   // File upload helper
-  async uploadFile<T = any>(
+  async uploadFile<T = unknown>(
     url: string, 
     file: File, 
     additionalData: Record<string, string> = {},
@@ -365,7 +370,7 @@ export class ApiClient {
   getStats() {
     return {
       requestCount: this.requestCount,
-      cacheSize: (this.cache as any).cache.size, // Access private property for stats
+      cacheSize: this.cache.size(),
       baseUrl: this.baseUrl
     };
   }

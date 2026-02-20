@@ -2,6 +2,7 @@
 import { supabase } from "./supabase"
 import { createApiUrlWithLogging } from "./url-utils"
 import { fetchWithTimeout } from "./fetch-with-timeout"
+import type { BackendPolicyRecord } from "@/types/policies"
 
 export interface PolicyAnalysisRequest {
   files: File[]
@@ -39,7 +40,11 @@ export interface PolicySummary {
   }
 }
 
-const mapPolicyFromBackend = (policy: any): PolicySummary => {
+interface PoliciesApiResponse {
+  policies?: BackendPolicyRecord[]
+}
+
+const mapPolicyFromBackend = (policy: BackendPolicyRecord): PolicySummary => {
   const analysis = policy?.validation_metadata?.analysis_result || {}
   return {
     id: policy.id,
@@ -86,7 +91,7 @@ export const uploadPolicies = async (files: File[], userId: string): Promise<Pol
   }
 }
 
-export const comparePolicies = async (policyIds: string[]): Promise<any> => {
+export const comparePolicies = async (policyIds: string[]): Promise<unknown> => {
   // Get Supabase JWT
   const session = await supabase.auth.getSession()
   const token = session.data.session?.access_token
@@ -115,7 +120,7 @@ export const comparePolicies = async (policyIds: string[]): Promise<any> => {
   }
 }
 
-export const getPolicies = async (_userId?: string): Promise<PolicySummary[]> => {
+export const getPolicies = async (): Promise<PolicySummary[]> => {
   try {
     // Get Supabase JWT
     const session = await supabase.auth.getSession()
@@ -136,7 +141,7 @@ export const getPolicies = async (_userId?: string): Promise<PolicySummary[]> =>
       throw new Error(`Failed to fetch policies: ${response.status} - ${errorDetail}`)
     }
 
-    const data = await response.json()
+    const data = (await response.json()) as PoliciesApiResponse
     const backendPolicies = Array.isArray(data?.policies) ? data.policies : []
     return backendPolicies.map(mapPolicyFromBackend)
   } catch (error) {
@@ -146,7 +151,7 @@ export const getPolicies = async (_userId?: string): Promise<PolicySummary[]> =>
   }
 }
 
-export const chatWithPolicies = async (message: string, policyIds: string[]): Promise<any> => {
+export const chatWithPolicies = async (message: string, policyIds: string[]): Promise<unknown> => {
   // Get Supabase JWT
   const session = await supabase.auth.getSession()
   const token = session.data.session?.access_token
@@ -218,7 +223,7 @@ export interface HistoryResponse {
     comparisons: number
     totalPolicies: number
   }
-  policies: any[]
+  policies: unknown[]
   pagination?: {
     page: number
     page_size: number
@@ -256,7 +261,7 @@ export const getActivityHistory = async (): Promise<HistoryResponse> => {
       throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`)
     }
 
-    const data = await response.json()
+    const data = (await response.json()) as HistoryResponse
     return data
   } catch (error) {
     console.error("Error fetching activity history:", error)

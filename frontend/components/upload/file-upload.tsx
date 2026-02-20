@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react"
 import { useDropzone } from "react-dropzone"
+import type { FileRejection } from "react-dropzone"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
@@ -15,6 +16,7 @@ interface FileWithPreview extends File {
   status: "uploading" | "success" | "error"
   progress: number
   error?: string
+  _originalFile?: File
 }
 
 interface FileUploadProps {
@@ -28,7 +30,7 @@ export function FileUpload({ onFilesUploaded, maxFiles = 5, maxSize = 10 * 1024 
   const [error, setError] = useState("")
 
   const onDrop = useCallback(
-    (acceptedFiles: File[], rejectedFiles: any[]) => {
+    (acceptedFiles: File[], rejectedFiles: FileRejection[]) => {
       setError("")
 
       if (rejectedFiles.length > 0) {
@@ -42,29 +44,15 @@ export function FileUpload({ onFilesUploaded, maxFiles = 5, maxSize = 10 * 1024 
         return
       }
 
-      const newFiles: FileWithPreview[] = acceptedFiles.map((file) => {
-        // Create a simple object with our custom properties and keep reference to original file
-        return {
-          // File properties (read-only)
-          name: file.name,
-          size: file.size,
-          type: file.type,
-          lastModified: file.lastModified,
-          webkitRelativePath: file.webkitRelativePath || '',
-          // Keep reference to original file for upload
+      const newFiles: FileWithPreview[] = acceptedFiles.map((file) =>
+        Object.assign(file, {
           _originalFile: file,
-          // File methods - bind to original
-          arrayBuffer: () => file.arrayBuffer(),
-          slice: (start?: number, end?: number, contentType?: string) => file.slice(start, end, contentType),
-          stream: () => file.stream(),
-          text: () => file.text(),
-          // Our custom properties
           id: Math.random().toString(36).substr(2, 9),
           status: "uploading" as const,
           progress: 0,
           preview: file.type && file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined,
-        } as any
-      })
+        }),
+      )
 
       setFiles((prev) => [...prev, ...newFiles])
 

@@ -74,7 +74,6 @@ export default function DashboardPage() {
   const { user } = useAuth()
   const userName = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User"
 
-  const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState<{
     uploadedDocuments: number
     documentsProcessed: number
@@ -97,7 +96,6 @@ export default function DashboardPage() {
   const quickInsight = metrics?.quickInsight ?? "Scan your first policy to get personalized savings insights."
 
   const fetchStats = useCallback(async () => {
-    setLoading(true)
     try {
       const sessionResult = await (await import("@/lib/supabase")).supabase.auth.getSession()
       const session = sessionResult.data.session
@@ -139,10 +137,8 @@ export default function DashboardPage() {
           policiesCount: metricsData.policiesCount || 0,
         })
       }
-    } catch (e) {
+    } catch {
       setStats({ uploadedDocuments: 0, documentsProcessed: 0, analysesCompleted: 0, comparisonsRun: 0 })
-    } finally {
-      setLoading(false)
     }
   }, [])
 

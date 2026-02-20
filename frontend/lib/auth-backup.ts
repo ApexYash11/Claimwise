@@ -1,6 +1,12 @@
 import { supabase } from "./supabase"
 import type { User } from "@supabase/supabase-js"
 
+interface AuthOperationError {
+  message: string
+  name: string
+  status: number
+}
+
 // Completely bypass any user sync
 const syncUserToDatabase = async (user: User) => {
   console.log('User authenticated successfully:', user.email)
@@ -28,7 +34,7 @@ export const signInWithProvider = async (provider: 'google' | 'github') => {
         message: 'Social login failed. Please try again.',
         name: 'SocialLoginError',
         status: 500
-      } as any
+      } as AuthOperationError
     }
   }
 }

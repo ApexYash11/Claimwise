@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -20,13 +20,7 @@ export function PolicyComparison({ policies, onRemovePolicy }: PolicyComparisonP
   const [comparisonPerformed, setComparisonPerformed] = useState(false)
 
   // Call backend comparison API when policies are compared
-  useEffect(() => {
-    if (policies.length >= 2 && !comparisonPerformed) {
-      performComparison()
-    }
-  }, [policies, comparisonPerformed])
-
-  const performComparison = async () => {
+  const performComparison = useCallback(async () => {
     try {
       // Call backend to store comparison
       const session = await supabase.auth.getSession()
@@ -58,7 +52,13 @@ export function PolicyComparison({ policies, onRemovePolicy }: PolicyComparisonP
     } catch (error) {
       console.error("Error performing comparison:", error)
     }
-  }
+  }, [policies])
+
+  useEffect(() => {
+    if (policies.length >= 2 && !comparisonPerformed) {
+      void performComparison()
+    }
+  }, [policies, comparisonPerformed, performComparison])
 
   // Format currency in Indian format
   const formatIndianCurrency = (amount: string) => {
@@ -80,11 +80,6 @@ export function PolicyComparison({ policies, onRemovePolicy }: PolicyComparisonP
       ...prev,
       [policyId]: !prev[policyId]
     }))
-  }
-
-  const compareValues = (field: keyof PolicySummary) => {
-    const values = policies.map((p) => p[field])
-    return values
   }
 
   const getPremiumComparison = (premium: string, allPremiums: string[]) => {

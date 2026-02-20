@@ -30,7 +30,47 @@ export interface ErrorDetails {
   originalError?: string;
   lineno?: number;
   colno?: number;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
+}
+
+interface ApiErrorDetailPayload {
+  message?: string
+  category?: string
+  details?: {
+    field?: string
+    [key: string]: unknown
+  }
+}
+
+interface ApiErrorPayload {
+  detail?: string | ApiErrorDetailPayload
+}
+
+const toApiErrorPayload = (data: unknown): ApiErrorPayload => {
+  if (typeof data !== 'object' || data === null) {
+    return {}
+  }
+  return data as ApiErrorPayload
+}
+
+const getDetailPayload = (data: unknown): ApiErrorDetailPayload | null => {
+  const payload = toApiErrorPayload(data)
+  if (typeof payload.detail === 'object' && payload.detail !== null) {
+    return payload.detail as ApiErrorDetailPayload
+  }
+  return null
+}
+
+const getDetailString = (data: unknown): string | undefined => {
+  const payload = toApiErrorPayload(data)
+  if (typeof payload.detail === 'string') {
+    return payload.detail
+  }
+  const detailObj = getDetailPayload(data)
+  if (detailObj?.message) {
+    return detailObj.message
+  }
+  return undefined
 }
 
 export interface RecoveryAction {
@@ -213,25 +253,27 @@ export class RateLimitError extends ClaimWiseError {
 }
 
 // Error parsing utilities
-export function parseApiError(response: Response, data?: any): ClaimWiseError {
+export function parseApiError(response: Response, data?: unknown): ClaimWiseError {
   const traceId = response.headers.get('X-Trace-ID') || undefined;
+  const detailPayload = getDetailPayload(data)
+  const detailString = getDetailString(data)
 
   // Handle different status codes
   switch (response.status) {
     case 400:
-      if (data?.detail?.category === 'validation') {
+      if (detailPayload?.category === 'validation') {
         return new ValidationError(
-          data.detail.message || 'Validation failed',
-          data.detail.details?.field,
+          detailPayload.message || 'Validation failed',
+          detailPayload.details?.field,
           {
-            userMessage: data.detail.message,
-            details: data.detail.details,
+            userMessage: detailPayload.message,
+            details: detailPayload.details,
             traceId
           }
         );
       }
       return new ClaimWiseError(
-        data?.detail || 'Bad request',
+        detailString || 'Bad request',
         ErrorCategory.CLIENT_ERROR,
         ErrorSeverity.LOW,
         { traceId }
@@ -239,21 +281,21 @@ export function parseApiError(response: Response, data?: any): ClaimWiseError {
 
     case 401:
       return new AuthenticationError(
-        data?.detail?.message || 'Authentication required',
+        detailPayload?.message || 'Authentication required',
         {
-          userMessage: data?.detail?.message,
-          details: data?.detail?.details,
+          userMessage: detailPayload?.message,
+          details: detailPayload?.details,
           traceId
         }
       );
 
     case 403:
       return new ClaimWiseError(
-        data?.detail?.message || 'Access denied',
+        detailPayload?.message || 'Access denied',
         ErrorCategory.AUTHENTICATION,
         ErrorSeverity.MEDIUM,
         {
-          userMessage: data?.detail?.message || 'You don\'t have permission to perform this action',
+          userMessage: detailPayload?.message || 'You don\'t have permission to perform this action',
           traceId
         }
       );
@@ -261,22 +303,22 @@ export function parseApiError(response: Response, data?: any): ClaimWiseError {
     case 429:
       const retryAfter = parseInt(response.headers.get('Retry-After') || '60');
       return new RateLimitError(
-        data?.detail?.message || 'Rate limit exceeded',
+        detailPayload?.message || 'Rate limit exceeded',
         retryAfter,
         {
-          userMessage: data?.detail?.message || `Please wait ${retryAfter} seconds before trying again`,
-          details: data?.detail?.details,
+          userMessage: detailPayload?.message || `Please wait ${retryAfter} seconds before trying again`,
+          details: detailPayload?.details,
           traceId
         }
       );
 
     case 422:
       return new ValidationError(
-        data?.detail?.message || 'Validation error',
-        data?.detail?.details?.field,
+        detailPayload?.message || 'Validation error',
+        detailPayload?.details?.field,
         {
-          userMessage: data?.detail?.message,
-          details: data?.detail?.details,
+          userMessage: detailPayload?.message,
+          details: detailPayload?.details,
           traceId
         }
       );
@@ -286,19 +328,19 @@ export function parseApiError(response: Response, data?: any): ClaimWiseError {
     case 503:
     case 504:
       return new ClaimWiseError(
-        data?.detail?.message || 'Server error',
+        detailPayload?.message || 'Server error',
         ErrorCategory.SERVER_ERROR,
         ErrorSeverity.HIGH,
         {
-          userMessage: data?.detail?.message || 'Server is experiencing issues. Please try again later.',
-          details: data?.detail?.details,
+          userMessage: detailPayload?.message || 'Server is experiencing issues. Please try again later.',
+          details: detailPayload?.details,
           traceId
         }
       );
 
     default:
       return new ClaimWiseError(
-        data?.detail || `HTTP ${response.status} error`,
+        detailString || `HTTP ${response.status} error`,
         ErrorCategory.UNKNOWN,
         ErrorSeverity.MEDIUM,
         { traceId }

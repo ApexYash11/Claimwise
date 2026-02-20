@@ -1,11 +1,9 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
+import dynamic from "next/dynamic"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { Header } from "@/components/layout/header"
-import { Message } from "@/components/chat/message"
-import { SuggestedQuestions } from "@/components/chat/suggested-questions"
-import { ChatInput } from "@/components/chat/chat-input"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -18,6 +16,26 @@ import type { PolicySummary } from "@/lib/api"
 
 import { createApiUrlWithLogging } from "@/lib/url-utils"
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
+import type { BackendPolicyRecord } from "@/types/policies"
+import type { BackendHistoryResponse } from "@/types/history"
+
+const Message = dynamic(() => import("@/components/chat/message").then((mod) => ({ default: mod.Message })), {
+  loading: () => <div className="h-24 w-full rounded-lg bg-slate-100 dark:bg-slate-800 animate-pulse" />,
+  ssr: false,
+})
+
+const SuggestedQuestions = dynamic(
+  () => import("@/components/chat/suggested-questions").then((mod) => ({ default: mod.SuggestedQuestions })),
+  {
+    loading: () => <div className="h-64 w-full rounded-lg bg-slate-100 dark:bg-slate-800 animate-pulse" />,
+    ssr: false,
+  },
+)
+
+const ChatInput = dynamic(() => import("@/components/chat/chat-input").then((mod) => ({ default: mod.ChatInput })), {
+  loading: () => <div className="h-16 w-full rounded-lg bg-slate-100 dark:bg-slate-800 animate-pulse" />,
+  ssr: false,
+})
 
 interface ChatMessage {
   id: string
@@ -34,17 +52,16 @@ export default function ChatPage() {
   const [selectedPolicyId, setSelectedPolicyId] = useState<string>("all")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
-  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([])
   const [loadingPolicies, setLoadingPolicies] = useState(true)
   const [historyPage, setHistoryPage] = useState(1)
   const [hasMoreHistory, setHasMoreHistory] = useState(false)
   const [loadingMoreHistory, setLoadingMoreHistory] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  const mapServerHistoryToMessages = (historyData: any): ChatMessage[] => {
+  const mapServerHistoryToMessages = (historyData: BackendHistoryResponse): ChatMessage[] => {
     const serverMessages: ChatMessage[] = []
     if (historyData?.chat_logs && Array.isArray(historyData.chat_logs)) {
-      historyData.chat_logs.forEach((chat: any) => {
+      historyData.chat_logs.forEach((chat) => {
         serverMessages.push({
           id: `user_${chat.id}`,
           content: chat.question,
@@ -75,7 +92,7 @@ export default function ChatPage() {
   // Load user policies and chat history on component mount
   useEffect(() => {
     const controller = new AbortController()
-    const mapPolicyFromBackend = (policy: any): PolicySummary => {
+    const mapPolicyFromBackend = (policy: BackendPolicyRecord): PolicySummary => {
       const analysis = policy?.validation_metadata?.analysis_result || {}
       return {
         id: policy.id,
@@ -93,7 +110,6 @@ export default function ChatPage() {
 
     const loadPoliciesAndHistory = async () => {
       try {
-        // Load policies via backend API
         const session = await supabase.auth.getSession()
         const token = session.data.session?.access_token
         const user = session.data.session?.user
@@ -104,56 +120,42 @@ export default function ChatPage() {
           return
         }
 
+        const authHeaders = token ? { Authorization: `Bearer ${token}` } : undefined
         const policiesUrl = createApiUrlWithLogging("/policies")
-        const policiesResponse = await fetchWithTimeout(policiesUrl, {
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-          timeoutMs: 12000,
-          signal: controller.signal,
-        })
+        const chatHistoryUrl = `${createApiUrlWithLogging("/history")}?page=1&page_size=25`
 
-        if (!policiesResponse.ok) {
-          setError("Failed to load policies")
-          setLoadingPolicies(false)
-          return
-        }
-
-        const policyPayload = await policiesResponse.json()
-        const backendPolicies = Array.isArray(policyPayload?.policies) ? policyPayload.policies : []
-        const loadedPolicies = backendPolicies.map(mapPolicyFromBackend)
-        setPolicies(loadedPolicies)
-
-        if (loadedPolicies.length > 0) {
-          setSelectedPolicyId(loadedPolicies[0].id)
-        }
-
-        // Load chat history from server first, with localStorage fallback
-        try {
-          console.log("Loading chat history from server...")
-          const chatHistoryUrl = `${createApiUrlWithLogging("/history")}?page=1&page_size=25`
-          const historyResponse = await fetchWithTimeout(chatHistoryUrl, {
-            headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        const [policiesResult, historyResult] = await Promise.allSettled([
+          fetchWithTimeout(policiesUrl, {
+            headers: authHeaders,
             timeoutMs: 12000,
             signal: controller.signal,
-          })
-          
-          if (historyResponse.ok) {
-            const historyData = await historyResponse.json()
-            const serverMessages = mapServerHistoryToMessages(historyData)
-            
-            setChatHistory(serverMessages)
-            setMessages(serverMessages)
-            setHistoryPage(1)
-            setHasMoreHistory(Boolean(historyData?.pagination?.has_more_chat_logs))
-            console.log(`Loaded ${serverMessages.length} messages from server`)
-          } else {
-            console.warn("Failed to load chat history from server, using localStorage fallback")
-            loadFromLocalStorage(user.id)
+          }),
+          fetchWithTimeout(chatHistoryUrl, {
+            headers: authHeaders,
+            timeoutMs: 12000,
+            signal: controller.signal,
+          }),
+        ])
+
+        if (policiesResult.status === "fulfilled" && policiesResult.value.ok) {
+          const policyPayload = (await policiesResult.value.json()) as { policies?: BackendPolicyRecord[] }
+          const backendPolicies = Array.isArray(policyPayload?.policies) ? policyPayload.policies : []
+          const loadedPolicies = backendPolicies.map(mapPolicyFromBackend)
+          setPolicies(loadedPolicies)
+          if (loadedPolicies.length > 0) {
+            setSelectedPolicyId(loadedPolicies[0].id)
           }
-        } catch (e) {
-          if (e instanceof Error && e.name === "AbortError") {
-            return
-          }
-          console.error("Error loading server chat history:", e)
+        } else {
+          setError("Failed to load policies")
+        }
+
+        if (historyResult.status === "fulfilled" && historyResult.value.ok) {
+          const historyData = (await historyResult.value.json()) as BackendHistoryResponse
+          const serverMessages = mapServerHistoryToMessages(historyData)
+          setMessages(serverMessages)
+          setHistoryPage(1)
+          setHasMoreHistory(Boolean(historyData?.pagination?.has_more_chat_logs))
+        } else {
           loadFromLocalStorage(user.id)
         }
 
@@ -173,11 +175,10 @@ export default function ChatPage() {
       const userSpecificKey = `claimwise_chat_history_${userId}`
       const storedHistory = localStorage.getItem(userSpecificKey)
       if (storedHistory) {
-        const history = JSON.parse(storedHistory).map((msg: any) => ({
+        const history = (JSON.parse(storedHistory) as ChatMessage[]).map((msg) => ({
           ...msg,
           timestamp: new Date(msg.timestamp)
         }))
-        setChatHistory(history)
         setMessages(history)
         console.log(`Loaded ${history.length} messages from localStorage (user-specific)`)
       }
@@ -212,7 +213,7 @@ export default function ChatPage() {
         return
       }
 
-      const historyData = await response.json()
+      const historyData = (await response.json()) as BackendHistoryResponse
       const olderMessages = mapServerHistoryToMessages(historyData)
 
       if (olderMessages.length === 0) {

@@ -8,12 +8,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, LogOut, Mail, User, Shield } from "lucide-react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { useState } from "react"
 
 export default function ProfilePage() {
   const { user } = useAuth()
-  const router = useRouter()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   const userName = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User"

@@ -37,11 +37,6 @@ export function PolicyComparison({ policies, onRemovePolicy }: PolicyComparisonP
     }))
   }
 
-  const compareValues = (field: keyof PolicySummary) => {
-    const values = policies.map((p) => p[field])
-    return values
-  }
-
   const getPremiumComparison = (premium: string, allPremiums: string[]) => {
     const numericPremiums = allPremiums.map((p) => Number.parseFloat(p.replace(/[^0-9.]/g, "")))
     const currentPremium = Number.parseFloat(premium.replace(/[^0-9.]/g, ""))
