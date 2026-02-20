@@ -18,6 +18,7 @@ interface PolicyComparisonProps {
 export function PolicyComparison({ policies, onRemovePolicy }: PolicyComparisonProps) {
   const [expandedFeatures, setExpandedFeatures] = useState<{ [key: string]: boolean }>({})
   const [comparisonPerformed, setComparisonPerformed] = useState(false)
+  const policyIdsKey = policies.map((policy) => policy.id).join("|")
 
   // Call backend comparison API when policies are compared
   const performComparison = useCallback(async () => {
@@ -53,6 +54,10 @@ export function PolicyComparison({ policies, onRemovePolicy }: PolicyComparisonP
       console.error("Error performing comparison:", error)
     }
   }, [policies])
+
+  useEffect(() => {
+    setComparisonPerformed(false)
+  }, [policyIdsKey])
 
   useEffect(() => {
     if (policies.length >= 2 && !comparisonPerformed) {

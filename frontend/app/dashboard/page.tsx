@@ -73,6 +73,7 @@ function CircularProgress({ value, size = 60, strokeWidth = 6 }: { value: number
 export default function DashboardPage() {
   const { user } = useAuth()
   const userName = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User"
+  const [statsError, setStatsError] = useState<string | null>(null)
 
   const [stats, setStats] = useState<{
     uploadedDocuments: number
@@ -97,6 +98,7 @@ export default function DashboardPage() {
 
   const fetchStats = useCallback(async () => {
     try {
+      setStatsError(null)
       const sessionResult = await (await import("@/lib/supabase")).supabase.auth.getSession()
       const session = sessionResult.data.session
       const token = session?.access_token
@@ -137,8 +139,9 @@ export default function DashboardPage() {
           policiesCount: metricsData.policiesCount || 0,
         })
       }
-    } catch {
-      setStats({ uploadedDocuments: 0, documentsProcessed: 0, analysesCompleted: 0, comparisonsRun: 0 })
+    } catch (error) {
+      console.error("Failed to fetch dashboard intelligence:", error)
+      setStatsError("Could not refresh dashboard intelligence. Showing last available data.")
     }
   }, [])
 
@@ -160,6 +163,9 @@ export default function DashboardPage() {
               <p className="text-muted-foreground mt-1">
                 Your AI Policy Analyst has identified new insights for your portfolio.
               </p>
+              {statsError && (
+                <p className="mt-2 text-sm text-red-600 dark:text-red-400">{statsError}</p>
+              )}
             </div>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={fetchStats} className="hidden md:flex">

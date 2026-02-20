@@ -44,15 +44,20 @@ export function FileUpload({ onFilesUploaded, maxFiles = 5, maxSize = 10 * 1024 
         return
       }
 
-      const newFiles: FileWithPreview[] = acceptedFiles.map((file) =>
-        Object.assign(file, {
+      const newFiles: FileWithPreview[] = acceptedFiles.map((file) => {
+        const fileWithMetadata = new File([file], file.name, {
+          type: file.type,
+          lastModified: file.lastModified,
+        })
+
+        return Object.assign(fileWithMetadata, {
           _originalFile: file,
           id: Math.random().toString(36).substr(2, 9),
           status: "uploading" as const,
           progress: 0,
           preview: file.type && file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined,
-        }),
-      )
+        })
+      })
 
       setFiles((prev) => [...prev, ...newFiles])
 
