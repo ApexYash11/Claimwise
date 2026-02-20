@@ -152,7 +152,9 @@ def retrieve_top_k(query: str, k: int = 5, policy_id: Optional[str] = None) -> L
       len(q_emb),
       EXPECTED_EMBED_DIM,
     )
-    return []
+    raise RuntimeError(
+      f"Query embedding dimension mismatch: got {len(q_emb)} expected {EXPECTED_EMBED_DIM}"
+    )
 
   service_client = supabase_storage or supabase
   try:

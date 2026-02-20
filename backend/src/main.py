@@ -77,6 +77,32 @@ def _require_debug_routes_enabled() -> None:
         raise HTTPException(status_code=404, detail="Not found")
 
 
+def _duplicate_conflict_detail(error_obj: Any) -> str:
+    default_message = "A resource already exists"
+    constraint_name = None
+
+    try:
+        if error_obj is None:
+            return default_message
+
+        constraint_name = getattr(error_obj, "constraint_name", None)
+        if not constraint_name:
+            diag = getattr(error_obj, "diag", None)
+            constraint_name = getattr(diag, "constraint_name", None) if diag is not None else None
+
+        if not constraint_name:
+            orig = getattr(error_obj, "orig", None)
+            if orig is not None:
+                diag = getattr(orig, "diag", None)
+                constraint_name = getattr(diag, "constraint_name", None) if diag is not None else None
+    except Exception:
+        constraint_name = None
+
+    if constraint_name:
+        return f"Conflict: duplicate value for constraint '{constraint_name}'"
+    return default_message
+
+
 def log_activity(user_id: str, activity_type: str, title: str, description: str, details: Union[Dict, None] = None):
     """
     Log user activity to the database for dynamic activity tracking.
@@ -344,7 +370,7 @@ async def upload_policy(
                 if "foreign key" in str(err_msg).lower() or err_code == "23503":
                     raise HTTPException(status_code=403, detail="Invalid user or authentication state. Please re-authenticate.")
                 if err_code == "23505" or "duplicate key" in str(err_msg).lower() or "already exists" in str(err_msg).lower():
-                    raise HTTPException(status_code=409, detail=f"A policy named '{policy_name or 'Policy'}' already exists.")
+                    raise HTTPException(status_code=409, detail=_duplicate_conflict_detail(resp_err))
                 else:
                     raise HTTPException(status_code=500, detail="Failed to save policy.")
 
@@ -402,7 +428,7 @@ async def upload_policy(
             if "foreign key" in err_str or "violates foreign key" in err_str or "23503" in err_str:
                 raise HTTPException(status_code=403, detail="Invalid user or authentication state. Please re-authenticate.")
             if "23505" in err_str or "duplicate key" in err_str or "already exists" in err_str:
-                raise HTTPException(status_code=409, detail=f"A policy named '{policy_name or 'Policy'}' already exists.")
+                raise HTTPException(status_code=409, detail=_duplicate_conflict_detail(db_error))
             raise HTTPException(status_code=500, detail="Database save failed.")
     except HTTPException:
         raise
@@ -1049,8 +1075,13 @@ def get_comprehensive_history(
             ).eq("user_id", user_id).order("created_at", desc=True).range(offset, offset + page_size - 1).execute().data
             logging.debug("Found %d chat logs", len(chat_logs) if chat_logs else 0)
 
-            chat_logs_all = supabase.table("chat_logs").select("id").eq("user_id", user_id).execute().data
-            total_chat_logs = len(chat_logs_all) if chat_logs_all else 0
+            chat_logs_count_result = (
+                supabase.table("chat_logs")
+                .select("id", **{"count": "exact", "head": True})
+                .eq("user_id", user_id)
+                .execute()
+            )
+            total_chat_logs = int(getattr(chat_logs_count_result, "count", 0) or 0)
         except Exception as e:
             logging.exception("Error fetching chat logs: %s", e)
             chat_logs = []
