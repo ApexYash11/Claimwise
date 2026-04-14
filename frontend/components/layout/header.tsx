@@ -99,7 +99,7 @@ export function Header() {
                   <Link href="/login">Sign in</Link>
                 </Button>
                 <Button asChild className="bg-teal-600 hover:bg-teal-700 text-white shadow-sm">
-                  <Link href="/signup">Book Demo</Link>
+                  <Link href="/#demo">Book Demo</Link>
                 </Button>
               </>
             )}
@@ -211,7 +211,7 @@ export function Header() {
                       <Link href="/login">Sign in</Link>
                     </Button>
                     <Button asChild className="bg-teal-600 hover:bg-teal-700 text-white">
-                      <Link href="/signup">Book Demo</Link>
+                      <Link href="/#demo">Book Demo</Link>
                     </Button>
                   </>
                 )}

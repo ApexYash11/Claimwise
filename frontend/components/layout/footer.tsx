@@ -34,7 +34,7 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/signup" className="text-slate-600 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors">
+                <Link href="/#demo" className="text-slate-600 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors">
                   Book Demo
                 </Link>
               </li>
@@ -53,6 +53,16 @@ export function Footer() {
               <li>
                 <Link href="/signup" className="text-slate-600 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors">
                   Create account
+                </Link>
+              </li>
+              <li>
+                <Link href="/privacy" className="text-slate-600 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors">
+                  Privacy Policy
+                </Link>
+              </li>
+              <li>
+                <Link href="/terms" className="text-slate-600 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors">
+                  Terms of Service
                 </Link>
               </li>
               <li>
