@@ -667,7 +667,7 @@ def get_user_policies(user_id: str = Depends(get_current_user)):
         logging.debug(f"Fetching policies for user {user_id}")
         
         result = supabase.table("policies").select(
-            "id, policy_name, policy_number, created_at, updated_at, validation_score, validation_metadata, uploaded_file_url"
+            "id, policy_name, policy_number, created_at, validation_score, validation_metadata, uploaded_file_url"
         ).eq("user_id", user_id).order("created_at", desc=True).execute()
         
         policies = result.data if result.data else []

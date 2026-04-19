@@ -8,3 +8,13 @@ build
 .vercel
 .pytest_cache/
 __pycache__/  
+.venv/
+.idea/
+.DS_Store
+.vscode/
+*.log
+coverage/
+*.egg-info/
+*.egg
+*.bak
+*.swp
