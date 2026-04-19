@@ -62,7 +62,7 @@ export function Header() {
                 Features
               </Link>
               <Link href="#demo" className="px-4 py-2 rounded-md text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-all">
-                How it Works
+                Demo Flow
               </Link>
             </nav>
           )}
@@ -99,7 +99,7 @@ export function Header() {
                   <Link href="/login">Sign in</Link>
                 </Button>
                 <Button asChild className="bg-teal-600 hover:bg-teal-700 text-white shadow-sm">
-                  <Link href="/signup">Get Started</Link>
+                  <Link href="/signup">Book Demo</Link>
                 </Button>
               </>
             )}
@@ -179,7 +179,7 @@ export function Header() {
                     className="text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 font-medium"
                     onClick={() => setIsMenuOpen(false)}
                   >
-                    How it Works
+                    Demo Flow
                   </Link>
                 </>
               )}
@@ -211,7 +211,7 @@ export function Header() {
                       <Link href="/login">Sign in</Link>
                     </Button>
                     <Button asChild className="bg-teal-600 hover:bg-teal-700 text-white">
-                      <Link href="/signup">Get Started</Link>
+                      <Link href="/signup">Book Demo</Link>
                     </Button>
                   </>
                 )}
