@@ -6,6 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ChatInput } from "./chat-input"
 import { Message } from "./message"
 import { MessageSquare, X, Minimize2 } from "lucide-react"
+import { supabase } from "@/lib/supabase"
+import { createApiUrlWithLogging } from "@/lib/url-utils"
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
 
 interface ChatMessage {
   id: string
@@ -32,33 +35,54 @@ export function ChatWidget() {
     setMessages((prev) => [...prev, userMessage])
     setIsLoading(true)
 
-    // Use requestIdleCallback for better responsiveness
-    if (typeof requestIdleCallback !== 'undefined') {
-      requestIdleCallback(() => {
-        setTimeout(() => {
-          const assistantMessage: ChatMessage = {
-            id: (Date.now() + 1).toString(),
-            content:
-              "I'd be happy to help you with that question about your insurance policies. Let me analyze your coverage details...",
-            role: "assistant",
-            timestamp: new Date(),
-          }
-          setMessages((prev) => [...prev, assistantMessage])
-          setIsLoading(false)
-        }, 300) // Reduced from 1500ms
+    try {
+      const session = await supabase.auth.getSession()
+      const token = session.data.session?.access_token
+
+      if (!token) {
+        throw new Error("Not authenticated")
+      }
+
+      const url = createApiUrlWithLogging("/chat-multiple")
+      const response = await fetchWithTimeout(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ question: content }),
+        timeoutMs: 30000,
       })
-    } else {
-      setTimeout(() => {
-        const assistantMessage: ChatMessage = {
-          id: (Date.now() + 1).toString(),
-          content:
-            "I'd be happy to help you with that question about your insurance policies. Let me analyze your coverage details...",
-          role: "assistant",
-          timestamp: new Date(),
-        }
-        setMessages((prev) => [...prev, assistantMessage])
-        setIsLoading(false)
-      }, 300)
+
+      if (!response.ok) {
+        const errorBody = await response.text().catch(() => "")
+        throw new Error(errorBody || `Request failed: ${response.statusText}`)
+      }
+
+      const data = await response.json()
+
+      const assistantMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        content: data.answer || "I could not generate a response. Please try again.",
+        role: "assistant",
+        timestamp: new Date(),
+        policyReferences: data.citations?.length > 0
+          ? data.citations.map((c: { id?: number; excerpt?: string }) => `Chunk #${c.id ?? "?"}`)
+          : undefined,
+      }
+
+      setMessages((prev) => [...prev, assistantMessage])
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Service temporarily unavailable"
+      const fallbackMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        content: `Sorry, I encountered an error: ${errorMessage}. Please try again later.`,
+        role: "assistant",
+        timestamp: new Date(),
+      }
+      setMessages((prev) => [...prev, fallbackMessage])
+    } finally {
+      setIsLoading(false)
     }
   }, [])
 

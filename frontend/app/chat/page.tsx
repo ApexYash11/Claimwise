@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, MessageSquare, Bot, AlertCircle, FileText, Globe, History } from "lucide-react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
-import type { PolicySummary } from "@/lib/api"
+import type { PolicySummary } from "@/types/policies"
 
 import { createApiUrlWithLogging } from "@/lib/url-utils"
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout"

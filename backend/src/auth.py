@@ -1,9 +1,8 @@
-import os 
+import os
 from supabase.client import create_client, Client
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-from functools import lru_cache
 import logging
 
 # intialzing supbasae client
@@ -13,7 +12,7 @@ if not supabase_url or not supabase_key:
     raise ValueError("SUPABASE_URL and SUPABASE_KEY environment variables must be set")
 supabase: Client = create_client(supabase_url, supabase_key)
 
-#Oauth 2 scheme for token 
+# Oauth 2 scheme for token
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 # Supabase JWT secret for token verification
@@ -23,13 +22,13 @@ if not SUPABASE_JWT_SECRET:
 
 ALGORITHM = ["HS256"]  # Supabase Legacy JWT uses HS256 for signing
 
-@lru_cache(maxsize=128)
+
 def decode_token(token: str) -> str:
     """
     Decode and verify a Supabase-issued JWT token.
     Supports tokens from email/password and social authentication (Google, GitHub).
 
-    Args: 
+    Args:
         token (str): The JWT token to decode and verify.
 
     Returns:
@@ -42,19 +41,28 @@ def decode_token(token: str) -> str:
         logger = logging.getLogger(__name__)
         logger.debug("Decoding token")
         jwt_secret: str = SUPABASE_JWT_SECRET  # type: ignore
-        payload = jwt.decode(token, jwt_secret, algorithms=ALGORITHM, options={"verify_aud": True}, audience="authenticated")
+        payload = jwt.decode(
+            token,
+            jwt_secret,
+            algorithms=ALGORITHM,
+            options={"verify_aud": True},
+            audience="authenticated",
+        )
         logger.debug("Decoded payload keys: %s", list(payload.keys()))
         user_id = payload.get("sub")
         if user_id is None:
             logger.warning("[Auth] Missing 'sub' claim in JWT payload")
             raise JWTError("Invalid authentication credentials: missing 'sub' claim")
-        
+
         logger.debug("[Auth] User ID extracted from token: %s", user_id)
         return str(user_id)
     except JWTError as e:
-        logging.getLogger(__name__).exception("[Auth] JWTError during token decode: %s", str(e))
+        logging.getLogger(__name__).exception(
+            "[Auth] JWTError during token decode: %s", str(e)
+        )
         raise
-    
+
+
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> str:
     """
     Verify JWT token and extract user ID.
@@ -72,7 +80,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> str:
     try:
         logger = logging.getLogger(__name__)
         logger.debug("[Auth] get_current_user called")
-        
+
         user_id = decode_token(token)
         logger.debug("[Auth] User authenticated: %s", user_id)
         return user_id
@@ -93,13 +101,14 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> str:
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+
 async def refresh_token(refresh_token: str):
     """
     Refresh an access token using a refresh token.
-    
+
     Args:
         refresh_token (str): Refresh token from client.
-    
+
     Returns:
         dict: New access and refresh tokens.
     """
@@ -107,12 +116,13 @@ async def refresh_token(refresh_token: str):
         response = supabase.auth.refresh_session(refresh_token)
         session = getattr(response, "session", None)
         if session is None:
-            raise HTTPException(status_code=400, detail="No session returned from Supabase.")
+            raise HTTPException(
+                status_code=400, detail="No session returned from Supabase."
+            )
         return {
             "access_token": session.access_token,
             "refresh_token": session.refresh_token,
-            "token_type": "bearer"
+            "token_type": "bearer",
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Refresh failed: {str(e)}")
-    

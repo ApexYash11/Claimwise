@@ -8,4 +8,5 @@ def test_chunk_texts_basic():
         "one two three four",
         "four five six seven",
         "seven eight nine ten",
+        "ten",
     ]

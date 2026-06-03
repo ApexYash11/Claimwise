@@ -18,6 +18,26 @@ export interface PolicyValidationMetadata {
   analysis_result?: PolicyAnalysisResult
 }
 
+export interface PolicySummary {
+  id: string
+  fileName: string
+  policyType: string
+  provider: string
+  coverageAmount: string
+  premium: string
+  deductible: string
+  keyFeatures: string[]
+  expirationDate: string
+  rawAnalysis?: {
+    coverage?: string
+    exclusions?: string
+    claim_process?: string
+    claim_readiness_score?: number
+    waiting_period?: string
+    copay?: string
+  }
+}
+
 export interface BackendPolicyRecord {
   id: string
   policy_name?: string

@@ -114,8 +114,8 @@ claimwise/
 │   └── requirements.txt          # Dependencies
 │
 └── 📚 docs/                       # Documentation
-    ├── api/                      # API documentation
-    └── deployment/               # Deployment guides
+    ├── api/                      # Architectural & RAG reviews
+    └── deployment/               # Deployment guides (TODO)
 ```
 
 ---
