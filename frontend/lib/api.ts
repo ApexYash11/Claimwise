@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase"
+import { getSupabase } from "@/lib/get-supabase"
 import { createApiUrlWithLogging } from "@/lib/url-utils"
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
 import type { BackendPolicyRecord } from "@/types/policies"
@@ -6,6 +6,7 @@ import type { BackendPolicyRecord } from "@/types/policies"
 export type { PolicySummary } from "@/types/policies"
 
 export async function getPolicies() {
+  const supabase = await getSupabase()
   const session = await supabase.auth.getSession()
   const token = session.data.session?.access_token
 

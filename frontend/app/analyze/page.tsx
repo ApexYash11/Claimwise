@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils"
 import type { BackendPolicyRecord } from "@/types/policies"
 
 // Dynamic policy data from backend/AI
-import { supabase } from "@/lib/supabase"
+import { getSupabase } from "@/lib/get-supabase"
 import { createApiUrlWithLogging } from "@/lib/url-utils"
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
 
@@ -46,6 +46,7 @@ export default function AnalyzePage() {
       
       try {
         // Get Supabase JWT and user info
+        const supabase = await getSupabase()
         const session = await supabase.auth.getSession()
         const token = session.data.session?.access_token
         const userId = session.data.session?.user?.id
@@ -283,6 +284,7 @@ export default function AnalyzePage() {
     if (!confirm("Are you sure you want to delete this policy?")) return
 
     try {
+      const supabase = await getSupabase()
       const session = await supabase.auth.getSession()
       const token = session.data.session?.access_token
       

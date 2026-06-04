@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { FileText, MessageSquare, BarChart3, Upload, Clock, ArrowRight } from "lucide-react"
 import { useEffect, useState } from "react"
-import { supabase } from "@/lib/supabase"
+import { getSupabase } from "@/lib/get-supabase"
 import {
   Table,
   TableBody,
@@ -37,6 +37,7 @@ export function RecentActivity() {
     const fetchActivities = async () => {
       try {
         // Wait for Supabase session to load, and refresh if needed
+        const supabase = await getSupabase()
         const sessionResult = await supabase.auth.getSession()
         let session = sessionResult.data.session
         let token = session?.access_token
