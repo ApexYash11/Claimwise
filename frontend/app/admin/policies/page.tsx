@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, Edit2, Save, X } from "lucide-react"
 import Link from "next/link"
-import { supabase } from "@/lib/supabase"
+import { getSupabase } from "@/lib/get-supabase"
 import { useAuth } from "@/hooks/use-auth"
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
 
@@ -55,6 +55,7 @@ export default function PolicyManagerPage() {
 
   const fetchPolicies = async () => {
     try {
+      const supabase = await getSupabase()
       const session = await supabase.auth.getSession()
       const token = session.data.session?.access_token
 
@@ -84,6 +85,7 @@ export default function PolicyManagerPage() {
 
   const updatePolicyName = async (policyId: string, name: string) => {
     try {
+      const supabase = await getSupabase()
       const session = await supabase.auth.getSession()
       const token = session.data.session?.access_token
 

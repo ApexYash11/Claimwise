@@ -3,8 +3,8 @@
 import type React from "react"
 
 import { createContext, useContext, useEffect, useState } from "react"
-import type { User } from "@supabase/supabase-js"
-import { supabase } from "@/lib/supabase"
+import type { User, AuthChangeEvent, Session } from "@supabase/supabase-js"
+import { getSupabase } from "@/lib/get-supabase"
 
 interface AuthContextType {
   user: User | null
@@ -34,7 +34,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isAdmin, setIsAdmin] = useState(false)
   const [userRole, setUserRole] = useState<string | null>(null)
 
-  const resolveUserRole = async (user: User): Promise<{ role: string | null; isAdmin: boolean }> => {
+  const resolveUserRole = async (supabase: any, user: any): Promise<{ role: string | null; isAdmin: boolean }> => {
     try {
       const { data: userRow } = await supabase
         .from("users")
@@ -59,107 +59,118 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     let isMounted = true
 
-    // Get initial session
-    const getInitialSession = async () => {
-      try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
-        
-        if (isMounted) {
-          console.log("[AuthProvider] Initial session:", session ? `User: ${session.user.email}` : "No session")
-          setUser(session?.user ?? null)
-          if (session?.user) {
-            const roleInfo = await resolveUserRole(session.user)
-            if (isMounted) {
-              setUserRole(roleInfo.role)
-              setIsAdmin(roleInfo.isAdmin)
+    const init = async () => {
+      const supabase = await getSupabase()
+
+      // Get initial session
+      const getInitialSession = async () => {
+        try {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession()
+          
+          if (isMounted) {
+            console.log("[AuthProvider] Initial session:", session ? `User: ${session.user.email}` : "No session")
+            setUser(session?.user ?? null)
+            if (session?.user) {
+              const roleInfo = await resolveUserRole(supabase, session.user)
+              if (isMounted) {
+                setUserRole(roleInfo.role)
+                setIsAdmin(roleInfo.isAdmin)
+              }
+            } else {
+              setUserRole(null)
+              setIsAdmin(false)
             }
-          } else {
+          }
+        } catch (error) {
+          // Ignore AbortError during cleanup
+          if (error instanceof Error && error.name === 'AbortError') {
+            console.debug("[AuthProvider] Session request aborted (cleanup)")
+            return
+          }
+          if (isMounted) {
+            console.warn("[AuthProvider] Failed to get session:", error)
+            setUser(null)
             setUserRole(null)
             setIsAdmin(false)
           }
+        } finally {
+          if (isMounted) {
+            setLoading(false)
+          }
         }
-      } catch (error) {
-        // Ignore AbortError during cleanup
-        if (error instanceof Error && error.name === 'AbortError') {
-          console.debug("[AuthProvider] Session request aborted (cleanup)")
-          return
-        }
-        if (isMounted) {
-          console.warn("[AuthProvider] Failed to get session:", error)
-          setUser(null)
+      }
+
+      await getInitialSession()
+
+      // Listen for auth changes (OAuth redirects, email signups, etc.)
+      const {
+        data: { subscription },
+      } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session: Session | null) => {
+        if (!isMounted) return
+        
+        console.log("[AuthProvider] Auth state change:", event, "User:", session?.user?.email ?? "None")
+        setUser(session?.user ?? null)
+        setLoading(true)
+
+        if (session?.user) {
+          const roleInfo = await resolveUserRole(supabase, session.user)
+          if (isMounted) {
+            setUserRole(roleInfo.role)
+            setIsAdmin(roleInfo.isAdmin)
+            setLoading(false)
+          }
+        } else {
           setUserRole(null)
           setIsAdmin(false)
-        }
-      } finally {
-        if (isMounted) {
           setLoading(false)
         }
-      }
+
+        // Auto-sync user to database after OAuth or email signup
+        if ((event === "SIGNED_IN" || event === "USER_UPDATED") && session?.user) {
+          try {
+            const { data: existingUser } = await supabase
+              .from("users")
+              .select("id")
+              .eq("id", session.user.id)
+              .single()
+            
+            if (!existingUser && isMounted) {
+              const userName =
+                session.user.user_metadata?.full_name ||
+                session.user.user_metadata?.name ||
+                session.user.email?.split("@")[0] ||
+                "Unknown User"
+              
+              console.log("[AuthProvider] Creating user profile:", session.user.email)
+              await supabase
+                .from("users")
+                .insert({
+                  id: session.user.id,
+                  email: session.user.email,
+                  name: userName,
+                })
+            }
+          } catch (err) {
+            if (isMounted) {
+              console.warn("[AuthProvider] User sync failed (non-critical):", err)
+            }
+          }
+        }
+      })
+
+      return subscription
     }
 
-    getInitialSession()
-
-    // Listen for auth changes (OAuth redirects, email signups, etc.)
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!isMounted) return
-      
-      console.log("[AuthProvider] Auth state change:", event, "User:", session?.user?.email ?? "None")
-      setUser(session?.user ?? null)
-      setLoading(true)
-
-      if (session?.user) {
-        const roleInfo = await resolveUserRole(session.user)
-        if (isMounted) {
-          setUserRole(roleInfo.role)
-          setIsAdmin(roleInfo.isAdmin)
-          setLoading(false)
-        }
-      } else {
-        setUserRole(null)
-        setIsAdmin(false)
-        setLoading(false)
-      }
-
-      // Auto-sync user to database after OAuth or email signup
-      if ((event === "SIGNED_IN" || event === "USER_UPDATED") && session?.user) {
-        try {
-          const { data: existingUser } = await supabase
-            .from("users")
-            .select("id")
-            .eq("id", session.user.id)
-            .single()
-          
-          if (!existingUser && isMounted) {
-            const userName =
-              session.user.user_metadata?.full_name ||
-              session.user.user_metadata?.name ||
-              session.user.email?.split("@")[0] ||
-              "Unknown User"
-            
-            console.log("[AuthProvider] Creating user profile:", session.user.email)
-            await supabase
-              .from("users")
-              .insert({
-                id: session.user.id,
-                email: session.user.email,
-                name: userName,
-              })
-          }
-        } catch (err) {
-          if (isMounted) {
-            console.warn("[AuthProvider] User sync failed (non-critical):", err)
-          }
-        }
-      }
+    let subscription: { unsubscribe: () => void } | null = null
+    init().then((sub) => {
+      subscription = sub
     })
 
     return () => {
       isMounted = false
-      subscription.unsubscribe()
+      subscription?.unsubscribe()
     }
   }, [])
 

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { supabase } from "@/lib/supabase"
+import { getSupabase } from "@/lib/get-supabase"
 import { createApiUrlWithLogging } from "@/lib/url-utils"
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
 import { useRouter } from "next/navigation"
@@ -92,6 +92,7 @@ export default function UploadPage() {
       const originalFile = files[0]._originalFile || files[0]
       formData.append("file", originalFile, files[0].name)
       
+      const supabase = await getSupabase()
       const session = await supabase.auth.getSession()
       const token = session.data.session?.access_token
       

@@ -11,9 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, MessageSquare, Bot, AlertCircle, FileText, Globe, History } from "lucide-react"
 import Link from "next/link"
-import { supabase } from "@/lib/supabase"
-import type { PolicySummary } from "@/lib/api"
+import type { PolicySummary } from "@/types/policies"
 
+import { getSupabase } from "@/lib/get-supabase"
 import { createApiUrlWithLogging } from "@/lib/url-utils"
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
 import type { BackendPolicyRecord } from "@/types/policies"
@@ -110,6 +110,7 @@ export default function ChatPage() {
 
     const loadPoliciesAndHistory = async () => {
       try {
+        const supabase = await getSupabase()
         const session = await supabase.auth.getSession()
         const token = session.data.session?.access_token
         const user = session.data.session?.user
@@ -194,6 +195,7 @@ export default function ChatPage() {
     try {
       setLoadingMoreHistory(true)
       const nextPage = historyPage + 1
+      const supabase = await getSupabase()
       const session = await supabase.auth.getSession()
       const token = session.data.session?.access_token
       if (!token) {
@@ -288,6 +290,7 @@ export default function ChatPage() {
     setError("")
 
     try {
+      const supabase = await getSupabase()
       const chatSession = await supabase.auth.getSession()
       const token = chatSession.data.session?.access_token
       
@@ -394,6 +397,7 @@ export default function ChatPage() {
   const handleClearHistory = async () => {
     setMessages([])
     // Clear user-specific localStorage
+    const supabase = await getSupabase()
     const session = await supabase.auth.getSession()
     const user = session.data.session?.user
     if (user) {

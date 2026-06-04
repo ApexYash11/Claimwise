@@ -1,270 +1,46 @@
-// API utilities for backend communication
-import { supabase } from "./supabase"
-import { createApiUrlWithLogging } from "./url-utils"
-import { fetchWithTimeout } from "./fetch-with-timeout"
+import { getSupabase } from "@/lib/get-supabase"
+import { createApiUrlWithLogging } from "@/lib/url-utils"
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
 import type { BackendPolicyRecord } from "@/types/policies"
 
-export interface PolicyAnalysisRequest {
-  files: File[]
-  userId: string
-}
+export type { PolicySummary } from "@/types/policies"
 
-export interface PolicyAnalysisResponse {
-  analysisId: string
-  status: "processing" | "completed" | "error"
-  results?: {
-    policies: PolicySummary[]
-    insights: string[]
-    recommendations: string[]
+export async function getPolicies() {
+  const supabase = await getSupabase()
+  const session = await supabase.auth.getSession()
+  const token = session.data.session?.access_token
+
+  if (!session.data.session) {
+    throw new Error("Not authenticated")
   }
-  error?: string
-}
 
-export interface PolicySummary {
-  id: string
-  fileName: string
-  policyType: string
-  provider: string
-  coverageAmount: string
-  premium: string
-  deductible: string
-  keyFeatures: string[]
-  expirationDate: string
-  rawAnalysis?: {
-    coverage?: string
-    exclusions?: string
-    claim_process?: string
-    claim_readiness_score?: number
-    waiting_period?: string
-    copay?: string
-  }
-}
-
-interface PoliciesApiResponse {
-  policies?: BackendPolicyRecord[]
-}
-
-const mapPolicyFromBackend = (policy: BackendPolicyRecord): PolicySummary => {
-  const analysis = policy?.validation_metadata?.analysis_result || {}
-  return {
-    id: policy.id,
-    fileName: policy.policy_name || (policy.policy_number ? `Policy ${policy.policy_number}` : `Policy ${String(policy.id).slice(-8)}`),
-    policyType: analysis.policy_type || policy.policy_type || "Unknown",
-    provider: analysis.provider || policy.provider || "Unknown Provider",
-    coverageAmount: analysis.coverage_amount || "Not specified",
-    premium: analysis.premium || "Not specified",
-    deductible: analysis.deductible || "Not specified",
-    keyFeatures: Array.isArray(analysis.key_features) ? analysis.key_features : [],
-    expirationDate: analysis.expiration_date || "Not specified",
-    rawAnalysis: analysis,
-  }
-}
-
-export const uploadPolicies = async (files: File[], userId: string): Promise<PolicyAnalysisResponse> => {
-  const formData = new FormData()
-  files.forEach((file, index) => {
-    formData.append(`file_${index}`, file)
+  const url = createApiUrlWithLogging("/policies")
+  const response = await fetchWithTimeout(url, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    timeoutMs: 12000,
   })
-  formData.append("user_id", userId)
 
-  // Get Supabase JWT
-  const session = await supabase.auth.getSession()
-  const token = session.data.session?.access_token
-
-  try {
-    const apiUrl = createApiUrlWithLogging("/analyze-policy");
-    const response = await fetchWithTimeout(apiUrl, {
-      method: "POST",
-      body: formData,
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      timeoutMs: 15000,
-    })
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
-
-    return await response.json()
-  } catch (error) {
-    console.error("Error uploading policies:", error)
-    throw error
+  if (!response.ok) {
+    throw new Error(`Failed to fetch policies: ${response.statusText}`)
   }
-}
 
-export const comparePolicies = async (policyIds: string[]): Promise<unknown> => {
-  // Get Supabase JWT
-  const session = await supabase.auth.getSession()
-  const token = session.data.session?.access_token
+  const payload = await response.json()
+  const payloadRecord = payload as { policies?: BackendPolicyRecord[] }
+  const backendPolicies = Array.isArray(payloadRecord?.policies) ? payloadRecord.policies : []
 
-  try {
-    const apiUrl = createApiUrlWithLogging("/compare-policies");
-    const response = await fetchWithTimeout(apiUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({ policy_ids: policyIds }),
-      timeoutMs: 15000,
-    })
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`)
+  return backendPolicies.map((p) => {
+    const a = p?.validation_metadata?.analysis_result || {}
+    return {
+      id: p.id,
+      fileName: p.policy_name || (p.policy_number ? `Policy ${p.policy_number}` : `Policy ${String(p.id).slice(0, 8)}`),
+      policyType: a.policy_type || p.policy_type || "Insurance",
+      provider: a.provider || p.provider || "Unknown Provider",
+      coverageAmount: a.coverage_amount || "Not specified",
+      premium: a.premium || "Not specified",
+      deductible: a.deductible || "Not specified",
+      keyFeatures: Array.isArray(a.key_features) ? a.key_features : [a.coverage || "Basic coverage"],
+      expirationDate: a.expiration_date || "Not specified",
+      rawAnalysis: a,
     }
-
-    return await response.json()
-  } catch (error) {
-    console.error("Error comparing policies:", error)
-    throw error
-  }
-}
-
-export const getPolicies = async (): Promise<PolicySummary[]> => {
-  try {
-    // Get Supabase JWT
-    const session = await supabase.auth.getSession()
-    const token = session.data.session?.access_token
-
-    if (!token) {
-      throw new Error("Not authenticated. Please log in.")
-    }
-
-    const apiUrl = createApiUrlWithLogging(`/policies`);
-    const response = await fetchWithTimeout(apiUrl, {
-      headers: { Authorization: `Bearer ${token}` },
-      timeoutMs: 12000,
-    })
-
-    if (!response.ok) {
-      const errorDetail = await response.text()
-      throw new Error(`Failed to fetch policies: ${response.status} - ${errorDetail}`)
-    }
-
-    const data = (await response.json()) as PoliciesApiResponse
-    const backendPolicies = Array.isArray(data?.policies) ? data.policies : []
-    return backendPolicies.map(mapPolicyFromBackend)
-  } catch (error) {
-    console.error("Error fetching policies:", error)
-    // Re-throw to allow caller to handle the error
-    throw error
-  }
-}
-
-export const chatWithPolicies = async (message: string, policyIds: string[]): Promise<unknown> => {
-  // Get Supabase JWT
-  const session = await supabase.auth.getSession()
-  const token = session.data.session?.access_token
-
-  try {
-    if (policyIds.length > 1 && !policyIds.includes("all")) {
-      throw new Error("Multiple specific policy IDs are not supported in a single request. Select one policy or use 'all'.")
-    }
-
-    const isMultiPolicy = policyIds.length === 0 || policyIds.includes("all")
-    const apiUrl = isMultiPolicy
-      ? createApiUrlWithLogging("/chat-multiple")
-      : createApiUrlWithLogging("/chat")
-
-    const response = await fetchWithTimeout(apiUrl, {
-      method: "POST",
-      headers: {
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        "Content-Type": "application/json",
-      },
-      ...(isMultiPolicy
-        ? { body: JSON.stringify({ question: message }) }
-        : {
-            body: JSON.stringify({
-              question: message,
-              policy_id: policyIds[0],
-            }),
-          }),
-      timeoutMs: 15000,
-    })
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`)
-    }
-
-    return await response.json()
-  } catch (error) {
-    console.error("Error in chat:", error)
-    throw error
-  }
-}
-
-export interface HistoryActivity {
-  id: string
-  type: "upload" | "analysis" | "chat" | "comparison"
-  title: string
-  description: string
-  timestamp: string
-  status: "completed" | "processing" | "failed"
-  details?: {
-    filesProcessed?: number
-    insightsGenerated?: number
-    questionsAnswered?: number
-    policiesCompared?: number
-    policyId?: string
-    chatType?: string
-    analysisType?: string
-  }
-}
-
-export interface HistoryResponse {
-  activities: HistoryActivity[]
-  stats: {
-    totalActivities: number
-    uploads: number
-    analyses: number
-    chats: number
-    comparisons: number
-    totalPolicies: number
-  }
-  policies: unknown[]
-  pagination?: {
-    page: number
-    page_size: number
-    has_more_activities: boolean
-    has_more_chat_logs: boolean
-    next_page: number | null
-    total_activities: number
-    total_chat_logs: number
-  }
-  success: boolean
-}
-
-export const getActivityHistory = async (): Promise<HistoryResponse> => {
-  try {
-    // Get Supabase JWT
-    const session = await supabase.auth.getSession()
-    const token = session.data.session?.access_token
-
-    if (!token) {
-      throw new Error("No authentication token available")
-    }
-
-    const apiUrl = createApiUrlWithLogging("/history");
-    const response = await fetchWithTimeout(apiUrl, {
-      method: "GET",
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      timeoutMs: 12000,
-    })
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`)
-    }
-
-    const data = (await response.json()) as HistoryResponse
-    return data
-  } catch (error) {
-    console.error("Error fetching activity history:", error)
-    throw error
-  }
+  })
 }

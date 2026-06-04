@@ -117,7 +117,8 @@ def make_llm_request(prompt: str, max_retries: int = 3, delay: float = 1.0):
                 model="llama-3.3-70b-versatile",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.1,
-                max_tokens=4000
+                max_tokens=4000,
+                timeout=30
             )
             logger.info("✅ Success with Primary Groq API")
             return response.choices[0].message.content
@@ -132,7 +133,8 @@ def make_llm_request(prompt: str, max_retries: int = 3, delay: float = 1.0):
                 model="llama-3.3-70b-versatile",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.1,
-                max_tokens=4000
+                max_tokens=4000,
+                timeout=30
             )
             logger.info("✅ Success with Secondary Groq API")
             return response.choices[0].message.content
@@ -147,7 +149,8 @@ def make_llm_request(prompt: str, max_retries: int = 3, delay: float = 1.0):
                 model="llama-3.3-70b-versatile",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.1,
-                max_tokens=4000
+                max_tokens=4000,
+                timeout=30
             )
             logger.info("✅ Success with Tertiary Groq API")
             return response.choices[0].message.content
@@ -236,7 +239,6 @@ def generate_rule_based_analysis(prompt: str) -> str:
         "claim_readiness_score": 50
     }}'''
 
-    raise Exception("Both Groq and Gemini APIs failed")
 
 def validate_and_clean_analysis(result: dict, original_text: str) -> dict:
     """
