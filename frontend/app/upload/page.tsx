@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { getSupabase } from "@/lib/get-supabase"
 import { createApiUrlWithLogging } from "@/lib/url-utils"
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
@@ -67,16 +67,6 @@ export default function UploadPage() {
   const [error, setError] = useState("")
   const router = useRouter()
 
-  // Simulate progress through steps when uploading
-  useEffect(() => {
-    if (uploading && currentStep < PROCESSING_STEPS.length - 1) {
-      const timer = setTimeout(() => {
-        setCurrentStep(prev => prev + 1)
-      }, 1500)
-      return () => clearTimeout(timer)
-    }
-  }, [uploading, currentStep])
-
   const handleFilesUploaded = async (files: FileWithPreview[]) => {
     setUploading(true)
     setCurrentStep(0)
@@ -97,6 +87,9 @@ export default function UploadPage() {
       const supabase = await getSupabase()
       const session = await supabase.auth.getSession()
       const token = session.data.session?.access_token
+
+      // Step 1: uploading in progress — move to step 1 after fetch starts
+      setCurrentStep(1)
       
       const uploadUrl = createApiUrlWithLogging("/upload-policy");
       const response = await fetchWithTimeout(uploadUrl, {
@@ -119,7 +112,7 @@ export default function UploadPage() {
       const data = (await response.json()) as UploadPolicyResponse
       setPolicyInfo(data)
       
-      // Complete the steps
+      // All backend processing is complete — mark all steps done
       setCurrentStep(PROCESSING_STEPS.length)
 
       // Store in local storage

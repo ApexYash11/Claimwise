@@ -7,6 +7,7 @@ import { AuthProvider } from "@/hooks/use-auth"
 import { ThemeProvider } from "@/components/theme-provider"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { ErrorBoundary } from "@/components/error-boundary"
+import { RouteTransitions } from "@/components/motion/route-transitions"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -39,7 +40,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
           <TooltipProvider>
             <ErrorBoundary>
-              <AuthProvider>{children}</AuthProvider>
+              <AuthProvider>
+                <RouteTransitions>{children}</RouteTransitions>
+              </AuthProvider>
             </ErrorBoundary>
           </TooltipProvider>
         </ThemeProvider>

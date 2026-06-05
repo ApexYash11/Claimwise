@@ -12,7 +12,6 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
-import { Progress } from "@/components/ui/progress"
 import { ArrowLeft, BarChart3, FileText, MessageSquare, CheckCircle, Shield, AlertCircle, FileJson, Trash2, Loader2 } from "lucide-react"
 import Link from "next/link"
 import type { PolicySummary } from "@/lib/api"
@@ -29,6 +28,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { toast } from "sonner"
+import { motion } from "framer-motion"
 import { PageWrapper } from "@/components/motion/page-wrapper"
 import { AnalyzeSkeleton } from "@/components/ui/skeleton"
 
@@ -538,7 +538,7 @@ export default function AnalyzePage() {
                               </div>
                             </div>
 
-                            {/* Claim Readiness Score - New Visual */}
+                            {/* Claim Readiness Score - Animated Ring */}
                             <Card className="border-none shadow-none bg-card">
                               <CardContent className="p-0 pt-2">
                                 <div className="flex items-center justify-between mb-2">
@@ -546,18 +546,51 @@ export default function AnalyzePage() {
                                     <h3 className="font-medium text-foreground">Claim Readiness Score</h3>
                                     <p className="text-xs text-muted-foreground">Based on document completeness</p>
                                   </div>
-                                  <span className={cn(
-                                    "text-2xl font-bold",
-                                    (currentPolicy.rawAnalysis?.claim_readiness_score || 0) >= 75 ? "text-green-600" :
-                                    (currentPolicy.rawAnalysis?.claim_readiness_score || 0) >= 40 ? "text-amber-600" : "text-red-600"
-                                  )}>
-                                    {currentPolicy.rawAnalysis?.claim_readiness_score || 0}/100
-                                  </span>
+                                  <div className="relative flex items-center justify-center">
+                                    {(() => {
+                                      const s = currentPolicy.rawAnalysis?.claim_readiness_score || 0
+                                      return (
+                                        <>
+                                          <svg className="-rotate-90" width="56" height="56">
+                                            <circle
+                                              className="text-slate-100 dark:text-slate-800"
+                                              strokeWidth="5"
+                                              stroke="currentColor"
+                                              fill="transparent"
+                                              r="22"
+                                              cx="28"
+                                              cy="28"
+                                            />
+                                            <motion.circle
+                                              className={cn(
+                                                s >= 75 ? "text-green-500" :
+                                                s >= 40 ? "text-amber-500" : "text-red-500"
+                                              )}
+                                              strokeWidth="5"
+                                              strokeDasharray={138.23}
+                                              stroke="currentColor"
+                                              fill="transparent"
+                                              r="22"
+                                              cx="28"
+                                              cy="28"
+                                              strokeLinecap="round"
+                                              initial={{ strokeDashoffset: 138.23 }}
+                                              animate={{ strokeDashoffset: 138.23 - (138.23 * s / 100) }}
+                                              transition={{ duration: 1, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                                            />
+                                          </svg>
+                                          <span className={cn(
+                                            "absolute text-xs font-bold",
+                                            s >= 75 ? "text-green-600" :
+                                            s >= 40 ? "text-amber-600" : "text-red-600"
+                                          )}>
+                                            {s}
+                                          </span>
+                                        </>
+                                      )
+                                    })()}
+                                  </div>
                                 </div>
-                                <Progress 
-                                  value={currentPolicy.rawAnalysis?.claim_readiness_score || 0} 
-                                  className="h-2" 
-                                />
                               </CardContent>
                             </Card>
 
