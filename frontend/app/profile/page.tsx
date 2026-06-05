@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { ArrowLeft, LogOut, Mail, User, Shield } from "lucide-react"
 import Link from "next/link"
 import { useState } from "react"
+import { PageWrapper } from "@/components/motion/page-wrapper"
 
 export default function ProfilePage() {
   const { user } = useAuth()
@@ -44,6 +45,7 @@ export default function ProfilePage() {
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-50">
         <Header />
         <main className="container mx-auto px-4 py-8 max-w-2xl">
+          <PageWrapper>
           {/* Back Button */}
           <Link href="/dashboard" className="inline-flex items-center gap-2 text-indigo-600 dark:text-indigo-400 hover:underline mb-8">
             <ArrowLeft className="h-4 w-4" />
@@ -159,6 +161,7 @@ export default function ProfilePage() {
               </p>
             </CardContent>
           </Card>
+          </PageWrapper>
         </main>
       </div>
     </ProtectedRoute>

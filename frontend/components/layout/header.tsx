@@ -7,6 +7,7 @@ import { useTheme } from "next-themes"
 import { useState, useEffect } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { motion, AnimatePresence } from "framer-motion"
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -130,95 +131,106 @@ export function Header() {
         </div>
 
         {/* Mobile Menu */}
-        {isMenuOpen && (
-          <div className="md:hidden py-4 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 absolute left-0 right-0 px-4 shadow-lg">
-            <nav className="flex flex-col space-y-4">
-              {user ? (
-                <>
-                  <Link
-                    href="/dashboard"
-                    className="text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 font-medium"
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    Dashboard
-                  </Link>
-                  <Link
-                    href="/upload"
-                    className="text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 font-medium"
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    Upload
-                  </Link>
-                  <Link
-                    href="/analyze"
-                    className="text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 font-medium"
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    Analyze
-                  </Link>
-                  <Link
-                    href="/chat"
-                    className="text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 font-medium"
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    Chat
-                  </Link>
-                  
-                </>
-              ) : (
-                <>
-                  <Link
-                    href="#features"
-                    className="text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 font-medium"
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    Features
-                  </Link>
-                  <Link
-                    href="#demo"
-                    className="text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 font-medium"
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    Demo Flow
-                  </Link>
-                </>
-              )}
+        <AnimatePresence>
+          {isMenuOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+              className="md:hidden overflow-hidden border-t border-slate-200 bg-white px-4 shadow-lg dark:border-slate-800 dark:bg-slate-950"
+            >
+              <div className="py-4">
+                <nav className="flex flex-col space-y-4">
+                  {user ? (
+                    <>
+                      <Link
+                        href="/dashboard"
+                        className="text-sm font-medium text-slate-600 transition-colors hover:text-teal-600 dark:text-slate-300 dark:hover:text-teal-400"
+                        onClick={() => setIsMenuOpen(false)}
+                      >
+                        Dashboard
+                      </Link>
+                      <Link
+                        href="/upload"
+                        className="text-sm font-medium text-slate-600 transition-colors hover:text-teal-600 dark:text-slate-300 dark:hover:text-teal-400"
+                        onClick={() => setIsMenuOpen(false)}
+                      >
+                        Upload
+                      </Link>
+                      <Link
+                        href="/analyze"
+                        className="text-sm font-medium text-slate-600 transition-colors hover:text-teal-600 dark:text-slate-300 dark:hover:text-teal-400"
+                        onClick={() => setIsMenuOpen(false)}
+                      >
+                        Analyze
+                      </Link>
+                      <Link
+                        href="/chat"
+                        className="text-sm font-medium text-slate-600 transition-colors hover:text-teal-600 dark:text-slate-300 dark:hover:text-teal-400"
+                        onClick={() => setIsMenuOpen(false)}
+                      >
+                        Chat
+                      </Link>
+                    </>
+                  ) : (
+                    <>
+                      <Link
+                        href="#features"
+                        className="text-sm font-medium text-slate-600 transition-colors hover:text-teal-600 dark:text-slate-300 dark:hover:text-teal-400"
+                        onClick={() => setIsMenuOpen(false)}
+                      >
+                        Features
+                      </Link>
+                      <Link
+                        href="#demo"
+                        className="text-sm font-medium text-slate-600 transition-colors hover:text-teal-600 dark:text-slate-300 dark:hover:text-teal-400"
+                        onClick={() => setIsMenuOpen(false)}
+                      >
+                        Demo Flow
+                      </Link>
+                    </>
+                  )}
 
-              <div className="flex flex-col space-y-3 pt-4 border-t border-slate-200 dark:border-slate-800">
-                {user ? (
-                  <>
-                    <Link href="/profile" onClick={() => setIsMenuOpen(false)}>
-                      <div className="flex items-center space-x-3 px-2 py-1">
-                        <Avatar className="h-8 w-8">
-                          <AvatarFallback className="bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300 text-xs">{userInitials}</AvatarFallback>
-                        </Avatar>
-                        <div className="flex flex-col">
-                          <span className="text-sm font-medium text-slate-900 dark:text-slate-50">{userName}</span>
-                          <span className="text-xs text-slate-500 dark:text-slate-400">{user.email}</span>
-                        </div>
-                      </div>
-                    </Link>
-                    <Link href="/profile" onClick={() => setIsMenuOpen(false)}>
-                      <Button variant="ghost" className="w-full justify-start text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20">
-                        <LogOut className="mr-2 h-4 w-4" />
-                        Sign out
-                      </Button>
-                    </Link>
-                  </>
-                ) : (
-                  <>
-                    <Button variant="ghost" asChild className="justify-start">
-                      <Link href="/login">Sign in</Link>
-                    </Button>
-                    <Button asChild className="bg-teal-600 hover:bg-teal-700 text-white">
-                      <Link href="/#demo">Book Demo</Link>
-                    </Button>
-                  </>
-                )}
+                  <div className="flex flex-col space-y-3 border-t border-slate-200 pt-4 dark:border-slate-800">
+                    {user ? (
+                      <>
+                        <Link href="/profile" onClick={() => setIsMenuOpen(false)}>
+                          <div className="flex items-center space-x-3 px-2 py-1">
+                            <Avatar className="h-8 w-8">
+                              <AvatarFallback className="bg-teal-100 text-xs font-medium text-teal-700 dark:bg-teal-900 dark:text-teal-300">
+                                {userInitials}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="flex flex-col">
+                              <span className="text-sm font-medium text-slate-900 dark:text-slate-50">{userName}</span>
+                              <span className="text-xs text-slate-500 dark:text-slate-400">{user.email}</span>
+                            </div>
+                          </div>
+                        </Link>
+                        <Link href="/profile" onClick={() => setIsMenuOpen(false)}>
+                          <Button variant="ghost" className="w-full justify-start text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/20">
+                            <LogOut className="mr-2 h-4 w-4" />
+                            Sign out
+                          </Button>
+                        </Link>
+                      </>
+                    ) : (
+                      <>
+                        <Button variant="ghost" asChild className="justify-start">
+                          <Link href="/login">Sign in</Link>
+                        </Button>
+                        <Button asChild className="bg-teal-600 text-white hover:bg-teal-700">
+                          <Link href="/#demo">Book Demo</Link>
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </nav>
               </div>
-            </nav>
-          </div>
-        )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </header>
   )

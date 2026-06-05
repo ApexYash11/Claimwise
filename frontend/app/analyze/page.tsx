@@ -18,6 +18,7 @@ import Link from "next/link"
 import type { PolicySummary } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import type { BackendPolicyRecord } from "@/types/policies"
+import { PageWrapper } from "@/components/motion/page-wrapper"
 
 // Dynamic policy data from backend/AI
 import { getSupabase } from "@/lib/get-supabase"
@@ -338,6 +339,7 @@ export default function AnalyzePage() {
         <Header />
         
         <main className="flex-1 overflow-hidden">
+          <PageWrapper>
           {loading ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center space-y-4">
@@ -647,6 +649,7 @@ export default function AnalyzePage() {
               </ResizablePanel>
             </ResizablePanelGroup>
           )}
+          </PageWrapper>
         </main>
       </div>
     </ProtectedRoute>

@@ -14,6 +14,8 @@ import { Card, CardContent } from "@/components/ui/card"
 import { ArrowLeft, ArrowRight, Shield, FileText, CheckCircle, Zap, Lock } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
+import { motion } from "framer-motion"
+import { PageWrapper } from "@/components/motion/page-wrapper"
 
 interface FileWithPreview extends File {
   preview?: string
@@ -155,6 +157,7 @@ export default function UploadPage() {
         <Header />
         
         <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <PageWrapper>
           {/* Back Button */}
           <div className="mb-8">
             <Button variant="ghost" asChild className="text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100">
@@ -218,19 +221,35 @@ export default function UploadPage() {
                           const Icon = step.icon
 
                           return (
-                            <div key={step.id} className="flex items-start gap-4">
-                              <div className={cn(
-                                "relative z-10 flex items-center justify-center w-12 h-12 rounded-full border-2 transition-colors duration-300",
-                                isCompleted ? "bg-teal-50 border-teal-500 text-teal-600" :
-                                isCurrent ? "bg-white border-blue-500 text-blue-600 animate-pulse" :
-                                "bg-slate-50 border-slate-200 text-slate-300"
-                              )}>
+                            <motion.div
+                              key={step.id}
+                              initial={{ opacity: 0, x: -12 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{ duration: 0.35, delay: index * 0.1, ease: [0.16, 1, 0.3, 1] }}
+                              className="flex items-start gap-4"
+                            >
+                              <motion.div
+                                animate={isCurrent ? { scale: [1, 1.05, 1] } : {}}
+                                transition={isCurrent ? { duration: 1.5, repeat: Infinity, ease: "easeInOut" } : {}}
+                                className={cn(
+                                  "relative z-10 flex items-center justify-center w-12 h-12 rounded-full border-2 transition-colors duration-300",
+                                  isCompleted ? "bg-teal-50 border-teal-500 text-teal-600" :
+                                  isCurrent ? "bg-white border-blue-500 text-blue-600" :
+                                  "bg-slate-50 border-slate-200 text-slate-300"
+                                )}
+                              >
                                 {isCompleted ? (
-                                  <CheckCircle className="w-6 h-6" />
+                                  <motion.div
+                                    initial={{ scale: 0 }}
+                                    animate={{ scale: 1 }}
+                                    transition={{ type: "spring", stiffness: 400, damping: 10 }}
+                                  >
+                                    <CheckCircle className="w-6 h-6" />
+                                  </motion.div>
                                 ) : (
                                   <Icon className="w-5 h-5" />
                                 )}
-                              </div>
+                              </motion.div>
                               <div className="pt-2">
                                 <h4 className={cn(
                                   "font-medium text-sm",
@@ -242,7 +261,7 @@ export default function UploadPage() {
                                   {step.description}
                                 </p>
                               </div>
-                            </div>
+                            </motion.div>
                           )
                         })}
                       </div>
@@ -250,12 +269,19 @@ export default function UploadPage() {
                   </div>
 
                   {policyInfo && (
-                    <div className="flex justify-end pt-6 border-t border-slate-100 dark:border-slate-800">
-                      <Button onClick={handleAnalyze} className="bg-slate-900 text-white hover:bg-slate-800">
-                        View Analysis Results
-                        <ArrowRight className="ml-2 h-4 w-4" />
-                      </Button>
-                    </div>
+                    <motion.div
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.4 }}
+                      className="flex justify-end pt-6 border-t border-slate-100 dark:border-slate-800"
+                    >
+                      <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                        <Button onClick={handleAnalyze} className="bg-slate-900 text-white hover:bg-slate-800">
+                          View Analysis Results
+                          <ArrowRight className="ml-2 h-4 w-4" />
+                        </Button>
+                      </motion.div>
+                    </motion.div>
                   )}
                 </div>
               )}
@@ -263,29 +289,36 @@ export default function UploadPage() {
           </Card>
 
           {/* Trust Indicators */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
-            <div className="p-4">
-              <div className="mx-auto w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-3">
-                <Lock className="h-5 w-5 text-slate-600" />
-              </div>
-              <h3 className="font-medium text-slate-900 dark:text-slate-100 text-sm">Bank-Grade Security</h3>
-              <p className="text-xs text-slate-500 mt-1">Your data is encrypted at rest and in transit</p>
-            </div>
-            <div className="p-4">
-              <div className="mx-auto w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-3">
-                <Shield className="h-5 w-5 text-slate-600" />
-              </div>
-              <h3 className="font-medium text-slate-900 dark:text-slate-100 text-sm">Private & Confidential</h3>
-              <p className="text-xs text-slate-500 mt-1">We never share your data with third parties</p>
-            </div>
-            <div className="p-4">
-              <div className="mx-auto w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-3">
-                <Zap className="h-5 w-5 text-slate-600" />
-              </div>
-              <h3 className="font-medium text-slate-900 dark:text-slate-100 text-sm">Instant Analysis</h3>
-              <p className="text-xs text-slate-500 mt-1">Get results in seconds, not days</p>
-            </div>
-          </div>
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: "-50px" }}
+            variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.1 } } }}
+            className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center"
+          >
+            {[
+              { icon: Lock, title: "Bank-Grade Security", desc: "Your data is encrypted at rest and in transit" },
+              { icon: Shield, title: "Private & Confidential", desc: "We never share your data with third parties" },
+              { icon: Zap, title: "Instant Analysis", desc: "Get results in seconds, not days" },
+            ].map((item) => (
+              <motion.div
+                key={item.title}
+                variants={{ hidden: { opacity: 0, y: 12 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4 } } }}
+                className="p-4"
+              >
+                <motion.div
+                  className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800"
+                  whileHover={{ scale: 1.1, rotate: 4 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 10 }}
+                >
+                  <item.icon className="h-5 w-5 text-slate-600" />
+                </motion.div>
+                <h3 className="text-sm font-medium text-slate-900 dark:text-slate-100">{item.title}</h3>
+                <p className="mt-1 text-xs text-slate-500">{item.desc}</p>
+              </motion.div>
+            ))}
+          </motion.div>
+          </PageWrapper>
         </main>
       </div>
     </ProtectedRoute>

@@ -40,8 +40,8 @@
   --input: 214.3 31.8% 91.4%;
   --ring: 222.2 84% 4.9%;
 
-  /* Radius: Professional/Small */
-  --radius: 0.3rem;
+  /* Radius: Premium/Modern */
+  --radius: 0.625rem;
 
   /* Charts */
   --chart-1: 175 57% 41%; /* Teal */
@@ -117,7 +117,7 @@
 
 @theme inline {
   --font-sans: var(--font-inter);
-  --font-serif: var(--font-merriweather);
+  --font-serif: var(--font-serif);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);

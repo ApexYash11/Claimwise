@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, MessageSquare, Bot, AlertCircle, FileText, Globe, History } from "lucide-react"
 import Link from "next/link"
 import type { PolicySummary } from "@/types/policies"
+import { PageWrapper } from "@/components/motion/page-wrapper"
 
 import { getSupabase } from "@/lib/get-supabase"
 import { createApiUrlWithLogging } from "@/lib/url-utils"
@@ -430,6 +431,7 @@ export default function ChatPage() {
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
         <Header />
 
+        <PageWrapper>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           {/* Back Button */}
           <div className="mb-8">
@@ -678,6 +680,7 @@ export default function ChatPage() {
             </div>
           </div>
         </div>
+        </PageWrapper>
       </div>
     </ProtectedRoute>
   )

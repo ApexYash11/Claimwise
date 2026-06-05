@@ -10,6 +10,7 @@ import { ArrowLeft, Plus, Loader2 } from "lucide-react"
 import Link from "next/link"
 import type { PolicySummary } from "@/lib/api"
 import { getPolicies } from "@/lib/api"
+import { PageWrapper } from "@/components/motion/page-wrapper"
 
 export default function ComparePage() {
   const [selectedPolicies, setSelectedPolicies] = useState<PolicySummary[]>([])
@@ -58,6 +59,7 @@ export default function ComparePage() {
       <div className="min-h-screen bg-gray-50">
         <Header />
 
+        <PageWrapper>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Back Button */}
           <div className="mb-6">
@@ -110,6 +112,7 @@ export default function ComparePage() {
             </Card>
           )}
         </div>
+        </PageWrapper>
       </div>
     </ProtectedRoute>
   )
