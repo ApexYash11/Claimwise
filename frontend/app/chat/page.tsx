@@ -13,6 +13,7 @@ import { ArrowLeft, MessageSquare, Bot, AlertCircle, FileText, Globe, History } 
 import Link from "next/link"
 import type { PolicySummary } from "@/types/policies"
 import { PageWrapper } from "@/components/motion/page-wrapper"
+import { Skeleton } from "@/components/ui/skeleton"
 
 import { getSupabase } from "@/lib/get-supabase"
 import { createApiUrlWithLogging } from "@/lib/url-utils"
@@ -556,9 +557,17 @@ export default function ChatPage() {
               <Card className="min-h-[500px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-sm rounded-xl">
                 <CardContent className="p-8 text-slate-900 dark:text-slate-100">
                   {loadingPolicies ? (
-                    <div className="text-center py-12">
-                      <div className="animate-spin w-8 h-8 border-4 border-teal-600 border-t-transparent rounded-full mx-auto mb-4"></div>
-                      <p className="text-slate-600 dark:text-slate-300 font-medium">Loading your policies...</p>
+                    <div className="space-y-6 py-8">
+                      <div className="flex justify-center space-x-2">
+                        <Skeleton className="h-6 w-40 rounded-full" />
+                        <Skeleton className="h-6 w-32 rounded-full" />
+                        <Skeleton className="h-6 w-36 rounded-full" />
+                      </div>
+                      <div className="space-y-4">
+                        <Skeleton className="h-24 w-full" />
+                        <Skeleton className="h-24 w-full" />
+                        <Skeleton className="h-24 w-3/4" />
+                      </div>
                     </div>
                   ) : policies.length === 0 ? (
                     <div className="text-center py-12">

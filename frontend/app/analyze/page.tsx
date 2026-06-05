@@ -13,12 +13,24 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/componen
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Progress } from "@/components/ui/progress"
-import { ArrowLeft, BarChart3, FileText, MessageSquare, CheckCircle, Shield, AlertCircle, FileJson, Trash2 } from "lucide-react"
+import { ArrowLeft, BarChart3, FileText, MessageSquare, CheckCircle, Shield, AlertCircle, FileJson, Trash2, Loader2 } from "lucide-react"
 import Link from "next/link"
 import type { PolicySummary } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import type { BackendPolicyRecord } from "@/types/policies"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { toast } from "sonner"
 import { PageWrapper } from "@/components/motion/page-wrapper"
+import { AnalyzeSkeleton } from "@/components/ui/skeleton"
 
 // Dynamic policy data from backend/AI
 import { getSupabase } from "@/lib/get-supabase"
@@ -39,6 +51,9 @@ export default function AnalyzePage() {
   const [selectedPolicyId, setSelectedPolicyId] = useState<string>("")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   useEffect(() => {
     const analyzeAllPolicies = async () => {
@@ -274,23 +289,22 @@ export default function AnalyzePage() {
     return recommendations
   }
 
-  const handleDeletePolicy = async (e: React.MouseEvent, policyId: string) => {
-    e.stopPropagation() // Prevent selecting the policy when clicking delete
-    
-    if (!policyId) {
-      console.error("No policy ID provided for deletion")
-      return
-    }
+  const handleDeleteClick = (e: React.MouseEvent, policyId: string) => {
+    e.stopPropagation()
+    setDeleteTargetId(policyId)
+    setDeleteDialogOpen(true)
+  }
 
-    if (!confirm("Are you sure you want to delete this policy?")) return
+  const handleDeleteConfirm = async () => {
+    if (!deleteTargetId) return
 
+    setIsDeleting(true)
     try {
       const supabase = await getSupabase()
       const session = await supabase.auth.getSession()
       const token = session.data.session?.access_token
       
-      const deleteUrl = createApiUrlWithLogging(`/policies/${policyId}`)
-      console.log(`Attempting to delete policy: ${policyId} at ${deleteUrl}`)
+      const deleteUrl = createApiUrlWithLogging(`/policies/${deleteTargetId}`)
       
       const response = await fetchWithTimeout(deleteUrl, {
         method: "DELETE",
@@ -304,29 +318,29 @@ export default function AnalyzePage() {
           const errorData = await response.json()
           errorMessage = errorData.detail || errorMessage
         } catch {
-          // If not JSON, use status text
           errorMessage = `Error ${response.status}: ${response.statusText}`
         }
         throw new Error(errorMessage)
       }
 
-      // Remove from local state
-      const updatedPolicies = policies.filter(p => p.id !== policyId)
+      const updatedPolicies = policies.filter(p => p.id !== deleteTargetId)
       setPolicies(updatedPolicies)
       
-      // Update selection if needed
-      if (selectedPolicyId === policyId) {
+      if (selectedPolicyId === deleteTargetId) {
         setSelectedPolicyId(updatedPolicies.length > 0 ? updatedPolicies[0].id : "")
       }
       
-      // Update localStorage
       const policyIds = updatedPolicies.map(p => p.id)
       localStorage.setItem("claimwise_uploaded_policy_ids", JSON.stringify(policyIds))
       
-      console.log("Policy deleted successfully")
+      toast.success("Policy deleted successfully")
     } catch (err: unknown) {
-      console.error("Delete error:", err)
-      alert(err instanceof Error ? err.message : "Failed to delete policy. Please try again.")
+      const message = err instanceof Error ? err.message : "Failed to delete policy. Please try again."
+      toast.error(message)
+    } finally {
+      setIsDeleting(false)
+      setDeleteDialogOpen(false)
+      setDeleteTargetId(null)
     }
   }
 
@@ -341,12 +355,7 @@ export default function AnalyzePage() {
         <main className="flex-1 overflow-hidden">
           <PageWrapper>
           {loading ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center space-y-4">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-slate-900 mx-auto"></div>
-                <p className="text-slate-500">Analyzing your policies...</p>
-              </div>
-            </div>
+            <AnalyzeSkeleton />
           ) : error ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center space-y-4 max-w-md mx-auto p-6 bg-white rounded-lg shadow-sm border border-red-100">
@@ -387,7 +396,7 @@ export default function AnalyzePage() {
                             <div className="flex items-center gap-2">
                               {selectedPolicyId === policy.id && <CheckCircle className="h-3 w-3 text-teal-600 mt-1" />}
                               <button 
-                                onClick={(e) => handleDeletePolicy(e, policy.id)}
+                                 onClick={(e) => handleDeleteClick(e, policy.id)}
                                 className="text-slate-400 hover:text-red-500 transition-colors p-1"
                                 title="Delete Policy"
                               >
@@ -652,6 +661,34 @@ export default function AnalyzePage() {
           </PageWrapper>
         </main>
       </div>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Policy</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this policy? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {isDeleting ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Deleting...
+                </span>
+              ) : (
+                "Delete"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </ProtectedRoute>
   )
 }

@@ -14,13 +14,13 @@ import {
   BarChart3,
   CheckCircle,
   ArrowRight,
-  Loader2,
   ShieldCheck,
   Activity,
   Sparkles,
   ScanSearch,
 } from "lucide-react"
 import { motion } from "framer-motion"
+import { Skeleton } from "@/components/ui/skeleton"
 
 export default function HomePage() {
   const { user, loading } = useAuth()
@@ -35,7 +35,7 @@ export default function HomePage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <Skeleton className="h-8 w-8 rounded-full" />
       </div>
     )
   }
