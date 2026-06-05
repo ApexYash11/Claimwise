@@ -198,6 +198,17 @@
   }
 }
 
+@keyframes typing-dot {
+  0%, 20%, 100% {
+    transform: translateY(0) scale(0.85);
+    opacity: 0.35;
+  }
+  50% {
+    transform: translateY(-7px) scale(1);
+    opacity: 1;
+  }
+}
+
 @layer utilities {
   .premium-grid {
     background-image:
@@ -257,13 +268,18 @@
   .section-fade-in {
     animation: fade-rise 650ms ease-out both;
   }
+
+  .typing-dot {
+    animation: typing-dot 1.4s ease-in-out infinite;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .reveal-on-load,
   .float-soft,
   .glow-pulse,
-  .section-fade-in {
+  .section-fade-in,
+  .typing-dot {
     animation: none;
   }
 }
