@@ -6,10 +6,12 @@ import { Header } from "@/components/layout/header"
 import { PolicyComparison } from "@/components/analysis/policy-comparison"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ArrowLeft, Plus, Loader2 } from "lucide-react"
+import { ArrowLeft, Plus } from "lucide-react"
 import Link from "next/link"
 import type { PolicySummary } from "@/lib/api"
 import { getPolicies } from "@/lib/api"
+import { PageWrapper } from "@/components/motion/page-wrapper"
+import { Skeleton } from "@/components/ui/skeleton"
 
 export default function ComparePage() {
   const [selectedPolicies, setSelectedPolicies] = useState<PolicySummary[]>([])
@@ -41,10 +43,12 @@ export default function ComparePage() {
         <div className="min-h-screen bg-gray-50">
           <Header />
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <div className="flex items-center justify-center h-64">
-              <div className="flex items-center space-x-2">
-                <Loader2 className="w-6 h-6 animate-spin" />
-                <span>Loading your policies...</span>
+            <div className="space-y-4 p-8">
+              <Skeleton className="h-8 w-64" />
+              <Skeleton className="h-48" />
+              <div className="grid grid-cols-2 gap-4">
+                <Skeleton className="h-32" />
+                <Skeleton className="h-32" />
               </div>
             </div>
           </div>
@@ -55,13 +59,14 @@ export default function ComparePage() {
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
         <Header />
 
+        <PageWrapper>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Back Button */}
           <div className="mb-6">
-            <Button variant="ghost" asChild className="text-gray-600 hover:text-gray-900">
+            <Button variant="ghost" asChild className="text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100">
               <Link href="/analyze">
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back to Analysis
@@ -71,14 +76,14 @@ export default function ComparePage() {
 
           {/* Header */}
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Compare Policies</h1>
-            <p className="text-lg text-gray-600">
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-50 mb-2">Compare Policies</h1>
+            <p className="text-lg text-slate-600 dark:text-slate-400">
               Side-by-side comparison of your insurance policies to help you make informed decisions.
             </p>
           </div>
 
           {/* Add More Policies */}
-          <Card className="mb-8 border-dashed border-2 border-gray-300">
+          <Card className="mb-8 border-dashed border-2 border-slate-300 dark:border-slate-700">
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <Plus className="w-5 h-5" />
@@ -87,7 +92,7 @@ export default function ComparePage() {
               <CardDescription>Upload additional policies to compare more options</CardDescription>
             </CardHeader>
             <CardContent>
-              <Button asChild className="bg-blue-600 hover:bg-blue-700">
+              <Button asChild>
                 <Link href="/upload">Upload More Policies</Link>
               </Button>
             </CardContent>
@@ -99,8 +104,8 @@ export default function ComparePage() {
           ) : (
             <Card className="text-center py-12">
               <CardContent>
-                <h3 className="text-lg font-semibold mb-2">No Policies to Compare</h3>
-                <p className="text-gray-600 mb-4">
+                <h3 className="text-lg font-semibold mb-2 text-slate-900 dark:text-slate-50">No Policies to Compare</h3>
+                <p className="text-slate-600 dark:text-slate-400 mb-4">
                   You need at least 2 policies to perform a comparison. Upload some policies to get started.
                 </p>
                 <Button asChild>
@@ -110,6 +115,7 @@ export default function ComparePage() {
             </Card>
           )}
         </div>
+        </PageWrapper>
       </div>
     </ProtectedRoute>
   )

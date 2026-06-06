@@ -7,17 +7,18 @@ import { Header } from "@/components/layout/header"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, MessageSquare, Bot, AlertCircle, FileText, Globe, History } from "lucide-react"
 import Link from "next/link"
 import type { PolicySummary } from "@/types/policies"
+import { PageWrapper } from "@/components/motion/page-wrapper"
+import { Skeleton } from "@/components/ui/skeleton"
 
 import { getSupabase } from "@/lib/get-supabase"
 import { createApiUrlWithLogging } from "@/lib/url-utils"
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
-import type { BackendPolicyRecord } from "@/types/policies"
 import type { BackendHistoryResponse } from "@/types/history"
+import { usePolicies, useHistory } from "@/lib/use-queries"
 
 const Message = dynamic(() => import("@/components/chat/message").then((mod) => ({ default: mod.Message })), {
   loading: () => <div className="h-24 w-full rounded-lg bg-slate-100 dark:bg-slate-800 animate-pulse" />,
@@ -48,11 +49,12 @@ interface ChatMessage {
 
 export default function ChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [policies, setPolicies] = useState<PolicySummary[]>([])
   const [selectedPolicyId, setSelectedPolicyId] = useState<string>("all")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
-  const [loadingPolicies, setLoadingPolicies] = useState(true)
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null)
+  const { data: policiesData, isLoading: loadingPolicies } = usePolicies()
+  const { data: historyData } = useHistory(1, 25)
   const [historyPage, setHistoryPage] = useState(1)
   const [hasMoreHistory, setHasMoreHistory] = useState(false)
   const [loadingMoreHistory, setLoadingMoreHistory] = useState(false)
@@ -89,105 +91,38 @@ export default function ChatPage() {
     scrollToBottom()
   }, [messages])
 
-  // Load user policies and chat history on component mount
+  // Populate policies from TanStack Query
+  const mapPolicyFromBackend = (policy: any): PolicySummary => {
+    const analysis = policy?.validation_metadata?.analysis_result || {}
+    return {
+      id: policy.id,
+      fileName: policy.policy_name || (policy.policy_number ? `Policy ${policy.policy_number}` : `Policy ${String(policy.id).slice(-8)}`),
+      policyType: analysis.policy_type || policy.policy_type || "Unknown",
+      provider: analysis.provider || policy.provider || "Unknown Provider",
+      premium: analysis.premium || "Not specified",
+      coverageAmount: analysis.coverage_amount || "Not specified",
+      deductible: analysis.deductible || "Not specified",
+      keyFeatures: Array.isArray(analysis.key_features) ? analysis.key_features : [],
+      expirationDate: analysis.expiration_date || "Not specified",
+      rawAnalysis: analysis,
+    }
+  }
+
+  const policies: PolicySummary[] = policiesData?.policies?.map(mapPolicyFromBackend) ?? []
+  const serverHistoryMessages = mapServerHistoryToMessages(historyData)
+
   useEffect(() => {
-    const controller = new AbortController()
-    const mapPolicyFromBackend = (policy: BackendPolicyRecord): PolicySummary => {
-      const analysis = policy?.validation_metadata?.analysis_result || {}
-      return {
-        id: policy.id,
-        fileName: policy.policy_name || (policy.policy_number ? `Policy ${policy.policy_number}` : `Policy ${String(policy.id).slice(-8)}`),
-        policyType: analysis.policy_type || policy.policy_type || "Unknown",
-        provider: analysis.provider || policy.provider || "Unknown Provider",
-        premium: analysis.premium || "Not specified",
-        coverageAmount: analysis.coverage_amount || "Not specified",
-        deductible: analysis.deductible || "Not specified",
-        keyFeatures: Array.isArray(analysis.key_features) ? analysis.key_features : [],
-        expirationDate: analysis.expiration_date || "Not specified",
-        rawAnalysis: analysis,
-      }
+    if (policies.length > 0 && selectedPolicyId === "all") {
+      setSelectedPolicyId(policies[0].id)
     }
+  }, [policies])
 
-    const loadPoliciesAndHistory = async () => {
-      try {
-        const supabase = await getSupabase()
-        const session = await supabase.auth.getSession()
-        const token = session.data.session?.access_token
-        const user = session.data.session?.user
-
-        if (!user) {
-          setError("Please log in to access your policies")
-          setLoadingPolicies(false)
-          return
-        }
-
-        const authHeaders = token ? { Authorization: `Bearer ${token}` } : undefined
-        const policiesUrl = createApiUrlWithLogging("/policies")
-        const chatHistoryUrl = `${createApiUrlWithLogging("/history")}?page=1&page_size=25`
-
-        const [policiesResult, historyResult] = await Promise.allSettled([
-          fetchWithTimeout(policiesUrl, {
-            headers: authHeaders,
-            timeoutMs: 12000,
-            signal: controller.signal,
-          }),
-          fetchWithTimeout(chatHistoryUrl, {
-            headers: authHeaders,
-            timeoutMs: 12000,
-            signal: controller.signal,
-          }),
-        ])
-
-        if (policiesResult.status === "fulfilled" && policiesResult.value.ok) {
-          const policyPayload = (await policiesResult.value.json()) as { policies?: BackendPolicyRecord[] }
-          const backendPolicies = Array.isArray(policyPayload?.policies) ? policyPayload.policies : []
-          const loadedPolicies = backendPolicies.map(mapPolicyFromBackend)
-          setPolicies(loadedPolicies)
-          if (loadedPolicies.length > 0) {
-            setSelectedPolicyId(loadedPolicies[0].id)
-          }
-        } else {
-          setError("Failed to load policies")
-        }
-
-        if (historyResult.status === "fulfilled" && historyResult.value.ok) {
-          const historyData = (await historyResult.value.json()) as BackendHistoryResponse
-          const serverMessages = mapServerHistoryToMessages(historyData)
-          setMessages(serverMessages)
-          setHistoryPage(1)
-          setHasMoreHistory(Boolean(historyData?.pagination?.has_more_chat_logs))
-        } else {
-          loadFromLocalStorage(user.id)
-        }
-
-      } catch (e) {
-        if (e instanceof Error && e.name === "AbortError") {
-          return
-        }
-        console.error("Error loading policies and history:", e)
-        setError("Failed to load policies and chat history")
-      } finally {
-        setLoadingPolicies(false)
-      }
+  useEffect(() => {
+    if (serverHistoryMessages.length > 0 && messages.length === 0) {
+      setMessages(serverHistoryMessages)
+      setHasMoreHistory(Boolean(historyData?.pagination?.has_more_chat_logs))
     }
-
-    // Helper function to load from user-specific localStorage
-    const loadFromLocalStorage = (userId: string) => {
-      const userSpecificKey = `claimwise_chat_history_${userId}`
-      const storedHistory = localStorage.getItem(userSpecificKey)
-      if (storedHistory) {
-        const history = (JSON.parse(storedHistory) as ChatMessage[]).map((msg) => ({
-          ...msg,
-          timestamp: new Date(msg.timestamp)
-        }))
-        setMessages(history)
-        console.log(`Loaded ${history.length} messages from localStorage (user-specific)`)
-      }
-    }
-
-    loadPoliciesAndHistory()
-    return () => controller.abort()
-  }, [])
+  }, [serverHistoryMessages])
 
   const handleLoadOlderHistory = async () => {
     if (loadingMoreHistory || !hasMoreHistory) return
@@ -371,6 +306,7 @@ export default function ChatPage() {
 
       const newMessages = [...messages, userMessage, assistantMessage]
       setMessages(newMessages)
+      setStreamingMessageId(assistantMessage.id)
       
       // Save to user-specific localStorage as backup
       const saveSession = await supabase.auth.getSession()
@@ -396,6 +332,7 @@ export default function ChatPage() {
 
   const handleClearHistory = async () => {
     setMessages([])
+    setStreamingMessageId(null)
     // Clear user-specific localStorage
     const supabase = await getSupabase()
     const session = await supabase.auth.getSession()
@@ -430,6 +367,7 @@ export default function ChatPage() {
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
         <Header />
 
+        <PageWrapper>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           {/* Back Button */}
           <div className="mb-8">
@@ -457,7 +395,7 @@ export default function ChatPage() {
                   Ask questions about your policies and get instant, accurate answers powered by advanced AI.
                 </p>
 
-                {/* Policy Selector */}
+                {/* Policy Selector Chips */}
                 {!loadingPolicies && policies.length > 0 && (
                   <div className="flex flex-col sm:flex-row items-center justify-center gap-6 mb-8">
                     <div className="flex items-center space-x-3">
@@ -466,60 +404,56 @@ export default function ChatPage() {
                       </div>
                       <span className="text-base font-semibold text-slate-700 dark:text-slate-300">Ask about:</span>
                     </div>
-                    <Select value={selectedPolicyId} onValueChange={setSelectedPolicyId}>
-                      <SelectTrigger className="w-80 h-12 rounded-lg border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-all duration-200 bg-white dark:bg-slate-800">
-                        <SelectValue>
-                          <div className="flex items-center space-x-3">
-                            <span className="font-semibold text-slate-900 dark:text-slate-100">{getCurrentPolicyName()}</span>
-                            {selectedPolicyId !== "all" && selectedPolicyId !== "auto" && (
-                              <Badge variant="outline" className="text-xs font-medium bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300">
-                                {policies.find(p => p.id === selectedPolicyId)?.policyType}
-                              </Badge>
-                            )}
-                          </div>
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent className="rounded-lg shadow-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-                        <SelectItem value="all" className="rounded-md p-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-200 cursor-pointer">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-8 h-8 bg-slate-100 dark:bg-slate-800 rounded-md flex items-center justify-center">
-                              <Globe className="w-4 h-4 text-slate-600 dark:text-slate-400" />
-                            </div>
-                            <span className="font-medium text-slate-900 dark:text-slate-100">All Policies (Comprehensive Search)</span>
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="auto" className="rounded-md p-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-200 cursor-pointer">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-8 h-8 bg-teal-50 dark:bg-teal-900/20 rounded-md flex items-center justify-center">
-                              <Bot className="w-4 h-4 text-teal-600 dark:text-teal-400" />
-                            </div>
-                            <span className="font-medium text-slate-900 dark:text-slate-100">Smart Selection (AI Picks Best Policy)</span>
-                          </div>
-                        </SelectItem>
-                        {policies.map((policy) => (
-                          <SelectItem key={policy.id} value={policy.id} className="rounded-md p-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-200 cursor-pointer">
-                            <div className="flex items-center space-x-3">
-                              <div className="w-8 h-8 bg-slate-100 dark:bg-slate-800 rounded-md flex items-center justify-center">
-                                <FileText className="w-4 h-4 text-slate-600 dark:text-slate-400" />
-                              </div>
-                              <div className="flex flex-col">
-                                <span className="font-medium text-slate-900 dark:text-slate-100">{policy.fileName}</span>
-                                <Badge variant="outline" className="text-xs w-fit border-slate-200 text-slate-500">
-                                  {policy.policyType}
-                                </Badge>
-                              </div>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="flex flex-wrap justify-center gap-2">
+                      <button
+                        onClick={() => setSelectedPolicyId("all")}
+                        className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+                          selectedPolicyId === "all"
+                            ? "bg-teal-600 text-white shadow-sm ring-1 ring-teal-600"
+                            : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700"
+                        }`}
+                      >
+                        <Globe className="w-3.5 h-3.5" />
+                        All Policies
+                      </button>
+                      <button
+                        onClick={() => setSelectedPolicyId("auto")}
+                        className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+                          selectedPolicyId === "auto"
+                            ? "bg-teal-600 text-white shadow-sm ring-1 ring-teal-600"
+                            : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700"
+                        }`}
+                      >
+                        <Bot className="w-3.5 h-3.5" />
+                        Smart Selection
+                      </button>
+                      {policies.slice(0, 4).map((policy) => (
+                        <button
+                          key={policy.id}
+                          onClick={() => setSelectedPolicyId(policy.id)}
+                          className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+                            selectedPolicyId === policy.id
+                              ? "bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-sm"
+                              : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700"
+                          }`}
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          {policy.fileName.length > 22 ? policy.fileName.slice(0, 22) + "..." : policy.fileName}
+                        </button>
+                      ))}
+                      {policies.length > 4 && (
+                        <span className="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                          +{policies.length - 4} more
+                        </span>
+                      )}
+                    </div>
                     
                     {messages.length > 0 && (
                       <Button 
                         variant="outline" 
                         size="sm" 
                         onClick={handleClearHistory}
-                        className="flex items-center space-x-2 rounded-lg border-slate-200 dark:border-slate-700 hover:border-red-300 hover:text-red-600 dark:hover:border-red-500 dark:hover:text-red-400 transition-all duration-200 h-12 px-4"
+                        className="flex items-center space-x-2 rounded-lg border-slate-200 dark:border-slate-700 hover:border-red-300 hover:text-red-600 dark:hover:border-red-500 dark:hover:text-red-400 transition-all duration-200 h-10 px-4"
                       >
                         <History className="w-4 h-4" />
                         <span>Clear History</span>
@@ -554,9 +488,17 @@ export default function ChatPage() {
               <Card className="min-h-[500px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-sm rounded-xl">
                 <CardContent className="p-8 text-slate-900 dark:text-slate-100">
                   {loadingPolicies ? (
-                    <div className="text-center py-12">
-                      <div className="animate-spin w-8 h-8 border-4 border-teal-600 border-t-transparent rounded-full mx-auto mb-4"></div>
-                      <p className="text-slate-600 dark:text-slate-300 font-medium">Loading your policies...</p>
+                    <div className="space-y-6 py-8">
+                      <div className="flex justify-center space-x-2">
+                        <Skeleton className="h-6 w-40 rounded-full" />
+                        <Skeleton className="h-6 w-32 rounded-full" />
+                        <Skeleton className="h-6 w-36 rounded-full" />
+                      </div>
+                      <div className="space-y-4">
+                        <Skeleton className="h-24 w-full" />
+                        <Skeleton className="h-24 w-full" />
+                        <Skeleton className="h-24 w-3/4" />
+                      </div>
                     </div>
                   ) : policies.length === 0 ? (
                     <div className="text-center py-12">
@@ -606,22 +548,28 @@ export default function ChatPage() {
                         </div>
                       )}
                       {messages.map((message) => (
-                        <Message key={message.id} message={message} onCopy={handleCopy} onFeedback={handleFeedback} />
+                        <Message 
+                          key={message.id} 
+                          message={message} 
+                          onCopy={handleCopy} 
+                          onFeedback={handleFeedback}
+                          isStreaming={message.role === "assistant" && message.id === streamingMessageId}
+                        />
                       ))}
                       {isLoading && (
                         <div className="flex gap-4 justify-start">
-                          <div className="w-8 h-8 bg-teal-600 rounded-full flex items-center justify-center shadow-sm">
+                          <div className="w-8 h-8 bg-teal-600 rounded-full flex items-center justify-center shadow-sm ring-2 ring-teal-50 dark:ring-teal-900/30">
                             <Bot className="w-4 h-4 text-white" />
                           </div>
-                          <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 shadow-sm rounded-xl max-w-xs">
-                            <CardContent className="p-4 text-slate-900 dark:text-slate-100">
-                              <div className="flex items-center space-x-3">
-                                <div className="flex space-x-1">
-                                  <div className="w-2 h-2 bg-teal-400 rounded-full animate-bounce" />
-                                  <div className="w-2 h-2 bg-teal-400 rounded-full animate-bounce delay-100" />
-                                  <div className="w-2 h-2 bg-teal-400 rounded-full animate-bounce delay-200" />
+                          <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 shadow-sm rounded-xl">
+                            <CardContent className="p-5">
+                              <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-1.5 h-5">
+                                  <div className="w-2 h-2 bg-teal-500 rounded-full typing-dot" />
+                                  <div className="w-2 h-2 bg-teal-500 rounded-full typing-dot" style={{ animationDelay: "0.2s" }} />
+                                  <div className="w-2 h-2 bg-teal-500 rounded-full typing-dot" style={{ animationDelay: "0.4s" }} />
                                 </div>
-                                <span className="text-sm text-slate-600 dark:text-slate-300 font-medium">
+                                <span className="text-sm text-slate-500 dark:text-slate-400 font-medium">
                                   {selectedPolicyId === "all" ? "Analyzing all policies..." : "AI is thinking..."}
                                 </span>
                               </div>
@@ -678,6 +626,7 @@ export default function ChatPage() {
             </div>
           </div>
         </div>
+        </PageWrapper>
       </div>
     </ProtectedRoute>
   )

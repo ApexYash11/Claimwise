@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { ArrowLeft, LogOut, Mail, User, Shield } from "lucide-react"
 import Link from "next/link"
 import { useState } from "react"
+import { PageWrapper } from "@/components/motion/page-wrapper"
 
 export default function ProfilePage() {
   const { user } = useAuth()
@@ -44,6 +45,7 @@ export default function ProfilePage() {
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-50">
         <Header />
         <main className="container mx-auto px-4 py-8 max-w-2xl">
+          <PageWrapper>
           {/* Back Button */}
           <Link href="/dashboard" className="inline-flex items-center gap-2 text-indigo-600 dark:text-indigo-400 hover:underline mb-8">
             <ArrowLeft className="h-4 w-4" />
@@ -57,10 +59,10 @@ export default function ProfilePage() {
           </div>
 
           {/* Profile Card */}
-          <Card className="border-none shadow-md mb-8">
-            <CardHeader className="bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-900/20 dark:to-blue-900/20 border-b border-slate-200 dark:border-slate-800">
+          <Card className="border border-slate-200 dark:border-slate-800 shadow-sm mb-8">
+            <CardHeader>
               <div className="flex items-center gap-6">
-                <div className="flex items-center justify-center w-20 h-20 rounded-full bg-indigo-600 text-white font-bold text-2xl">
+                <div className="flex items-center justify-center w-20 h-20 rounded-full bg-slate-900 text-white font-bold text-2xl dark:bg-slate-700">
                   {userInitials}
                 </div>
                 <div>
@@ -132,33 +134,21 @@ export default function ProfilePage() {
           </Card>
 
           {/* Logout Section */}
-          <Card className="border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/10">
-            <CardHeader className="border-b border-red-200 dark:border-red-800">
-              <CardTitle className="text-red-700 dark:text-red-400">Logout</CardTitle>
-              <CardDescription className="text-red-600 dark:text-red-500">
-                Sign out of your account and end your session
-              </CardDescription>
-            </CardHeader>
-
-            <CardContent className="p-6 space-y-4">
-              <p className="text-sm text-slate-600 dark:text-slate-400">
-                When you log out, you will be signed out of all your devices. You&apos;ll need to sign back in to access your policies and analysis.
-              </p>
-
-              <Button
-                onClick={handleLogout}
-                disabled={isLoggingOut}
-                className="w-full bg-red-600 hover:bg-red-700 text-white h-12 text-base font-semibold flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <LogOut className="h-5 w-5" />
-                {isLoggingOut ? "Signing out..." : "Sign Out"}
-              </Button>
-
-              <p className="text-xs text-muted-foreground text-center">
-                You will be redirected to the home page
-              </p>
-            </CardContent>
-          </Card>
+          <div className="flex items-center justify-between px-2">
+            <div>
+              <p className="text-sm text-muted-foreground">Signed in as <span className="font-medium text-slate-900 dark:text-slate-50">{userEmail}</span></p>
+            </div>
+            <Button
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              variant="outline"
+              className="text-red-600 border-red-200 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-950/20"
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              {isLoggingOut ? "Signing out..." : "Sign Out"}
+            </Button>
+          </div>
+          </PageWrapper>
         </main>
       </div>
     </ProtectedRoute>

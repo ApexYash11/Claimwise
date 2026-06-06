@@ -23,6 +23,7 @@ from src.models import UploadResponse
 from src.document_validator import validate_insurance_document
 from src.repositories.policy_repository import PolicyRepository
 from src.services.activity_service import log_activity
+from src.caching import cache_manager
 
 router = APIRouter()
 policy_repo = PolicyRepository()
@@ -267,6 +268,11 @@ async def upload_policy(
             },
         )
 
+        pcache = cache_manager.create_cache("policies", default_ttl=30)
+        pcache.delete(f"policies:{user_id}")
+        dcache = cache_manager.create_cache("dashboard", default_ttl=60)
+        dcache.delete(f"stats:{user_id}")
+        dcache.delete(f"metrics:{user_id}")
         return UploadResponse(
             policy_id=policy_id,
             extracted_text=extracted_text,
@@ -301,6 +307,10 @@ async def upload_policy(
 @router.get("/policies")
 def get_user_policies(user_id: str = Depends(get_current_user)):
     try:
+        pcache = cache_manager.create_cache("policies", max_size=1000, default_ttl=30)
+        cached = pcache.get(f"policies:{user_id}")
+        if cached:
+            return cached
         policies = (
             supabase.table("policies")
             .select(
@@ -311,7 +321,9 @@ def get_user_policies(user_id: str = Depends(get_current_user)):
             .execute()
         )
         data = policies.data if policies.data else []
-        return {"policies": data, "total": len(data), "success": True}
+        result = {"policies": data, "total": len(data), "success": True}
+        pcache.set(f"policies:{user_id}", result)
+        return result
     except Exception as e:
         logging.exception("Error fetching policies for user %s: %s", user_id, e)
         raise HTTPException(status_code=500, detail="Error fetching policies.")
@@ -384,6 +396,11 @@ def delete_policy(
             description=f"Policy {policy_id} deleted",
             details={"policy_id": policy_id},
         )
+        pcache = cache_manager.create_cache("policies", default_ttl=30)
+        pcache.delete(f"policies:{user_id}")
+        dcache = cache_manager.create_cache("dashboard", default_ttl=60)
+        dcache.delete(f"stats:{user_id}")
+        dcache.delete(f"metrics:{user_id}")
         return {"message": "Policy deleted successfully"}
     except HTTPException:
         raise

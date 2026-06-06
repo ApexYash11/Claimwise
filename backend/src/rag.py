@@ -13,7 +13,7 @@ from src.content_filters import (
 
 
 logger = logging.getLogger(__name__)
-EXPECTED_EMBED_DIM = int(os.getenv("EMBEDDING_DIM", "384"))
+EXPECTED_EMBED_DIM = int(os.getenv("EMBEDDING_DIM", "768"))
 
 
 def chunk_texts(
@@ -107,10 +107,9 @@ async def index_documents(
 
     service_client = supabase_storage or supabase
 
+    rows = []
     for idx, chunk in enumerate(quality_chunks):
         emb = embs[idx] if idx < len(embs) else None
-
-        # Validate embedding dimensionality if present
         if emb is not None:
             if EXPECTED_EMBED_DIM and len(emb) != EXPECTED_EMBED_DIM:
                 logger.error(
@@ -123,44 +122,34 @@ async def index_documents(
                 raise RuntimeError(
                     f"Embedding dimension mismatch for doc {document_id} chunk {idx}: got {len(emb)} expected {EXPECTED_EMBED_DIM}"
                 )
-
         row = {
-            "policy_id": document_id,  # Use policy_id instead of document_id
+            "policy_id": document_id,
             "chunk_index": idx,
             "content": chunk,
         }
         if emb is not None:
             row["embedding"] = emb
+        rows.append(row)
 
+    if rows:
         try:
-            # First try with policy_id (current schema)
-            res = service_client.table("document_chunks").insert(row).execute()
+            res = service_client.table("document_chunks").insert(rows).execute()
             err = getattr(res, "error", None)
             if err:
-                logger.error(
-                    "Failed to insert chunk %d for doc %s: %s", idx, document_id, err
+                logger.error("Failed to insert chunks for doc %s: %s", document_id, err)
+                raise RuntimeError(
+                    f"Failed to insert document chunks for {document_id}: {err}"
                 )
-                continue
-
-            result.append((chunk, emb))
+            for idx, chunk in enumerate(quality_chunks):
+                result.append((chunk, embs[idx] if idx < len(embs) else None))
         except Exception as e:
-            # If foreign key constraint fails, it might be schema mismatch
             if "foreign key constraint" in str(e).lower():
-                logger.error(
-                    "Document chunks table foreign key constraint failed for policy %s - RAG indexing cannot proceed",
-                    document_id,
-                )
-                logger.debug("Full error: %s", e)
                 raise RuntimeError(
                     f"Cannot index document {document_id}: foreign key constraint failure. Ensure the policy exists in the policies table."
                 ) from e
-            else:
-                logger.exception(
-                    "Exception inserting chunk %d for doc %s: %s", idx, document_id, e
-                )
-                raise RuntimeError(
-                    f"Failed to insert document chunk {idx} for document {document_id}: {str(e)}"
-                ) from e
+            raise RuntimeError(
+                f"Failed to insert document chunks for document {document_id}: {str(e)}"
+            ) from e
 
     return result
 

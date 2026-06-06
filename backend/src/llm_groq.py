@@ -5,6 +5,9 @@ import time
 import logging
 from datetime import datetime, timedelta
 from typing import Optional, List
+
+from src.circuit_breaker import circuit_breaker, CircuitBreakerOpen
+
 try:
     from dateutil import parser as date_parser
 except ImportError:
@@ -25,7 +28,9 @@ load_dotenv()
 # Initialize API keys for multiple providers
 groq_api_key = os.getenv("GROQ_API_KEY")
 groq_api_key_2 = os.getenv("GROQ_API_KEY_2")  # Second Groq account for fallback
-groq_api_key_3 = os.getenv("GROQ_API_KEY_3")  # Third Groq account for even more fallback
+groq_api_key_3 = os.getenv(
+    "GROQ_API_KEY_3"
+)  # Third Groq account for even more fallback
 gemini_api_key = os.getenv("GEMINI_API_KEY")
 openai_api_key = os.getenv("OPENAI_API_KEY")  # For OpenAI free tier
 anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")  # For Claude free tier
@@ -40,35 +45,38 @@ groq_client_3 = None  # Third Groq client for maximum reliability
 if OpenAI is not None and groq_api_key:
     try:
         groq_client = OpenAI(
-            base_url="https://api.groq.com/openai/v1",
-            api_key=groq_api_key
+            base_url="https://api.groq.com/openai/v1", api_key=groq_api_key
         )
     except Exception as e:
         # Fail gracefully and leave groq_client as None so the app can
         # fallback to Gemini or continue running for local dev.
-        logging.getLogger(__name__).warning("failed to initialize Groq/OpenAI client: %s", e)
+        logging.getLogger(__name__).warning(
+            "failed to initialize Groq/OpenAI client: %s", e
+        )
         groq_client = None
 
 # Initialize second Groq client for fallback
 if OpenAI is not None and groq_api_key_2:
     try:
         groq_client_2 = OpenAI(
-            base_url="https://api.groq.com/openai/v1",
-            api_key=groq_api_key_2
+            base_url="https://api.groq.com/openai/v1", api_key=groq_api_key_2
         )
     except Exception as e:
-        logging.getLogger(__name__).warning("failed to initialize second Groq/OpenAI client: %s", e)
+        logging.getLogger(__name__).warning(
+            "failed to initialize second Groq/OpenAI client: %s", e
+        )
         groq_client_2 = None
 
 # Initialize third Groq client for maximum reliability
 if OpenAI is not None and groq_api_key_3:
     try:
         groq_client_3 = OpenAI(
-            base_url="https://api.groq.com/openai/v1",
-            api_key=groq_api_key_3
+            base_url="https://api.groq.com/openai/v1", api_key=groq_api_key_3
         )
     except Exception as e:
-        logging.getLogger(__name__).warning("failed to initialize third Groq/OpenAI client: %s", e)
+        logging.getLogger(__name__).warning(
+            "failed to initialize third Groq/OpenAI client: %s", e
+        )
         groq_client_3 = None
 
 # Fallback: Gemini client
@@ -78,28 +86,32 @@ gemini_available = False
 if gemini_api_key:
     try:
         import google.generativeai as genai
+
         # Prefer client-based usage: instantiate Client if available and use its models proxy.
         gemini_client = None
         gemini_model = None
         try:
-            ClientCtor = getattr(genai, 'Client', None)
+            ClientCtor = getattr(genai, "Client", None)
             if ClientCtor:
                 try:
                     gemini_client = ClientCtor(api_key=gemini_api_key)
-                    gemini_model = getattr(gemini_client, 'models', None)
+                    gemini_model = getattr(gemini_client, "models", None)
                 except Exception:
                     gemini_client = None
                     gemini_model = None
             else:
                 # Fall back to using top-level SDK helpers if present
-                gemini_model = getattr(genai, 'GenerativeModel', None)
+                gemini_model = getattr(genai, "GenerativeModel", None)
         except Exception:
             gemini_client = None
             gemini_model = None
 
         gemini_available = True if (gemini_client or gemini_model) else False
     except ImportError:
-        logging.getLogger(__name__).warning("google-generativeai not available for fallback")
+        logging.getLogger(__name__).warning(
+            "google-generativeai not available for fallback"
+        )
+
 
 def make_llm_request(prompt: str, max_retries: int = 3, delay: float = 1.0):
     """
@@ -107,65 +119,88 @@ def make_llm_request(prompt: str, max_retries: int = 3, delay: float = 1.0):
     Each Groq API key has separate 100k token/day limits = 300k total Groq capacity!
     """
     import logging
+
     logger = logging.getLogger(__name__)
-    
+
+    rate_limited = False
+
     # Provider 1: Primary Groq API (100k tokens/day)
-    if groq_client:
+    if groq_client and not rate_limited:
         try:
             logger.info("Trying Primary Groq API (llama-3.3-70b-versatile)...")
-            response = groq_client.chat.completions.create(
+            response = circuit_breaker.call(
+                "groq_primary",
+                groq_client.chat.completions.create,
                 model="llama-3.3-70b-versatile",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.1,
                 max_tokens=4000,
-                timeout=30
+                timeout=8,
             )
             logger.info("✅ Success with Primary Groq API")
             return response.choices[0].message.content
+        except CircuitBreakerOpen:
+            logger.warning("Primary Groq circuit is OPEN, skipping")
+            rate_limited = True
         except Exception as e:
             logger.warning("❌ Primary Groq API failed: %s", str(e))
-    
+            if "429" in str(e):
+                rate_limited = True
+
     # Provider 2: Secondary Groq API (separate 100k tokens/day!)
-    if groq_client_2:
+    if groq_client_2 and not rate_limited:
         try:
             logger.info("Trying Secondary Groq API (separate quota)...")
-            response = groq_client_2.chat.completions.create(
+            response = circuit_breaker.call(
+                "groq_secondary",
+                groq_client_2.chat.completions.create,
                 model="llama-3.3-70b-versatile",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.1,
                 max_tokens=4000,
-                timeout=30
+                timeout=8,
             )
             logger.info("✅ Success with Secondary Groq API")
             return response.choices[0].message.content
+        except CircuitBreakerOpen:
+            logger.warning("Secondary Groq circuit is OPEN, skipping")
+            rate_limited = True
         except Exception as e:
             logger.warning("❌ Secondary Groq API failed: %s", str(e))
-    
+            if "429" in str(e):
+                rate_limited = True
+
     # Provider 3: Tertiary Groq API (third separate 100k tokens/day!)
-    if groq_client_3:
+    if groq_client_3 and not rate_limited:
         try:
             logger.info("Trying Tertiary Groq API (third separate quota)...")
-            response = groq_client_3.chat.completions.create(
+            response = circuit_breaker.call(
+                "groq_tertiary",
+                groq_client_3.chat.completions.create,
                 model="llama-3.3-70b-versatile",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.1,
                 max_tokens=4000,
-                timeout=30
+                timeout=8,
             )
             logger.info("✅ Success with Tertiary Groq API")
             return response.choices[0].message.content
+        except CircuitBreakerOpen:
+            logger.warning("Tertiary Groq circuit is OPEN, skipping")
+            rate_limited = True
         except Exception as e:
             logger.warning("❌ Tertiary Groq API failed: %s", str(e))
-    
+            if "429" in str(e):
+                rate_limited = True
+
     # Provider 4: Gemini (Different provider = different limits)
     if gemini_available:
         try:
             logger.info("Trying Gemini API...")
             # Use the existing Gemini initialization pattern from this file
-            if gemini_client and hasattr(gemini_client, 'models'):
+            if gemini_client and hasattr(gemini_client, "models"):
                 response = gemini_client.models.generate_content(
-                    model="gemini-1.5-flash",
-                    contents=[{"parts": [{"text": prompt}]}]
+                    model="gemini-1.5-flash", contents=[{"parts": [{"text": prompt}]}]
                 )
                 logger.info("✅ Success with Gemini API (client)")
                 return response.text
@@ -174,7 +209,7 @@ def make_llm_request(prompt: str, max_retries: int = 3, delay: float = 1.0):
                 # Use getattr to avoid Pylance "not exported" errors
                 configure = getattr(genai, "configure", None)
                 GenerativeModel = getattr(genai, "GenerativeModel", None)
-                
+
                 if configure and GenerativeModel:
                     configure(api_key=gemini_api_key)
                     model = GenerativeModel("gemini-3-flash")
@@ -183,10 +218,11 @@ def make_llm_request(prompt: str, max_retries: int = 3, delay: float = 1.0):
                     return response.text
         except Exception as e:
             logger.warning("❌ Gemini API failed: %s", str(e))
-    
+
     # Final fallback - generate basic analysis from text patterns
     logger.warning("❌ All LLM APIs failed, using rule-based fallback")
     return generate_rule_based_analysis(prompt)
+
 
 def generate_rule_based_analysis(prompt: str) -> str:
     """
@@ -196,33 +232,51 @@ def generate_rule_based_analysis(prompt: str) -> str:
     # Extract text from prompt
     text_start = prompt.find("following insurance policy text")
     if text_start > 0:
-        text_part = prompt[text_start + 31:prompt.find("Provide ONLY valid JSON")]
+        text_part = prompt[text_start + 31 : prompt.find("Provide ONLY valid JSON")]
     else:
         text_part = prompt[:2000]  # Use beginning of prompt
-    
+
     text_lower = text_part.lower()
-    
+
     # Rule-based extraction
-    policy_type = "Health Insurance" if any(word in text_lower for word in ["health", "medical", "mediclaim"]) else \
-                  "Auto Insurance" if any(word in text_lower for word in ["auto", "vehicle", "car"]) else \
-                  "Home Insurance" if any(word in text_lower for word in ["home", "property", "house"]) else \
-                  "Life Insurance" if any(word in text_lower for word in ["life", "term"]) else \
-                  "Insurance Policy"
-    
+    policy_type = (
+        "Health Insurance"
+        if any(word in text_lower for word in ["health", "medical", "mediclaim"])
+        else "Auto Insurance"
+        if any(word in text_lower for word in ["auto", "vehicle", "car"])
+        else "Home Insurance"
+        if any(word in text_lower for word in ["home", "property", "house"])
+        else "Life Insurance"
+        if any(word in text_lower for word in ["life", "term"])
+        else "Insurance Policy"
+    )
+
     # Try to extract provider
     provider = "Unknown Provider"
-    providers = ["national insurance", "bajaj", "hdfc", "icici", "sbi", "reliance", "tata aig", "oriental"]
+    providers = [
+        "national insurance",
+        "bajaj",
+        "hdfc",
+        "icici",
+        "sbi",
+        "reliance",
+        "tata aig",
+        "oriental",
+    ]
     for p in providers:
         if p in text_lower:
             provider = p.title()
             break
-    
+
     # Try to extract amounts
     import re
-    amounts = re.findall(r'₹[\d,]+|rs\.?\s*[\d,]+|inr\s*[\d,]+|\d+\s*lakh|\d+\s*crore', text_lower)
+
+    amounts = re.findall(
+        r"₹[\d,]+|rs\.?\s*[\d,]+|inr\s*[\d,]+|\d+\s*lakh|\d+\s*crore", text_lower
+    )
     coverage_amount = amounts[0] if amounts else "Coverage amount not specified"
     premium = amounts[1] if len(amounts) > 1 else "Premium not specified"
-    
+
     # Generate basic JSON response
     return f'''{{
         "policy_type": "{policy_type}",
@@ -245,18 +299,31 @@ def validate_and_clean_analysis(result: dict, original_text: str) -> dict:
     Validate and clean up the analysis results with proper date parsing and fallbacks.
     """
     logger = logging.getLogger(__name__)
-    
+
     # Ensure policy_number is never "Not specified" - generate one if needed
-    if result.get("policy_number") in ["Not specified", "Not found in policy", "", None]:
+    if result.get("policy_number") in [
+        "Not specified",
+        "Not found in policy",
+        "",
+        None,
+    ]:
         policy_type = result.get("policy_type", "POLICY")
         provider = result.get("provider", "UNKNOWN")
-        result["policy_number"] = f"{policy_type[:4].upper()}-{provider[:3].upper()}-{hash(original_text) % 1000:03d}"
-    
+        result["policy_number"] = (
+            f"{policy_type[:4].upper()}-{provider[:3].upper()}-{hash(original_text) % 1000:03d}"
+        )
+
     # Clean up expiration date and calculate days remaining
     expiry_date = result.get("expiration_date", "")
     days_remaining = None
-    
-    if expiry_date and expiry_date not in ["Not specified", "Not found in policy", "Invalid Date", "", None]:
+
+    if expiry_date and expiry_date not in [
+        "Not specified",
+        "Not found in policy",
+        "Invalid Date",
+        "",
+        None,
+    ]:
         try:
             # Try to parse the date
             parsed_date = None
@@ -268,36 +335,47 @@ def validate_and_clean_analysis(result: dict, original_text: str) -> dict:
                     parsed_date = datetime.strptime(expiry_date, "%Y-%m-%d")
                 except ValueError:
                     # Try other common formats
-                    formats = ["%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y", "%Y/%m/%d", "%d %B %Y", "%B %d, %Y"]
+                    formats = [
+                        "%d/%m/%Y",
+                        "%m/%d/%Y",
+                        "%d-%m-%Y",
+                        "%Y/%m/%d",
+                        "%d %B %Y",
+                        "%B %d, %Y",
+                    ]
                     for fmt in formats:
                         try:
                             parsed_date = datetime.strptime(expiry_date, fmt)
                             break
                         except ValueError:
                             continue
-            
+
             if parsed_date:
                 result["expiration_date"] = parsed_date.strftime("%Y-%m-%d")
-                
+
                 # Calculate days remaining
                 today = datetime.now()
                 days_remaining = (parsed_date - today).days
-                
+
                 if days_remaining < 0:
                     result["policy_status"] = f"Expired {abs(days_remaining)} days ago"
-                    result["validity_days"] = f"Policy expired {abs(days_remaining)} days ago"
+                    result["validity_days"] = (
+                        f"Policy expired {abs(days_remaining)} days ago"
+                    )
                 elif days_remaining == 0:
                     result["policy_status"] = "Expires today"
                     result["validity_days"] = "Policy expires today"
                 elif days_remaining <= 30:
-                    result["policy_status"] = f"Expires in {days_remaining} days (renewal needed soon)"
+                    result["policy_status"] = (
+                        f"Expires in {days_remaining} days (renewal needed soon)"
+                    )
                     result["validity_days"] = f"Policy expires in {days_remaining} days"
                 else:
                     result["policy_status"] = f"Valid for {days_remaining} days"
                     result["validity_days"] = f"Policy valid for {days_remaining} days"
             else:
                 raise ValueError("Could not parse date")
-                
+
         except Exception as e:
             logger.warning("Failed to parse expiration date '%s': %s", expiry_date, e)
             result["expiration_date"] = "Date not available in policy"
@@ -305,29 +383,37 @@ def validate_and_clean_analysis(result: dict, original_text: str) -> dict:
             result["validity_days"] = "Validity period not available in policy"
     else:
         result["expiration_date"] = "Date not available in policy"
-        result["policy_status"] = "Policy validity period not clear from document" 
+        result["policy_status"] = "Policy validity period not clear from document"
         result["validity_days"] = "Validity period not available in policy"
-    
+
     # Clean up monetary values
     for field in ["premium", "coverage_amount", "deductible"]:
         value = result.get(field, "")
-        if value in ["Not specified", "Not found in policy", "", None, "NaN", "Invalid"]:
+        if value in [
+            "Not specified",
+            "Not found in policy",
+            "",
+            None,
+            "NaN",
+            "Invalid",
+        ]:
             result[field] = "Amount not specified in policy"
         elif isinstance(value, str) and value.strip():
             # Ensure proper Indian rupee formatting
             if not value.startswith("₹") and any(char.isdigit() for char in value):
                 # Try to extract numbers and format properly
                 import re
-                numbers = re.findall(r'[\d,]+', value)
+
+                numbers = re.findall(r"[\d,]+", value)
                 if numbers:
-                    number_str = numbers[0].replace(',', '')
+                    number_str = numbers[0].replace(",", "")
                     try:
                         amount = int(number_str)
                         # Format in Indian numbering system
                         result[field] = f"₹{amount:,}"
                     except ValueError:
                         result[field] = "Amount not specified in policy"
-    
+
     # Clean up text fields
     for field in ["coverage", "exclusions", "claim_process", "waiting_period", "copay"]:
         value = result.get(field, "")
@@ -337,23 +423,27 @@ def validate_and_clean_analysis(result: dict, original_text: str) -> dict:
             elif field == "exclusions":
                 result[field] = "Exclusion details not available in the policy document"
             elif field == "claim_process":
-                result[field] = "Claim process details not available in the policy document"
+                result[field] = (
+                    "Claim process details not available in the policy document"
+                )
             elif field == "waiting_period":
                 result[field] = "Not specified"
             elif field == "copay":
                 result[field] = "Not specified"
-    
+
     # Ensure key_features is a list and not empty
-    if not isinstance(result.get("key_features"), list) or not result.get("key_features"):
+    if not isinstance(result.get("key_features"), list) or not result.get(
+        "key_features"
+    ):
         result["key_features"] = ["Policy features not clearly specified in document"]
-    
+
     # Validate claim_readiness_score
     score = result.get("claim_readiness_score")
     if not isinstance(score, (int, float)) or score < 0 or score > 100:
         # Try to determine a reasonable score based on available information
         available_fields = 0
         total_fields = 8
-        
+
         if result.get("policy_type") not in ["Unknown", "", None]:
             available_fields += 1
         if result.get("provider") not in ["Unknown Provider", "Unknown", "", None]:
@@ -362,22 +452,31 @@ def validate_and_clean_analysis(result: dict, original_text: str) -> dict:
             available_fields += 2  # Expiry date is important
         if result.get("premium") != "Amount not specified in policy":
             available_fields += 1
-        if result.get("coverage") != "Coverage details not available in the policy document":
+        if (
+            result.get("coverage")
+            != "Coverage details not available in the policy document"
+        ):
             available_fields += 2  # Coverage is very important
-        if result.get("claim_process") != "Claim process details not available in the policy document":
+        if (
+            result.get("claim_process")
+            != "Claim process details not available in the policy document"
+        ):
             available_fields += 1
-        
-        result["claim_readiness_score"] = min(85, max(15, int((available_fields / total_fields) * 100)))
-    
+
+        result["claim_readiness_score"] = min(
+            85, max(15, int((available_fields / total_fields) * 100))
+        )
+
     # Clean up provider name
     if result.get("provider") in ["Unknown Provider", "Unknown", "", None]:
         result["provider"] = "Insurance provider name not found in policy"
-    
+
     # Clean up policy type
     if result.get("policy_type") in ["Unknown", "", None]:
         result["policy_type"] = "Policy type not clearly specified"
-    
+
     return result
+
 
 def analyze_policy(text: str) -> dict:
     """
@@ -386,7 +485,7 @@ def analyze_policy(text: str) -> dict:
     """
     # Check if this is test data
     is_test_data = "test insurance policy for automated testing" in text.lower()
-    
+
     if is_test_data:
         # Return structured test data instead of trying to analyze meaningless content
         return {
@@ -400,8 +499,12 @@ def analyze_policy(text: str) -> dict:
             "coverage": "This is a test policy with basic coverage for development purposes.",
             "exclusions": "Test exclusions apply.",
             "claim_process": "Test claim process - not for actual use.",
-            "key_features": ["Test feature 1", "Test feature 2", "Development purposes only"],
-            "claim_readiness_score": 75
+            "key_features": [
+                "Test feature 1",
+                "Test feature 2",
+                "Development purposes only",
+            ],
+            "claim_readiness_score": 75,
         }
 
     # Handle large text by truncating or summarizing key sections
@@ -409,31 +512,50 @@ def analyze_policy(text: str) -> dict:
     if len(text) > max_chars:
         # Try to extract key sections first
         key_sections = []
-        keywords = ['policy', 'coverage', 'premium', 'deductible', 'benefits', 'exclusions', 'claims', 'insured', 'amount', 'sum assured', 'mediclaim']
-        
+        keywords = [
+            "policy",
+            "coverage",
+            "premium",
+            "deductible",
+            "benefits",
+            "exclusions",
+            "claims",
+            "insured",
+            "amount",
+            "sum assured",
+            "mediclaim",
+        ]
+
         # Split text into sentences for better extraction
-        sentences = text.replace('\n', ' ').split('. ')
-        
+        sentences = text.replace("\n", " ").split(". ")
+
         for keyword in keywords:
             # Find sentences containing key insurance terms
             for sentence in sentences:
                 if keyword.lower() in sentence.lower() and len(sentence) > 30:
                     key_sections.append(sentence.strip())
-                    if len('. '.join(key_sections)) > max_chars // 2:
+                    if len(". ".join(key_sections)) > max_chars // 2:
                         break
-            if len('. '.join(key_sections)) > max_chars // 2:
+            if len(". ".join(key_sections)) > max_chars // 2:
                 break
-        
+
         if key_sections:
             # Use key sections + truncated beginning
-            remaining_chars = max_chars - len('. '.join(key_sections))
+            remaining_chars = max_chars - len(". ".join(key_sections))
             if remaining_chars > 1000:
-                text = text[:remaining_chars] + '\n\nKEY EXTRACTED SECTIONS:\n' + '. '.join(key_sections[:10])  # Limit to 10 key sections
+                text = (
+                    text[:remaining_chars]
+                    + "\n\nKEY EXTRACTED SECTIONS:\n"
+                    + ". ".join(key_sections[:10])
+                )  # Limit to 10 key sections
             else:
-                text = '. '.join(key_sections[:15])  # Use only key sections if no room
+                text = ". ".join(key_sections[:15])  # Use only key sections if no room
         else:
             # Just take the most relevant parts
-            text = text[:max_chars] + "\n\n[Document truncated for analysis - extracted key sections only]"
+            text = (
+                text[:max_chars]
+                + "\n\n[Document truncated for analysis - extracted key sections only]"
+            )
 
     prompt = f"""
     You are an insurance expert. Analyze the following insurance policy text and extract key information:
@@ -478,10 +600,10 @@ def analyze_policy(text: str) -> dict:
             output_text = re.sub(r"^```[a-zA-Z]*\n|\n```$", "", output_text).strip()
 
         result = json.loads(output_text)
-        
+
         # Post-process and validate the results
         result = validate_and_clean_analysis(result, text)
-        
+
         return result
 
     except json.JSONDecodeError as e:
@@ -498,13 +620,13 @@ def analyze_policy(text: str) -> dict:
             "exclusions": "Unable to determine exclusions.",
             "claim_process": "Unable to determine claim process.",
             "key_features": ["Analysis unavailable"],
-            "claim_readiness_score": 0
+            "claim_readiness_score": 0,
         }
     except Exception as e:
         logging.getLogger(__name__).exception("LLM Analysis error: %s", e)
         return {
             "policy_type": "Unknown",
-            "provider": "Unknown Provider", 
+            "provider": "Unknown Provider",
             "policy_number": f"ERROR-{hash(text) % 1000:03d}",
             "coverage_amount": "Not specified",
             "premium": "Not specified",
@@ -514,20 +636,26 @@ def analyze_policy(text: str) -> dict:
             "exclusions": "",
             "claim_process": "",
             "key_features": ["Error occurred during analysis"],
-            "claim_readiness_score": 0
+            "claim_readiness_score": 0,
         }
-    
-def compare_policies(text1: str, text2: str, policy_number1: Optional[str] = None, policy_number2: Optional[str] = None) -> str:
+
+
+def compare_policies(
+    text1: str,
+    text2: str,
+    policy_number1: Optional[str] = None,
+    policy_number2: Optional[str] = None,
+) -> str:
     """
     Compare two policies using Groq LLM with Gemini fallback.
     """
     prompt = f"""
     You are an insurance expert. Compare the following two insurance policies:
     Policy 1 Text: {text1}
-    {'Policy 1 Number (if available): ' + policy_number1 if policy_number1 else ''}
+    {"Policy 1 Number (if available): " + policy_number1 if policy_number1 else ""}
 
     Policy 2 Text: {text2}
-    {'Policy 2 Number (if available): ' + policy_number2 if policy_number2 else ''}
+    {"Policy 2 Number (if available): " + policy_number2 if policy_number2 else ""}
 
     Provide a side-by-side comparison table in Markdown format with the following columns:
     - Coverage
@@ -539,11 +667,18 @@ def compare_policies(text1: str, text2: str, policy_number1: Optional[str] = Non
     """
     try:
         response = make_llm_request(prompt)
-        return response if response is not None else "No response received from LLM service"
+        return (
+            response
+            if response is not None
+            else "No response received from LLM service"
+        )
     except Exception as e:
         return f"Error comparing policies: {str(e)}"
-    
-def chat_with_policy(text: str, question: str, policy_number: Optional[str] = None) -> str:
+
+
+def chat_with_policy(
+    text: str, question: str, policy_number: Optional[str] = None
+) -> str:
     """
     Chat with the policy text using Groq LLM with Gemini fallback.
     """
@@ -573,13 +708,21 @@ def chat_with_policy(text: str, question: str, policy_number: Optional[str] = No
 
     try:
         response = make_llm_request(prompt)
-        return response if response is not None else "No response received from LLM service"
+        return (
+            response
+            if response is not None
+            else "No response received from LLM service"
+        )
 
     except Exception as e:
         error_str = str(e)
-        
+
         # Handle quota exceeded errors specifically
-        if "429" in error_str or "quota" in error_str.lower() or "exceeded" in error_str.lower():
+        if (
+            "429" in error_str
+            or "quota" in error_str.lower()
+            or "exceeded" in error_str.lower()
+        ):
             return """🚫 **API Quota Exceeded**
             
 Both Groq and Gemini API quotas have been reached. 
@@ -590,21 +733,22 @@ Both Groq and Gemini API quotas have been reached.
 • Use the policy comparison feature
 
 Sorry for the inconvenience! This is a temporary limitation."""
-        
+
         return f"Service temporarily unavailable. Please try again later. (Error: {error_str[:100]})"
+
 
 def chat_with_multiple_policies(policies_data: List[dict], question: str) -> str:
     """
     Chat with multiple policies using Groq LLM with Gemini fallback.
     """
-    
+
     # Create a consolidated prompt with all policy information
     policies_text = ""
     for i, policy in enumerate(policies_data, 1):
-        policy_number = policy.get('policy_number', f'Policy {i}')
-        policy_text = policy.get('extracted_text', '')
+        policy_number = policy.get("policy_number", f"Policy {i}")
+        policy_text = policy.get("extracted_text", "")
         policies_text += f"\n--- POLICY {i} ({policy_number}) ---\n{policy_text}\n"
-    
+
     prompt = f"""
     You are an insurance expert and helpful advisor. Answer the following question using the provided multiple insurance policies and your expertise:
 
@@ -634,10 +778,15 @@ def chat_with_multiple_policies(policies_data: List[dict], question: str) -> str
 
     try:
         response = make_llm_request(prompt)
-        return response if response is not None else "No response received from LLM service"
+        return (
+            response
+            if response is not None
+            else "No response received from LLM service"
+        )
 
     except Exception as e:
         return f"Error answering question across multiple policies: {str(e)}"
+
 
 def get_api_status():
     """
@@ -645,5 +794,5 @@ def get_api_status():
     """
     status = {
         "groq": {"available": bool(groq_client), "primary": True},
-        "gemini": {"available": gemini_available, "fallback": True}
+        "gemini": {"available": gemini_available, "fallback": True},
     }

@@ -3,8 +3,9 @@ import re
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
-from src.db import supabase, supabase_storage
+from src.db import supabase
 from src.auth import get_current_user
+from src.caching import cache_manager
 
 router = APIRouter()
 
@@ -17,184 +18,84 @@ def get_comprehensive_history(
 
     _enforce_user_rate_limit("user_general", user_id, "/history")
     try:
+        cache = cache_manager.create_cache("history", max_size=1000, default_ttl=30)
+        cached = cache.get(f"history:{user_id}:{page}:{page_size}")
+        if cached:
+            return cached
         page = max(1, page)
         page_size = max(1, min(page_size, 100))
         offset = (page - 1) * page_size
-        policies = []
+
+        activities = []
         try:
-            policies = (
-                supabase.table("policies")
-                .select(
-                    "id",
-                    "policy_name",
-                    "policy_number",
-                    "created_at",
-                    "uploaded_file_url",
-                )
-                .eq("user_id", user_id)
-                .order("created_at", desc=True)
-                .execute()
-                .data
-            )
-        except Exception as e:
-            logging.exception("Error fetching policies: %s", e)
-            policies = []
-        total_chat_logs = 0
-        chat_logs = []
-        try:
-            chat_logs = (
-                supabase.table("chat_logs")
-                .select(
-                    "id", "policy_id", "question", "answer", "created_at", "chat_type"
-                )
+            activities = (
+                supabase.table("activities")
+                .select("*")
                 .eq("user_id", user_id)
                 .order("created_at", desc=True)
                 .range(offset, offset + page_size - 1)
                 .execute()
                 .data
             )
-            chat_logs_count_result = (
-                supabase.table("chat_logs")
-                .select("id", **{"count": "exact", "head": True})
-                .eq("user_id", user_id)
-                .execute()
-            )
-            total_chat_logs = int(getattr(chat_logs_count_result, "count", 0) or 0)
         except Exception as e:
-            logging.exception("Error fetching chat logs: %s", e)
-            chat_logs = []
-            total_chat_logs = 0
-        comparisons = []
+            logging.exception("Error fetching activities: %s", e)
+            activities = []
+
+        total_activities = 0
         try:
-            comparisons = (
-                supabase.table("comparisons")
-                .select(
-                    "id",
-                    "policy_1_id",
-                    "policy_2_id",
-                    "created_at",
-                    "comparison_result",
-                )
+            count_result = (
+                supabase.table("activities")
+                .select("id", {"count": "exact", "head": True})
                 .eq("user_id", user_id)
-                .order("created_at", desc=True)
                 .execute()
-                .data
             )
+            total_activities = int(getattr(count_result, "count", 0) or 0)
         except Exception as e:
-            logging.exception("Error fetching comparisons: %s", e)
-            comparisons = []
-        activities = []
-        for policy in policies:
-            activities.append(
+            logging.exception("Error counting activities: %s", e)
+
+        formatted = []
+        for act in activities:
+            formatted.append(
                 {
-                    "id": f"upload_{policy['id']}",
-                    "type": "upload",
-                    "title": f"Policy Upload: {policy.get('policy_name', 'Unnamed Policy')}",
-                    "description": policy.get(
-                        "policy_number", "No policy number provided"
-                    ),
-                    "timestamp": policy["created_at"],
-                    "status": "completed",
-                    "details": {
-                        "filesProcessed": 1,
-                        "policyId": policy["id"],
-                        "hasFile": bool(policy.get("uploaded_file_url")),
-                    },
+                    "id": act.get("id", ""),
+                    "type": act.get("type", "unknown"),
+                    "title": act.get("title", ""),
+                    "description": act.get("description", ""),
+                    "timestamp": act.get("created_at", ""),
+                    "status": act.get("status", "completed"),
+                    "details": act.get("details", {}),
                 }
             )
-        for chat in chat_logs:
-            chat_type = chat.get("chat_type", "single_policy")
-            title_suffix = (
-                "Multi-Policy Chat"
-                if chat_type == "multiple_policies"
-                else "Policy Chat"
-            )
-            activities.append(
-                {
-                    "id": f"chat_{chat['id']}",
-                    "type": "chat",
-                    "title": f"{title_suffix}: {chat['question'][:50]}{'...' if len(chat['question']) > 50 else ''}",
-                    "description": f"Asked about: {chat['question'][:120]}{'...' if len(chat['question']) > 120 else ''}",
-                    "timestamp": chat["created_at"],
-                    "status": "completed",
-                    "details": {
-                        "questionsAnswered": 1,
-                        "chatType": chat_type,
-                        "policyId": chat.get("policy_id"),
-                        "questionLength": len(chat["question"]),
-                        "answerLength": len(chat.get("answer", "")),
-                    },
-                }
-            )
-        for comp in comparisons:
-            activities.append(
-                {
-                    "id": f"comparison_{comp['id']}",
-                    "type": "comparison",
-                    "title": "Policy Comparison",
-                    "description": f"Compared policies {comp['policy_1_id']} and {comp['policy_2_id']}",
-                    "timestamp": comp["created_at"],
-                    "status": "completed",
-                    "details": {
-                        "policiesCompared": 2,
-                        "policy1Id": comp["policy_1_id"],
-                        "policy2Id": comp["policy_2_id"],
-                        "hasResult": bool(comp.get("comparison_result")),
-                    },
-                }
-            )
-        activities.sort(key=lambda x: x["timestamp"], reverse=True)
-        analysis_activities = []
-        for policy in policies:
-            analysis_activities.append(
-                {
-                    "id": f"analysis_{policy['id']}",
-                    "type": "analysis",
-                    "title": f"Policy Analysis: {policy.get('policy_name', 'Unnamed Policy')}",
-                    "description": f"Analyzed {policy.get('policy_name', 'policy')} for coverage details and insights",
-                    "timestamp": policy["created_at"],
-                    "status": "completed",
-                    "details": {
-                        "insightsGenerated": 3,
-                        "policyId": policy["id"],
-                        "analysisType": "automatic",
-                    },
-                }
-            )
-        all_activities = activities + analysis_activities
-        all_activities.sort(key=lambda x: x["timestamp"], reverse=True)
-        total_activities = len(all_activities)
-        paginated_activities = all_activities[offset : offset + page_size]
+
         stats = {
             "totalActivities": total_activities,
-            "uploads": len([a for a in all_activities if a["type"] == "upload"]),
-            "analyses": len([a for a in all_activities if a["type"] == "analysis"]),
-            "chats": len([a for a in all_activities if a["type"] == "chat"]),
-            "comparisons": len(
-                [a for a in all_activities if a["type"] == "comparison"]
-            ),
-            "totalPolicies": len(policies),
+            "uploads": len([a for a in formatted if a["type"] == "upload"]),
+            "analyses": len([a for a in formatted if a["type"] == "analysis"]),
+            "chats": len([a for a in formatted if a["type"] == "chat"]),
+            "comparisons": len([a for a in formatted if a["type"] == "comparison"]),
+            "totalPolicies": 0,
         }
-        has_more_activities = offset + page_size < total_activities
-        has_more_chat_logs = offset + page_size < total_chat_logs
-        return {
-            "activities": paginated_activities,
+
+        has_more = offset + page_size < total_activities
+
+        result = {
+            "activities": formatted,
             "stats": stats,
-            "policies": policies,
-            "chat_logs": chat_logs,
+            "policies": [],
+            "chat_logs": [],
             "pagination": {
                 "page": page,
                 "page_size": page_size,
-                "has_more_activities": has_more_activities,
-                "has_more_chat_logs": has_more_chat_logs,
-                "next_page": page + 1
-                if (has_more_activities or has_more_chat_logs)
-                else None,
+                "has_more_activities": has_more,
+                "has_more_chat_logs": False,
+                "next_page": page + 1 if has_more else None,
                 "total_activities": total_activities,
-                "total_chat_logs": total_chat_logs,
+                "total_chat_logs": 0,
             },
             "success": True,
         }
+        cache.set(f"history:{user_id}:{page}:{page_size}", result)
+        return result
     except Exception as e:
         logging.exception("Exception in get_comprehensive_history: %s", str(e))
         raise HTTPException(
@@ -205,24 +106,18 @@ def get_comprehensive_history(
 @router.get("/activities")
 def get_activities(user_id: str = Depends(get_current_user)):
     try:
-        try:
-            activities = (
-                supabase_storage.table("activities")
-                .select("*")
-                .eq("user_id", user_id)
-                .order("created_at", desc=True)
-                .limit(10)
-                .execute()
-            )
-        except Exception:
-            activities = (
-                supabase.table("activities")
-                .select("*")
-                .eq("user_id", user_id)
-                .order("created_at", desc=True)
-                .limit(10)
-                .execute()
-            )
+        cache = cache_manager.create_cache("activities", max_size=1000, default_ttl=30)
+        cached = cache.get(f"activities:{user_id}")
+        if cached:
+            return cached
+        activities = (
+            supabase.table("activities")
+            .select("*")
+            .eq("user_id", user_id)
+            .order("created_at", desc=True)
+            .limit(10)
+            .execute()
+        )
         if (
             activities
             and hasattr(activities, "data")
@@ -242,7 +137,9 @@ def get_activities(user_id: str = Depends(get_current_user)):
                         "details": activity.get("details", {}),
                     }
                 )
-            return {"activities": formatted, "total": len(formatted), "success": True}
+            result = {"activities": formatted, "total": len(formatted), "success": True}
+            cache.set(f"activities:{user_id}", result)
+            return result
         else:
             try:
                 policies_res = (
@@ -267,14 +164,16 @@ def get_activities(user_id: str = Depends(get_current_user)):
                                 "details": {"policy_id": p["id"]},
                             }
                         )
-                    return {
+                    result = {
                         "activities": generated,
                         "total": len(generated),
                         "success": True,
                     }
+                    cache.set(f"activities:{user_id}", result)
+                    return result
             except Exception as e:
                 logging.warning("Failed to generate activities from policies: %s", e)
-            return {
+            result = {
                 "activities": [
                     {
                         "id": "sample-1",
@@ -289,6 +188,8 @@ def get_activities(user_id: str = Depends(get_current_user)):
                 "total": 1,
                 "success": True,
             }
+            cache.set(f"activities:{user_id}", result)
+            return result
     except Exception as e:
         logging.exception("Error fetching activities: %s", str(e))
         return {"activities": [], "total": 0, "success": False, "error": str(e)}
@@ -297,6 +198,10 @@ def get_activities(user_id: str = Depends(get_current_user)):
 @router.get("/dashboard/stats")
 def dashboard_stats(user_id: str = Depends(get_current_user)):
     try:
+        cache = cache_manager.create_cache("dashboard", max_size=1000, default_ttl=60)
+        cached = cache.get(f"stats:{user_id}")
+        if cached:
+            return cached
         uploaded_count = 0
         try:
             policies = (
@@ -323,12 +228,14 @@ def dashboard_stats(user_id: str = Depends(get_current_user)):
         except Exception as e:
             logging.exception("Error counting comparisons: %s", e)
             comparisons_run = 0
-        return {
+        result = {
             "uploadedDocuments": uploaded_count,
             "documentsProcessed": documents_processed,
             "analysesCompleted": analyses_completed,
             "comparisonsRun": comparisons_run,
         }
+        cache.set(f"stats:{user_id}", result)
+        return result
     except Exception as e:
         logging.exception("Exception in dashboard_stats: %s", str(e))
         raise HTTPException(status_code=500, detail="Error fetching dashboard stats.")
@@ -402,10 +309,14 @@ def dashboard_stats_dev(user_id: str = Depends(get_current_user)):
 @router.get("/dashboard/metrics")
 def dashboard_metrics(user_id: str = Depends(get_current_user)):
     try:
+        cache = cache_manager.create_cache("dashboard", max_size=1000, default_ttl=60)
+        cached = cache.get(f"metrics:{user_id}")
+        if cached:
+            return cached
         policies_res = (
             supabase.table("policies")
             .select(
-                "id, validation_score, validation_metadata, extracted_text, policy_name, created_at"
+                "id, validation_score, validation_metadata, policy_name, created_at"
             )
             .eq("user_id", user_id)
             .execute()
@@ -424,27 +335,10 @@ def dashboard_metrics(user_id: str = Depends(get_current_user)):
                 metadata = policy.get("validation_metadata") or {}
                 if not isinstance(metadata, dict):
                     metadata = {}
-                analysis_result = metadata.get("analysis_result", {})
-                if not analysis_result and policy.get("extracted_text"):
-                    text = policy.get("extracted_text", "")
-                    coverage_patterns = [
-                        r"Sum Insured\s*[:\-\s]\s*(?:Rs\.?|INR|₹)?\s*([\d,]+)",
-                        r"Coverage Amount\s*[:\-\s]\s*(?:Rs\.?|INR|₹)?\s*([\d,]+)",
-                        r"Total Coverage\s*[:\-\s]\s*(?:Rs\.?|INR|₹)?\s*([\d,]+)",
-                    ]
-                    for pattern in coverage_patterns:
-                        match = re.search(pattern, text, re.IGNORECASE)
-                        if match:
-                            try:
-                                amount_str = match.group(1).replace(",", "")
-                                coverage_amounts.append(float(amount_str))
-                                break
-                            except Exception:
-                                pass
-                if isinstance(analysis_result, dict):
-                    risk_count += len(analysis_result.get("gaps_and_risks", []))
-                    risk_count += len(analysis_result.get("exclusions", []))
-                    coverage = analysis_result.get("coverage_amount")
+                computed = metadata.get("computed_metrics")
+                if isinstance(computed, dict):
+                    risk_count += computed.get("risk_count", 0)
+                    coverage = computed.get("coverage_amount", "0")
                     if coverage:
                         try:
                             clean_coverage = re.sub(r"[^\d.]", "", str(coverage))
@@ -452,6 +346,19 @@ def dashboard_metrics(user_id: str = Depends(get_current_user)):
                                 coverage_amounts.append(float(clean_coverage))
                         except (ValueError, TypeError):
                             pass
+                else:
+                    analysis_result = metadata.get("analysis_result", {})
+                    if isinstance(analysis_result, dict):
+                        risk_count += len(analysis_result.get("gaps_and_risks", []))
+                        risk_count += len(analysis_result.get("exclusions", []))
+                        coverage = analysis_result.get("coverage_amount")
+                        if coverage:
+                            try:
+                                clean_coverage = re.sub(r"[^\d.]", "", str(coverage))
+                                if clean_coverage:
+                                    coverage_amounts.append(float(clean_coverage))
+                            except (ValueError, TypeError):
+                                pass
             if validation_scores:
                 protection_score = int(sum(validation_scores) / len(validation_scores))
             risks_found = risk_count
@@ -472,13 +379,15 @@ def dashboard_metrics(user_id: str = Depends(get_current_user)):
             quick_insight = "Your policies provide comprehensive coverage. Consider reviewing annually for best deals."
         else:
             quick_insight = "Some coverage gaps detected. Explore our comparison tool to find better options."
-        return {
+        result = {
             "protectionScore": protection_score,
             "risksFound": risks_found,
             "totalCoverage": total_coverage_formatted,
             "quickInsight": quick_insight,
             "policiesCount": len(policies),
         }
+        cache.set(f"metrics:{user_id}", result)
+        return result
     except Exception as e:
         logging.exception("Exception in dashboard_metrics: %s", str(e))
         raise HTTPException(status_code=500, detail="Error fetching dashboard metrics.")

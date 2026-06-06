@@ -3,8 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { FileText, MessageSquare, BarChart3, Upload, Clock, ArrowRight } from "lucide-react"
-import { useEffect, useState } from "react"
-import { getSupabase } from "@/lib/get-supabase"
+import { useActivities } from "@/lib/use-queries"
 import {
   Table,
   TableBody,
@@ -13,9 +12,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-
-import { createApiUrlWithLogging } from "@/lib/url-utils"
-import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
 
 interface ActivityItem {
   id: string
@@ -28,57 +24,9 @@ interface ActivityItem {
 }
 
 export function RecentActivity() {
-  // Force recompilation
-  const [activities, setActivities] = useState<ActivityItem[]>([])
-  const [loading, setLoading] = useState(true)
-
-  // Fetch activities from API
-  useEffect(() => {
-    const fetchActivities = async () => {
-      try {
-        // Wait for Supabase session to load, and refresh if needed
-        const supabase = await getSupabase()
-        const sessionResult = await supabase.auth.getSession()
-        let session = sessionResult.data.session
-        let token = session?.access_token
-
-        // If no token, try to refresh
-        if (!token) {
-          const { data: refreshed } = await supabase.auth.refreshSession()
-          session = refreshed.session
-          token = session?.access_token
-        }
-
-        let response;
-        if (token) {
-          const activitiesUrl = createApiUrlWithLogging("/activities");
-          response = await fetchWithTimeout(activitiesUrl, {
-            headers: {
-              "Authorization": `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-            timeoutMs: 12000,
-          })
-        }
-        
-        if (response && response.ok) {
-          const data = await response.json()
-          if (data.success && data.activities) {
-            setActivities(data.activities)
-          } else {
-            setActivities([])
-          }
-        } else {
-          setActivities([])
-        }
-      } catch {
-        setActivities([])
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchActivities()
-  }, [])
+  const { data, isLoading } = useActivities()
+  const activities: ActivityItem[] = data?.activities ?? []
+  const loading = isLoading
 
   const getIcon = (type: string) => {
     switch (type) {

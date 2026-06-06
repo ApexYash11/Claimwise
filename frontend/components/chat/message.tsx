@@ -4,7 +4,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Copy, ThumbsUp, ThumbsDown, User, Bot, FileText } from "lucide-react"
-import { useState, memo } from "react"
+import { useState, useEffect, memo, useRef } from "react"
 
 // Component to format assistant responses with proper styling
 function FormattedContent({ content }: { content: string }) {
@@ -105,6 +105,55 @@ function FormattedContent({ content }: { content: string }) {
   return <div className="space-y-2">{formatContent(content)}</div>
 }
 
+function StreamingText({ content, isStreaming, onComplete }: {
+  content: string
+  isStreaming: boolean
+  onComplete: () => void
+}) {
+  const [displayedLength, setDisplayedLength] = useState(isStreaming ? 0 : content.length)
+  const contentRef = useRef(content)
+  const onCompleteRef = useRef(onComplete)
+  onCompleteRef.current = onComplete
+
+  useEffect(() => {
+    contentRef.current = content
+  }, [content])
+
+  useEffect(() => {
+    if (!isStreaming) {
+      setDisplayedLength(content.length)
+      return
+    }
+
+    setDisplayedLength(0)
+    const interval = setInterval(() => {
+      setDisplayedLength(prev => {
+        const next = prev + 2
+        if (next >= contentRef.current.length) {
+          clearInterval(interval)
+          onCompleteRef.current()
+          return contentRef.current.length
+        }
+        return next
+      })
+    }, 20)
+
+    return () => clearInterval(interval)
+  }, [content, isStreaming])
+
+  const revealedContent = content.slice(0, displayedLength)
+  const isComplete = displayedLength >= content.length
+
+  return (
+    <p className="text-slate-700 dark:text-slate-300 text-[15px] leading-relaxed whitespace-pre-wrap">
+      {revealedContent}
+      {!isComplete && (
+        <span className="inline-block w-0.5 h-[1em] bg-teal-500 ml-0.5 align-text-bottom animate-pulse" />
+      )}
+    </p>
+  )
+}
+
 interface MessageProps {
   message: {
     id: string
@@ -115,10 +164,16 @@ interface MessageProps {
   }
   onCopy?: (content: string) => void
   onFeedback?: (messageId: string, feedback: "positive" | "negative") => void
+  isStreaming?: boolean
 }
 
-export function Message({ message, onCopy, onFeedback }: MessageProps) {
+export function Message({ message, onCopy, onFeedback, isStreaming }: MessageProps) {
   const [feedback, setFeedback] = useState<"positive" | "negative" | null>(null)
+  const [streamComplete, setStreamComplete] = useState(!isStreaming)
+
+  useEffect(() => {
+    if (!isStreaming) setStreamComplete(true)
+  }, [isStreaming])
 
   const handleFeedback = (type: "positive" | "negative") => {
     setFeedback(type)
@@ -151,7 +206,15 @@ export function Message({ message, onCopy, onFeedback }: MessageProps) {
           <CardContent className="p-5">
             <div className="prose prose-sm max-w-none">
               {message.role === "assistant" ? (
-                <FormattedContent content={message.content} />
+                streamComplete ? (
+                  <FormattedContent content={message.content} />
+                ) : (
+                  <StreamingText
+                    content={message.content}
+                    isStreaming={!!isStreaming}
+                    onComplete={() => setStreamComplete(true)}
+                  />
+                )
               ) : (
                 <p className="mb-0 text-[15px] leading-relaxed text-white dark:text-slate-100">
                   {message.content}

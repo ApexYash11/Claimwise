@@ -12,14 +12,27 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
-import { Progress } from "@/components/ui/progress"
-import { ArrowLeft, BarChart3, FileText, MessageSquare, CheckCircle, Shield, AlertCircle, FileJson, Trash2 } from "lucide-react"
+import { ArrowLeft, BarChart3, FileText, MessageSquare, CheckCircle, Shield, AlertCircle, FileJson, Trash2, Loader2 } from "lucide-react"
 import Link from "next/link"
 import type { PolicySummary } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import type { BackendPolicyRecord } from "@/types/policies"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { toast } from "sonner"
+import { motion } from "framer-motion"
+import { PageWrapper } from "@/components/motion/page-wrapper"
+import { AnalyzeSkeleton } from "@/components/ui/skeleton"
 
-// Dynamic policy data from backend/AI
+import { usePolicies } from "@/lib/use-queries"
 import { getSupabase } from "@/lib/get-supabase"
 import { createApiUrlWithLogging } from "@/lib/url-utils"
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
@@ -38,118 +51,45 @@ export default function AnalyzePage() {
   const [selectedPolicyId, setSelectedPolicyId] = useState<string>("")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  const { data: policiesData, isLoading: policiesLoading } = usePolicies()
 
   useEffect(() => {
-    const analyzeAllPolicies = async () => {
-      setLoading(true)
-      setError("")
-      
-      try {
-        // Get Supabase JWT and user info
-        const supabase = await getSupabase()
-        const session = await supabase.auth.getSession()
-        const token = session.data.session?.access_token
-        const userId = session.data.session?.user?.id
-
-        if (!session.data.session || !userId) {
-          setError("Please log in to view your policies.")
-          setLoading(false)
-          return
-        }
-
-        // Clear any cached policy data
-        if (typeof window !== "undefined") {
-          localStorage.removeItem("claimwise_uploaded_policy_ids")
-          localStorage.removeItem("claimwise_uploaded_policy_infos")
-        }
-
-        const policiesUrl = createApiUrlWithLogging("/policies")
-        const policiesResponse = await fetchWithTimeout(policiesUrl, {
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-          timeoutMs: 12000,
-        })
-
-        if (!policiesResponse.ok) {
-          setError("Could not load policies from server.")
-          setLoading(false)
-          return
-        }
-
-        const payload = await policiesResponse.json()
-        const payloadRecord = payload as { policies?: BackendPolicyRecord[] }
-        const backendPolicies = Array.isArray(payloadRecord?.policies) ? payloadRecord.policies : []
-
-        if (backendPolicies.length === 0) {
-          setError("No policies found. Please upload some policies first.")
-          setLoading(false)
-          return
-        }
-
-        const mappedPolicies: PolicySummary[] = backendPolicies.map((policyData) => {
-          const analysis = policyData?.validation_metadata?.analysis_result || {}
-          const fileName = policyData.policy_name || (policyData.policy_number ? `Policy ${policyData.policy_number}` : `Policy ${String(policyData.id).slice(0, 8)}`)
-
-          return {
-            id: policyData.id,
-            fileName,
-            policyType: analysis.policy_type || policyData.policy_type || "Insurance",
-            provider: analysis.provider || policyData.provider || "Unknown Provider",
-            coverageAmount: analysis.coverage_amount || "Not specified",
-            premium: analysis.premium || "Not specified",
-            deductible: analysis.deductible || "Not specified",
-            keyFeatures: Array.isArray(analysis.key_features) ? analysis.key_features : [analysis.coverage || "Basic coverage"],
-            expirationDate: analysis.expiration_date || "Not specified",
-            rawAnalysis: analysis,
-          }
-        })
-
-        // Update localStorage with current policies
-        const policyIds = mappedPolicies.map(p => p.id)
-        localStorage.setItem("claimwise_uploaded_policy_ids", JSON.stringify(policyIds))
-
-        const allPolicies = mappedPolicies
-        
-        // Final deduplication pass after analysis - remove any remaining duplicates
-        const finalUniquePolicies = []
-        const finalSeenKeys = new Set()
-        
-        for (const policy of allPolicies) {
-          // Use multiple criteria to ensure uniqueness
-          const key1 = policy.fileName?.toLowerCase().trim()
-          const key2 = policy.id
-          const key3 = `${policy.provider}_${policy.coverageAmount}_${policy.premium}`.toLowerCase()
-          
-          const compositeKey = `${key1}_${key2}_${key3}`
-          
-          if (!finalSeenKeys.has(compositeKey) && !finalSeenKeys.has(key2)) {
-            finalSeenKeys.add(compositeKey)
-            finalSeenKeys.add(key2)
-            finalUniquePolicies.push(policy)
-          } else {
-            console.log('Removing duplicate after analysis:', policy.fileName)
-          }
-        }
-        
-        console.log(`Final deduplication: ${allPolicies.length} → ${finalUniquePolicies.length} policies`)
-        
-        // Generate insights and recommendations
-        setPolicies(finalUniquePolicies)
-        
-        // Set first policy as selected
-        if (finalUniquePolicies.length > 0) {
-          setSelectedPolicyId(finalUniquePolicies[0].id)
-        }
-        setSelectedPolicies([])
-        
-      } catch (e) {
-        console.error("Error loading policies:", e)
-        setError("Could not load policy analysis.")
-      } finally {
-        setLoading(false)
-      }
+    if (policiesLoading) return
+    if (!policiesData?.policies?.length) {
+      setError("No policies found. Please upload some policies first.")
+      setLoading(false)
+      return
     }
-    analyzeAllPolicies()
-  }, [])
+
+    const backendPolicies = policiesData.policies
+    const mappedPolicies: PolicySummary[] = backendPolicies.map((policyData: any) => {
+      const analysis = policyData?.validation_metadata?.analysis_result || {}
+      const fileName = policyData.policy_name || (policyData.policy_number ? `Policy ${policyData.policy_number}` : `Policy ${String(policyData.id).slice(0, 8)}`)
+      return {
+        id: policyData.id,
+        fileName,
+        policyType: analysis.policy_type || policyData.policy_type || "Insurance",
+        provider: analysis.provider || policyData.provider || "Unknown Provider",
+        coverageAmount: analysis.coverage_amount || "Not specified",
+        premium: analysis.premium || "Not specified",
+        deductible: analysis.deductible || "Not specified",
+        keyFeatures: Array.isArray(analysis.key_features) ? analysis.key_features : [analysis.coverage || "Basic coverage"],
+        expirationDate: analysis.expiration_date || "Not specified",
+        rawAnalysis: analysis,
+      }
+    })
+
+    setPolicies(mappedPolicies)
+    setLoading(false)
+
+    if (mappedPolicies.length > 0) {
+      setSelectedPolicyId(mappedPolicies[0].id)
+    }
+  }, [policiesData, policiesLoading])
 
 
   const handleCompareToggle = (policyId: string) => {
@@ -273,23 +213,22 @@ export default function AnalyzePage() {
     return recommendations
   }
 
-  const handleDeletePolicy = async (e: React.MouseEvent, policyId: string) => {
-    e.stopPropagation() // Prevent selecting the policy when clicking delete
-    
-    if (!policyId) {
-      console.error("No policy ID provided for deletion")
-      return
-    }
+  const handleDeleteClick = (e: React.MouseEvent, policyId: string) => {
+    e.stopPropagation()
+    setDeleteTargetId(policyId)
+    setDeleteDialogOpen(true)
+  }
 
-    if (!confirm("Are you sure you want to delete this policy?")) return
+  const handleDeleteConfirm = async () => {
+    if (!deleteTargetId) return
 
+    setIsDeleting(true)
     try {
       const supabase = await getSupabase()
       const session = await supabase.auth.getSession()
       const token = session.data.session?.access_token
       
-      const deleteUrl = createApiUrlWithLogging(`/policies/${policyId}`)
-      console.log(`Attempting to delete policy: ${policyId} at ${deleteUrl}`)
+      const deleteUrl = createApiUrlWithLogging(`/policies/${deleteTargetId}`)
       
       const response = await fetchWithTimeout(deleteUrl, {
         method: "DELETE",
@@ -303,29 +242,29 @@ export default function AnalyzePage() {
           const errorData = await response.json()
           errorMessage = errorData.detail || errorMessage
         } catch {
-          // If not JSON, use status text
           errorMessage = `Error ${response.status}: ${response.statusText}`
         }
         throw new Error(errorMessage)
       }
 
-      // Remove from local state
-      const updatedPolicies = policies.filter(p => p.id !== policyId)
+      const updatedPolicies = policies.filter(p => p.id !== deleteTargetId)
       setPolicies(updatedPolicies)
       
-      // Update selection if needed
-      if (selectedPolicyId === policyId) {
+      if (selectedPolicyId === deleteTargetId) {
         setSelectedPolicyId(updatedPolicies.length > 0 ? updatedPolicies[0].id : "")
       }
       
-      // Update localStorage
       const policyIds = updatedPolicies.map(p => p.id)
       localStorage.setItem("claimwise_uploaded_policy_ids", JSON.stringify(policyIds))
       
-      console.log("Policy deleted successfully")
+      toast.success("Policy deleted successfully")
     } catch (err: unknown) {
-      console.error("Delete error:", err)
-      alert(err instanceof Error ? err.message : "Failed to delete policy. Please try again.")
+      const message = err instanceof Error ? err.message : "Failed to delete policy. Please try again."
+      toast.error(message)
+    } finally {
+      setIsDeleting(false)
+      setDeleteDialogOpen(false)
+      setDeleteTargetId(null)
     }
   }
 
@@ -338,13 +277,9 @@ export default function AnalyzePage() {
         <Header />
         
         <main className="flex-1 overflow-hidden">
+          <PageWrapper>
           {loading ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center space-y-4">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-slate-900 mx-auto"></div>
-                <p className="text-slate-500">Analyzing your policies...</p>
-              </div>
-            </div>
+            <AnalyzeSkeleton />
           ) : error ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center space-y-4 max-w-md mx-auto p-6 bg-white rounded-lg shadow-sm border border-red-100">
@@ -385,7 +320,7 @@ export default function AnalyzePage() {
                             <div className="flex items-center gap-2">
                               {selectedPolicyId === policy.id && <CheckCircle className="h-3 w-3 text-teal-600 mt-1" />}
                               <button 
-                                onClick={(e) => handleDeletePolicy(e, policy.id)}
+                                 onClick={(e) => handleDeleteClick(e, policy.id)}
                                 className="text-slate-400 hover:text-red-500 transition-colors p-1"
                                 title="Delete Policy"
                               >
@@ -527,7 +462,7 @@ export default function AnalyzePage() {
                               </div>
                             </div>
 
-                            {/* Claim Readiness Score - New Visual */}
+                            {/* Claim Readiness Score - Animated Ring */}
                             <Card className="border-none shadow-none bg-card">
                               <CardContent className="p-0 pt-2">
                                 <div className="flex items-center justify-between mb-2">
@@ -535,18 +470,51 @@ export default function AnalyzePage() {
                                     <h3 className="font-medium text-foreground">Claim Readiness Score</h3>
                                     <p className="text-xs text-muted-foreground">Based on document completeness</p>
                                   </div>
-                                  <span className={cn(
-                                    "text-2xl font-bold",
-                                    (currentPolicy.rawAnalysis?.claim_readiness_score || 0) >= 75 ? "text-green-600" :
-                                    (currentPolicy.rawAnalysis?.claim_readiness_score || 0) >= 40 ? "text-amber-600" : "text-red-600"
-                                  )}>
-                                    {currentPolicy.rawAnalysis?.claim_readiness_score || 0}/100
-                                  </span>
+                                  <div className="relative flex items-center justify-center">
+                                    {(() => {
+                                      const s = currentPolicy.rawAnalysis?.claim_readiness_score || 0
+                                      return (
+                                        <>
+                                          <svg className="-rotate-90" width="56" height="56">
+                                            <circle
+                                              className="text-slate-100 dark:text-slate-800"
+                                              strokeWidth="5"
+                                              stroke="currentColor"
+                                              fill="transparent"
+                                              r="22"
+                                              cx="28"
+                                              cy="28"
+                                            />
+                                            <motion.circle
+                                              className={cn(
+                                                s >= 75 ? "text-green-500" :
+                                                s >= 40 ? "text-amber-500" : "text-red-500"
+                                              )}
+                                              strokeWidth="5"
+                                              strokeDasharray={138.23}
+                                              stroke="currentColor"
+                                              fill="transparent"
+                                              r="22"
+                                              cx="28"
+                                              cy="28"
+                                              strokeLinecap="round"
+                                              initial={{ strokeDashoffset: 138.23 }}
+                                              animate={{ strokeDashoffset: 138.23 - (138.23 * s / 100) }}
+                                              transition={{ duration: 1, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                                            />
+                                          </svg>
+                                          <span className={cn(
+                                            "absolute text-xs font-bold",
+                                            s >= 75 ? "text-green-600" :
+                                            s >= 40 ? "text-amber-600" : "text-red-600"
+                                          )}>
+                                            {s}
+                                          </span>
+                                        </>
+                                      )
+                                    })()}
+                                  </div>
                                 </div>
-                                <Progress 
-                                  value={currentPolicy.rawAnalysis?.claim_readiness_score || 0} 
-                                  className="h-2" 
-                                />
                               </CardContent>
                             </Card>
 
@@ -647,8 +615,37 @@ export default function AnalyzePage() {
               </ResizablePanel>
             </ResizablePanelGroup>
           )}
+          </PageWrapper>
         </main>
       </div>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Policy</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this policy? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {isDeleting ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Deleting...
+                </span>
+              ) : (
+                "Delete"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </ProtectedRoute>
   )
 }

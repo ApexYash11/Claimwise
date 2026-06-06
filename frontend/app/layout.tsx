@@ -1,12 +1,14 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Inter, Merriweather, JetBrains_Mono } from "next/font/google"
+import { Inter, Instrument_Serif, JetBrains_Mono } from "next/font/google"
 import "./globals.css"
 
 import { AuthProvider } from "@/hooks/use-auth"
 import { ThemeProvider } from "@/components/theme-provider"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { ErrorBoundary } from "@/components/error-boundary"
+import { RouteTransitions } from "@/components/motion/route-transitions"
+import { QueryProvider } from "@/components/query-provider"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -14,11 +16,11 @@ const inter = Inter({
   variable: "--font-inter",
 })
 
-const merriweather = Merriweather({
+const instrumentSerif = Instrument_Serif({
   subsets: ["latin"],
-  weight: ["300", "400", "700", "900"],
+  weight: ["400"],
   display: "swap",
-  variable: "--font-merriweather",
+  variable: "--font-serif",
 })
 
 const jetbrainsMono = JetBrains_Mono({
@@ -34,12 +36,16 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} ${merriweather.variable} ${jetbrainsMono.variable} antialiased`} suppressHydrationWarning>
+    <html lang="en" className={`${inter.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable} antialiased`} suppressHydrationWarning>
       <body className="font-sans bg-slate-50 dark:bg-slate-950">
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
           <TooltipProvider>
             <ErrorBoundary>
-              <AuthProvider>{children}</AuthProvider>
+              <AuthProvider>
+                <QueryProvider>
+                  <RouteTransitions>{children}</RouteTransitions>
+                </QueryProvider>
+              </AuthProvider>
             </ErrorBoundary>
           </TooltipProvider>
         </ThemeProvider>
