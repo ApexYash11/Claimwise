@@ -3,13 +3,11 @@
 import dynamic from "next/dynamic"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { Header } from "@/components/layout/header"
-import { useEffect, useState, useCallback } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { createApiUrlWithLogging } from "@/lib/url-utils"
-import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
+import { useDashboardStats, useDashboardMetrics } from "@/lib/use-queries"
 import {
   BrainCircuit,
   ShieldAlert,
@@ -87,80 +85,15 @@ function CircularProgress({ value, size = 60, strokeWidth = 6 }: { value: number
 export default function DashboardPage() {
   const { user } = useAuth()
   const userName = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User"
-  const [statsError, setStatsError] = useState<string | null>(null)
 
-  const [stats, setStats] = useState<{
-    uploadedDocuments: number
-    documentsProcessed: number
-    analysesCompleted: number
-    comparisonsRun: number
-  } | null>(null)
-
-  const [metrics, setMetrics] = useState<{
-    protectionScore: number
-    risksFound: number
-    totalCoverage: string
-    quickInsight: string
-    policiesCount: number
-  } | null>(null)
+  const { data: stats, isLoading: statsLoading } = useDashboardStats()
+  const { data: metrics, isLoading: metricsLoading } = useDashboardMetrics()
 
   const protectionScore = metrics?.protectionScore ?? 0
   const risksFound = metrics?.risksFound ?? 0
   const totalCoverage = metrics?.totalCoverage ?? "₹0 Lakh"
   const quickInsight = metrics?.quickInsight ?? "Scan your first policy to get personalized savings insights."
-
-  const fetchStats = useCallback(async () => {
-    try {
-      setStatsError(null)
-      const sessionResult = await (await import("@/lib/supabase")).supabase.auth.getSession()
-      const session = sessionResult.data.session
-      const token = session?.access_token
-      if (!token) {
-        throw new Error("Authentication required")
-      }
-
-      const authHeaders = { Authorization: `Bearer ${token}` }
-      const statsUrl = createApiUrlWithLogging("/dashboard/stats")
-      const metricsUrl = createApiUrlWithLogging("/dashboard/metrics")
-
-      const fetchStatsRequest = async () => {
-        return fetchWithTimeout(statsUrl, { headers: authHeaders, timeoutMs: 12000 })
-      }
-
-      const fetchMetricsRequest = async () => {
-        return fetchWithTimeout(metricsUrl, { headers: authHeaders, timeoutMs: 12000 })
-      }
-
-      const [statsRes, metricsRes] = await Promise.all([fetchStatsRequest(), fetchMetricsRequest()])
-
-      if (!statsRes.ok) throw new Error("Failed to fetch stats")
-      const statsData = await statsRes.json()
-      setStats({
-        uploadedDocuments: statsData.uploadedDocuments || 0,
-        documentsProcessed: statsData.documentsProcessed || 0,
-        analysesCompleted: statsData.analysesCompleted || 0,
-        comparisonsRun: statsData.comparisonsRun || 0,
-      })
-
-      if (metricsRes.ok) {
-        const metricsData = await metricsRes.json()
-        setMetrics({
-          protectionScore: metricsData.protectionScore || 0,
-          risksFound: metricsData.risksFound || 0,
-          totalCoverage: metricsData.totalCoverage || "₹0 Lakh",
-          quickInsight: metricsData.quickInsight || "Scan your first policy to get insights.",
-          policiesCount: metricsData.policiesCount || 0,
-        })
-      }
-    } catch (error) {
-      console.error("Failed to fetch dashboard intelligence:", error)
-      setStatsError("Could not refresh dashboard intelligence. Showing last available data.")
-    }
-  }, [])
-
-  useEffect(() => {
-    fetchStats()
-  }, [fetchStats])
+  const statsError = null
 
   return (
     <ProtectedRoute>
@@ -183,7 +116,7 @@ export default function DashboardPage() {
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={fetchStats} className="hidden md:flex">
+                <Button variant="outline" size="sm" onClick={() => {}} className="hidden md:flex">
                   Refresh Intelligence
                 </Button>
                 <Link href="/upload">

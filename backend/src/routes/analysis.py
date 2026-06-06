@@ -38,6 +38,17 @@ def analyze(policy_id: str = Form(...), user_id: str = Depends(get_current_user)
         total_risks = gaps_count + exclusions_count
         risk_impact = min(total_risks * 0.5, 90)
         validation_score = max((100 - risk_impact) / 100, 0.1)
+        risks_list = []
+        if analysis.get("exclusions"):
+            risks_list.append("exclusions")
+        if analysis.get("gaps_and_risks"):
+            risks_list.extend(analysis.get("gaps_and_risks", []))
+        metadata["computed_metrics"] = {
+            "coverage_amount": analysis.get("coverage_amount", "0"),
+            "risk_count": len(risks_list),
+            "has_exclusions": bool(analysis.get("exclusions")),
+            "protection_score": analysis.get("claim_readiness_score", 0),
+        }
         supabase.table("policies").update(
             {"validation_metadata": metadata, "validation_score": validation_score}
         ).eq("id", policy_id).execute()

@@ -17,8 +17,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { getSupabase } from "@/lib/get-supabase"
 import { createApiUrlWithLogging } from "@/lib/url-utils"
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
-import type { BackendPolicyRecord } from "@/types/policies"
 import type { BackendHistoryResponse } from "@/types/history"
+import { usePolicies, useHistory } from "@/lib/use-queries"
 
 const Message = dynamic(() => import("@/components/chat/message").then((mod) => ({ default: mod.Message })), {
   loading: () => <div className="h-24 w-full rounded-lg bg-slate-100 dark:bg-slate-800 animate-pulse" />,
@@ -49,15 +49,15 @@ interface ChatMessage {
 
 export default function ChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [policies, setPolicies] = useState<PolicySummary[]>([])
   const [selectedPolicyId, setSelectedPolicyId] = useState<string>("all")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
-  const [loadingPolicies, setLoadingPolicies] = useState(true)
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null)
+  const { data: policiesData, isLoading: loadingPolicies } = usePolicies()
+  const { data: historyData } = useHistory(1, 25)
   const [historyPage, setHistoryPage] = useState(1)
   const [hasMoreHistory, setHasMoreHistory] = useState(false)
   const [loadingMoreHistory, setLoadingMoreHistory] = useState(false)
-  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const mapServerHistoryToMessages = (historyData: BackendHistoryResponse): ChatMessage[] => {
@@ -91,105 +91,38 @@ export default function ChatPage() {
     scrollToBottom()
   }, [messages])
 
-  // Load user policies and chat history on component mount
+  // Populate policies from TanStack Query
+  const mapPolicyFromBackend = (policy: any): PolicySummary => {
+    const analysis = policy?.validation_metadata?.analysis_result || {}
+    return {
+      id: policy.id,
+      fileName: policy.policy_name || (policy.policy_number ? `Policy ${policy.policy_number}` : `Policy ${String(policy.id).slice(-8)}`),
+      policyType: analysis.policy_type || policy.policy_type || "Unknown",
+      provider: analysis.provider || policy.provider || "Unknown Provider",
+      premium: analysis.premium || "Not specified",
+      coverageAmount: analysis.coverage_amount || "Not specified",
+      deductible: analysis.deductible || "Not specified",
+      keyFeatures: Array.isArray(analysis.key_features) ? analysis.key_features : [],
+      expirationDate: analysis.expiration_date || "Not specified",
+      rawAnalysis: analysis,
+    }
+  }
+
+  const policies: PolicySummary[] = policiesData?.policies?.map(mapPolicyFromBackend) ?? []
+  const serverHistoryMessages = mapServerHistoryToMessages(historyData)
+
   useEffect(() => {
-    const controller = new AbortController()
-    const mapPolicyFromBackend = (policy: BackendPolicyRecord): PolicySummary => {
-      const analysis = policy?.validation_metadata?.analysis_result || {}
-      return {
-        id: policy.id,
-        fileName: policy.policy_name || (policy.policy_number ? `Policy ${policy.policy_number}` : `Policy ${String(policy.id).slice(-8)}`),
-        policyType: analysis.policy_type || policy.policy_type || "Unknown",
-        provider: analysis.provider || policy.provider || "Unknown Provider",
-        premium: analysis.premium || "Not specified",
-        coverageAmount: analysis.coverage_amount || "Not specified",
-        deductible: analysis.deductible || "Not specified",
-        keyFeatures: Array.isArray(analysis.key_features) ? analysis.key_features : [],
-        expirationDate: analysis.expiration_date || "Not specified",
-        rawAnalysis: analysis,
-      }
+    if (policies.length > 0 && selectedPolicyId === "all") {
+      setSelectedPolicyId(policies[0].id)
     }
+  }, [policies])
 
-    const loadPoliciesAndHistory = async () => {
-      try {
-        const supabase = await getSupabase()
-        const session = await supabase.auth.getSession()
-        const token = session.data.session?.access_token
-        const user = session.data.session?.user
-
-        if (!user) {
-          setError("Please log in to access your policies")
-          setLoadingPolicies(false)
-          return
-        }
-
-        const authHeaders = token ? { Authorization: `Bearer ${token}` } : undefined
-        const policiesUrl = createApiUrlWithLogging("/policies")
-        const chatHistoryUrl = `${createApiUrlWithLogging("/history")}?page=1&page_size=25`
-
-        const [policiesResult, historyResult] = await Promise.allSettled([
-          fetchWithTimeout(policiesUrl, {
-            headers: authHeaders,
-            timeoutMs: 12000,
-            signal: controller.signal,
-          }),
-          fetchWithTimeout(chatHistoryUrl, {
-            headers: authHeaders,
-            timeoutMs: 12000,
-            signal: controller.signal,
-          }),
-        ])
-
-        if (policiesResult.status === "fulfilled" && policiesResult.value.ok) {
-          const policyPayload = (await policiesResult.value.json()) as { policies?: BackendPolicyRecord[] }
-          const backendPolicies = Array.isArray(policyPayload?.policies) ? policyPayload.policies : []
-          const loadedPolicies = backendPolicies.map(mapPolicyFromBackend)
-          setPolicies(loadedPolicies)
-          if (loadedPolicies.length > 0) {
-            setSelectedPolicyId(loadedPolicies[0].id)
-          }
-        } else {
-          setError("Failed to load policies")
-        }
-
-        if (historyResult.status === "fulfilled" && historyResult.value.ok) {
-          const historyData = (await historyResult.value.json()) as BackendHistoryResponse
-          const serverMessages = mapServerHistoryToMessages(historyData)
-          setMessages(serverMessages)
-          setHistoryPage(1)
-          setHasMoreHistory(Boolean(historyData?.pagination?.has_more_chat_logs))
-        } else {
-          loadFromLocalStorage(user.id)
-        }
-
-      } catch (e) {
-        if (e instanceof Error && e.name === "AbortError") {
-          return
-        }
-        console.error("Error loading policies and history:", e)
-        setError("Failed to load policies and chat history")
-      } finally {
-        setLoadingPolicies(false)
-      }
+  useEffect(() => {
+    if (serverHistoryMessages.length > 0 && messages.length === 0) {
+      setMessages(serverHistoryMessages)
+      setHasMoreHistory(Boolean(historyData?.pagination?.has_more_chat_logs))
     }
-
-    // Helper function to load from user-specific localStorage
-    const loadFromLocalStorage = (userId: string) => {
-      const userSpecificKey = `claimwise_chat_history_${userId}`
-      const storedHistory = localStorage.getItem(userSpecificKey)
-      if (storedHistory) {
-        const history = (JSON.parse(storedHistory) as ChatMessage[]).map((msg) => ({
-          ...msg,
-          timestamp: new Date(msg.timestamp)
-        }))
-        setMessages(history)
-        console.log(`Loaded ${history.length} messages from localStorage (user-specific)`)
-      }
-    }
-
-    loadPoliciesAndHistory()
-    return () => controller.abort()
-  }, [])
+  }, [serverHistoryMessages])
 
   const handleLoadOlderHistory = async () => {
     if (loadingMoreHistory || !hasMoreHistory) return

@@ -32,7 +32,7 @@ import { motion } from "framer-motion"
 import { PageWrapper } from "@/components/motion/page-wrapper"
 import { AnalyzeSkeleton } from "@/components/ui/skeleton"
 
-// Dynamic policy data from backend/AI
+import { usePolicies } from "@/lib/use-queries"
 import { getSupabase } from "@/lib/get-supabase"
 import { createApiUrlWithLogging } from "@/lib/url-utils"
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
@@ -55,117 +55,41 @@ export default function AnalyzePage() {
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
 
+  const { data: policiesData, isLoading: policiesLoading } = usePolicies()
+
   useEffect(() => {
-    const analyzeAllPolicies = async () => {
-      setLoading(true)
-      setError("")
-      
-      try {
-        // Get Supabase JWT and user info
-        const supabase = await getSupabase()
-        const session = await supabase.auth.getSession()
-        const token = session.data.session?.access_token
-        const userId = session.data.session?.user?.id
-
-        if (!session.data.session || !userId) {
-          setError("Please log in to view your policies.")
-          setLoading(false)
-          return
-        }
-
-        // Clear any cached policy data
-        if (typeof window !== "undefined") {
-          localStorage.removeItem("claimwise_uploaded_policy_ids")
-          localStorage.removeItem("claimwise_uploaded_policy_infos")
-        }
-
-        const policiesUrl = createApiUrlWithLogging("/policies")
-        const policiesResponse = await fetchWithTimeout(policiesUrl, {
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-          timeoutMs: 12000,
-        })
-
-        if (!policiesResponse.ok) {
-          setError("Could not load policies from server.")
-          setLoading(false)
-          return
-        }
-
-        const payload = await policiesResponse.json()
-        const payloadRecord = payload as { policies?: BackendPolicyRecord[] }
-        const backendPolicies = Array.isArray(payloadRecord?.policies) ? payloadRecord.policies : []
-
-        if (backendPolicies.length === 0) {
-          setError("No policies found. Please upload some policies first.")
-          setLoading(false)
-          return
-        }
-
-        const mappedPolicies: PolicySummary[] = backendPolicies.map((policyData) => {
-          const analysis = policyData?.validation_metadata?.analysis_result || {}
-          const fileName = policyData.policy_name || (policyData.policy_number ? `Policy ${policyData.policy_number}` : `Policy ${String(policyData.id).slice(0, 8)}`)
-
-          return {
-            id: policyData.id,
-            fileName,
-            policyType: analysis.policy_type || policyData.policy_type || "Insurance",
-            provider: analysis.provider || policyData.provider || "Unknown Provider",
-            coverageAmount: analysis.coverage_amount || "Not specified",
-            premium: analysis.premium || "Not specified",
-            deductible: analysis.deductible || "Not specified",
-            keyFeatures: Array.isArray(analysis.key_features) ? analysis.key_features : [analysis.coverage || "Basic coverage"],
-            expirationDate: analysis.expiration_date || "Not specified",
-            rawAnalysis: analysis,
-          }
-        })
-
-        // Update localStorage with current policies
-        const policyIds = mappedPolicies.map(p => p.id)
-        localStorage.setItem("claimwise_uploaded_policy_ids", JSON.stringify(policyIds))
-
-        const allPolicies = mappedPolicies
-        
-        // Final deduplication pass after analysis - remove any remaining duplicates
-        const finalUniquePolicies = []
-        const finalSeenKeys = new Set()
-        
-        for (const policy of allPolicies) {
-          // Use multiple criteria to ensure uniqueness
-          const key1 = policy.fileName?.toLowerCase().trim()
-          const key2 = policy.id
-          const key3 = `${policy.provider}_${policy.coverageAmount}_${policy.premium}`.toLowerCase()
-          
-          const compositeKey = `${key1}_${key2}_${key3}`
-          
-          if (!finalSeenKeys.has(compositeKey) && !finalSeenKeys.has(key2)) {
-            finalSeenKeys.add(compositeKey)
-            finalSeenKeys.add(key2)
-            finalUniquePolicies.push(policy)
-          } else {
-            console.log('Removing duplicate after analysis:', policy.fileName)
-          }
-        }
-        
-        console.log(`Final deduplication: ${allPolicies.length} → ${finalUniquePolicies.length} policies`)
-        
-        // Generate insights and recommendations
-        setPolicies(finalUniquePolicies)
-        
-        // Set first policy as selected
-        if (finalUniquePolicies.length > 0) {
-          setSelectedPolicyId(finalUniquePolicies[0].id)
-        }
-        setSelectedPolicies([])
-        
-      } catch (e) {
-        console.error("Error loading policies:", e)
-        setError("Could not load policy analysis.")
-      } finally {
-        setLoading(false)
-      }
+    if (policiesLoading) return
+    if (!policiesData?.policies?.length) {
+      setError("No policies found. Please upload some policies first.")
+      setLoading(false)
+      return
     }
-    analyzeAllPolicies()
-  }, [])
+
+    const backendPolicies = policiesData.policies
+    const mappedPolicies: PolicySummary[] = backendPolicies.map((policyData: any) => {
+      const analysis = policyData?.validation_metadata?.analysis_result || {}
+      const fileName = policyData.policy_name || (policyData.policy_number ? `Policy ${policyData.policy_number}` : `Policy ${String(policyData.id).slice(0, 8)}`)
+      return {
+        id: policyData.id,
+        fileName,
+        policyType: analysis.policy_type || policyData.policy_type || "Insurance",
+        provider: analysis.provider || policyData.provider || "Unknown Provider",
+        coverageAmount: analysis.coverage_amount || "Not specified",
+        premium: analysis.premium || "Not specified",
+        deductible: analysis.deductible || "Not specified",
+        keyFeatures: Array.isArray(analysis.key_features) ? analysis.key_features : [analysis.coverage || "Basic coverage"],
+        expirationDate: analysis.expiration_date || "Not specified",
+        rawAnalysis: analysis,
+      }
+    })
+
+    setPolicies(mappedPolicies)
+    setLoading(false)
+
+    if (mappedPolicies.length > 0) {
+      setSelectedPolicyId(mappedPolicies[0].id)
+    }
+  }, [policiesData, policiesLoading])
 
 
   const handleCompareToggle = (policyId: string) => {

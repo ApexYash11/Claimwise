@@ -5,6 +5,7 @@ from src.db import supabase
 from src.auth import get_current_user
 from src.models import ChatRequest, MultiPolicyChatRequest, ChatResponse
 from src.services.activity_service import log_activity
+from src.caching import cache_manager
 
 router = APIRouter()
 
@@ -99,6 +100,8 @@ async def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
                 "answer": str(answer) if answer is not None else "",
             }
         ).execute()
+        hc = cache_manager.create_cache("history", default_ttl=30)
+        hc.clear()
         return ChatResponse(
             answer=str(answer) if answer is not None else "", citations=citations
         )
@@ -159,6 +162,8 @@ def chat_multiple_policies(
                 "chat_type": "multiple_policies",
             }
         ).execute()
+        hc = cache_manager.create_cache("history", default_ttl=30)
+        hc.clear()
         log_activity(
             user_id=user_id,
             activity_type="chat",
