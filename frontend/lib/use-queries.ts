@@ -7,10 +7,13 @@ import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
 
 async function getAuthHeaders() {
   const supabase = await getSupabase()
-  const { data } = await supabase.auth.getSession()
-  const token = data.session?.access_token
-  if (!token) throw new Error("Not authenticated")
-  return { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }
+  for (let i = 0; i < 6; i++) {
+    const { data } = await supabase.auth.getSession()
+    const token = data.session?.access_token
+    if (token) return { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }
+    if (i < 5) await new Promise((r) => setTimeout(r, 500))
+  }
+  throw new Error("Not authenticated")
 }
 
 export function usePolicies() {

@@ -9,29 +9,37 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ArrowLeft, Plus } from "lucide-react"
 import Link from "next/link"
 import type { PolicySummary } from "@/lib/api"
-import { getPolicies } from "@/lib/api"
+import { usePolicies } from "@/lib/use-queries"
 import { PageWrapper } from "@/components/motion/page-wrapper"
 import { Skeleton } from "@/components/ui/skeleton"
+import type { BackendPolicyRecord } from "@/types/policies"
+
+function mapPolicyFromBackend(policyData: BackendPolicyRecord): PolicySummary {
+  const analysis = policyData?.validation_metadata?.analysis_result || {}
+  return {
+    id: policyData.id,
+    fileName: policyData.policy_name || (policyData.policy_number ? `Policy ${policyData.policy_number}` : `Policy ${String(policyData.id).slice(0, 8)}`),
+    policyType: analysis.policy_type || policyData.policy_type || "Insurance",
+    provider: analysis.provider || policyData.provider || "Unknown Provider",
+    coverageAmount: analysis.coverage_amount || "Not specified",
+    premium: analysis.premium || "Not specified",
+    deductible: analysis.deductible || "Not specified",
+    keyFeatures: Array.isArray(analysis.key_features) ? analysis.key_features : [analysis.coverage || "Basic coverage"],
+    expirationDate: analysis.expiration_date || "Not specified",
+    rawAnalysis: analysis,
+  }
+}
 
 export default function ComparePage() {
   const [selectedPolicies, setSelectedPolicies] = useState<PolicySummary[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const { data: policiesData, isLoading } = usePolicies()
 
   useEffect(() => {
-    fetchUserPolicies()
-  }, [])
-
-  const fetchUserPolicies = async () => {
-    try {
-      setIsLoading(true)
-      const policies = await getPolicies()
-      setSelectedPolicies(policies.slice(0, 2))
-    } catch (error) {
-      console.error("Error fetching policies:", error)
-    } finally {
-      setIsLoading(false)
+    if (policiesData?.policies?.length) {
+      const mapped = policiesData.policies.map(mapPolicyFromBackend)
+      setSelectedPolicies(mapped.slice(0, 2))
     }
-  }
+  }, [policiesData])
 
   const handleRemovePolicy = (policyId: string) => {
     setSelectedPolicies((prev) => prev.filter((policy) => policy.id !== policyId))
@@ -40,7 +48,7 @@ export default function ComparePage() {
   if (isLoading) {
     return (
       <ProtectedRoute>
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-slate-50">
           <Header />
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <div className="space-y-4 p-8">
