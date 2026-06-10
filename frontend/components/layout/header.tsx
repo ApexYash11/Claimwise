@@ -2,230 +2,82 @@
 
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Shield, Menu, X, LogOut, Sun, Moon } from "lucide-react"
+import { Sun, Moon } from "lucide-react"
 import { useTheme } from "next-themes"
 import { useState, useEffect } from "react"
-import { useAuth } from "@/hooks/use-auth"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { motion, AnimatePresence } from "framer-motion"
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
-  const { user } = useAuth()
   const { setTheme, resolvedTheme } = useTheme()
 
-  // Ensure hydration compatibility
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  const userName = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User"
-  const userInitials = userName
-    .split(" ")
-    .map((n: string) => n[0])
-    .join("")
-    .toUpperCase()
-
   return (
-    <header className="bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50">
+    <header className="bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          {/* Logo */}
-          <Link href={user ? "/dashboard" : "/"} className="flex items-center space-x-3 group">
-            <div className="w-8 h-8 bg-teal-600 rounded-lg flex items-center justify-center group-hover:bg-teal-700 transition-colors">
-              <Shield className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-xl font-serif font-bold text-slate-900 dark:text-slate-50">ClaimWise</span>
+          <Link href="/" className="flex items-center space-x-3 group">
+            <span className="text-xl font-bold">App</span>
           </Link>
 
-          {/* Desktop Navigation */}
-          {user && (
-            <nav className="hidden md:flex items-center space-x-1">
-              <Link href="/dashboard" className="px-4 py-2 rounded-md text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-all">
-                Dashboard
-              </Link>
-              <Link href="/upload" className="px-4 py-2 rounded-md text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-all">
-                Upload
-              </Link>
-              <Link href="/analyze" className="px-4 py-2 rounded-md text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-all">
-                Analyze
-              </Link>
-              <Link href="/chat" className="px-4 py-2 rounded-md text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-all">
-                Chat
-              </Link>
-            </nav>
-          )}
+          <nav className="hidden md:flex items-center space-x-1">
+            <Link href="/" className="px-4 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+              Home
+            </Link>
+          </nav>
 
-          {!user && (
-            <nav className="hidden md:flex items-center space-x-1">
-              <Link href="#features" className="px-4 py-2 rounded-md text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-all">
-                Features
-              </Link>
-              <Link href="#demo" className="px-4 py-2 rounded-md text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-all">
-                Demo Flow
-              </Link>
-            </nav>
-          )}
-
-          {/* Desktop Auth & Theme Toggle */}
           <div className="hidden md:flex items-center space-x-3">
             <Button
               variant="ghost"
               size="icon"
               aria-label="Toggle theme"
               onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-              className="rounded-md w-9 h-9 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
             >
-              {!mounted ? (
-                // Show a neutral icon during hydration
-                <div className="w-5 h-5" />
-              ) : resolvedTheme === "dark" ? (
-                <Sun className="w-5 h-5" />
+              {mounted ? (
+                resolvedTheme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />
               ) : (
-                <Moon className="w-5 h-5" />
+                <div className="w-5 h-5" />
               )}
             </Button>
-            {user ? (
-              <Link href="/profile">
-                <Button variant="ghost" className="relative h-9 w-9 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800">
-                  <Avatar className="h-8 w-8">
-                    <AvatarFallback className="bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300 text-xs font-medium">{userInitials}</AvatarFallback>
-                  </Avatar>
-                </Button>
-              </Link>
-            ) : (
-              <>
-                <Button variant="ghost" asChild className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800">
-                  <Link href="/login">Sign in</Link>
-                </Button>
-                <Button asChild className="bg-teal-600 hover:bg-teal-700 text-white shadow-sm">
-                  <Link href="/#demo">Book Demo</Link>
-                </Button>
-              </>
-            )}
           </div>
 
-          {/* Mobile Menu Button & Theme Toggle */}
           <div className="md:hidden flex items-center space-x-2">
             <Button
               variant="ghost"
               size="icon"
               aria-label="Toggle theme"
               onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-              className="rounded-md text-slate-500"
             >
-              {!mounted ? (
-                // Show a neutral icon during hydration
-                <div className="w-5 h-5" />
-              ) : resolvedTheme === "dark" ? (
-                <Sun className="w-5 h-5" />
+              {mounted ? (
+                resolvedTheme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />
               ) : (
-                <Moon className="w-5 h-5" />
+                <div className="w-5 h-5" />
               )}
             </Button>
-            <button className="p-2 text-slate-600 dark:text-slate-300" onClick={() => setIsMenuOpen(!isMenuOpen)}>
-              {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            <button className="p-2" onClick={() => setIsMenuOpen(!isMenuOpen)}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d={isMenuOpen ? "M18 6L6 18M6 6l12 12" : "M3 12h18M3 6h18M3 18h18"} /></svg>
             </button>
           </div>
         </div>
 
-        {/* Mobile Menu */}
         <AnimatePresence>
           {isMenuOpen && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-              className="md:hidden overflow-hidden border-t border-slate-200 bg-white px-4 shadow-lg dark:border-slate-800 dark:bg-slate-950"
+              transition={{ duration: 0.2 }}
+              className="md:hidden overflow-hidden border-t"
             >
               <div className="py-4">
                 <nav className="flex flex-col space-y-4">
-                  {user ? (
-                    <>
-                      <Link
-                        href="/dashboard"
-                        className="text-sm font-medium text-slate-600 transition-colors hover:text-teal-600 dark:text-slate-300 dark:hover:text-teal-400"
-                        onClick={() => setIsMenuOpen(false)}
-                      >
-                        Dashboard
-                      </Link>
-                      <Link
-                        href="/upload"
-                        className="text-sm font-medium text-slate-600 transition-colors hover:text-teal-600 dark:text-slate-300 dark:hover:text-teal-400"
-                        onClick={() => setIsMenuOpen(false)}
-                      >
-                        Upload
-                      </Link>
-                      <Link
-                        href="/analyze"
-                        className="text-sm font-medium text-slate-600 transition-colors hover:text-teal-600 dark:text-slate-300 dark:hover:text-teal-400"
-                        onClick={() => setIsMenuOpen(false)}
-                      >
-                        Analyze
-                      </Link>
-                      <Link
-                        href="/chat"
-                        className="text-sm font-medium text-slate-600 transition-colors hover:text-teal-600 dark:text-slate-300 dark:hover:text-teal-400"
-                        onClick={() => setIsMenuOpen(false)}
-                      >
-                        Chat
-                      </Link>
-                    </>
-                  ) : (
-                    <>
-                      <Link
-                        href="#features"
-                        className="text-sm font-medium text-slate-600 transition-colors hover:text-teal-600 dark:text-slate-300 dark:hover:text-teal-400"
-                        onClick={() => setIsMenuOpen(false)}
-                      >
-                        Features
-                      </Link>
-                      <Link
-                        href="#demo"
-                        className="text-sm font-medium text-slate-600 transition-colors hover:text-teal-600 dark:text-slate-300 dark:hover:text-teal-400"
-                        onClick={() => setIsMenuOpen(false)}
-                      >
-                        Demo Flow
-                      </Link>
-                    </>
-                  )}
-
-                  <div className="flex flex-col space-y-3 border-t border-slate-200 pt-4 dark:border-slate-800">
-                    {user ? (
-                      <>
-                        <Link href="/profile" onClick={() => setIsMenuOpen(false)}>
-                          <div className="flex items-center space-x-3 px-2 py-1">
-                            <Avatar className="h-8 w-8">
-                              <AvatarFallback className="bg-teal-100 text-xs font-medium text-teal-700 dark:bg-teal-900 dark:text-teal-300">
-                                {userInitials}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="flex flex-col">
-                              <span className="text-sm font-medium text-slate-900 dark:text-slate-50">{userName}</span>
-                              <span className="text-xs text-slate-500 dark:text-slate-400">{user.email}</span>
-                            </div>
-                          </div>
-                        </Link>
-                        <Link href="/profile" onClick={() => setIsMenuOpen(false)}>
-                          <Button variant="ghost" className="w-full justify-start text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/20">
-                            <LogOut className="mr-2 h-4 w-4" />
-                            Sign out
-                          </Button>
-                        </Link>
-                      </>
-                    ) : (
-                      <>
-                        <Button variant="ghost" asChild className="justify-start">
-                          <Link href="/login">Sign in</Link>
-                        </Button>
-                        <Button asChild className="bg-teal-600 text-white hover:bg-teal-700">
-                          <Link href="/#demo">Book Demo</Link>
-                        </Button>
-                      </>
-                    )}
-                  </div>
+                  <Link href="/" className="text-sm font-medium" onClick={() => setIsMenuOpen(false)}>
+                    Home
+                  </Link>
                 </nav>
               </div>
             </motion.div>

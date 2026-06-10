@@ -1,6 +1,5 @@
 /**
- * Enhanced error handling system for ClaimWise frontend
- * Provides consistent error types, user-friendly messages, and recovery strategies
+ * Consistent error types, user-friendly messages, and recovery strategies
  */
 
 export enum ErrorCategory {
@@ -79,7 +78,7 @@ export interface RecoveryAction {
   primary?: boolean;
 }
 
-export class ClaimWiseError extends Error {
+export class AppError extends Error {
   public readonly category: ErrorCategory;
   public readonly severity: ErrorSeverity;
   public readonly userMessage: string;
@@ -101,7 +100,7 @@ export class ClaimWiseError extends Error {
     } = {}
   ) {
     super(message);
-    this.name = 'ClaimWiseError';
+    this.name = 'AppError';
     this.category = category;
     this.severity = severity;
     this.technicalMessage = message;
@@ -177,7 +176,7 @@ export class ClaimWiseError extends Error {
 }
 
 // Specific error classes
-export class NetworkError extends ClaimWiseError {
+export class NetworkError extends AppError {
   constructor(message: string, options: {
     userMessage?: string;
     details?: ErrorDetails;
@@ -187,7 +186,7 @@ export class NetworkError extends ClaimWiseError {
   }
 }
 
-export class AuthenticationError extends ClaimWiseError {
+export class AuthenticationError extends AppError {
   constructor(message: string, options: {
     userMessage?: string;
     details?: ErrorDetails;
@@ -197,7 +196,7 @@ export class AuthenticationError extends ClaimWiseError {
   }
 }
 
-export class ValidationError extends ClaimWiseError {
+export class ValidationError extends AppError {
   constructor(message: string, field?: string, options: {
     userMessage?: string;
     details?: ErrorDetails;
@@ -213,7 +212,7 @@ export class ValidationError extends ClaimWiseError {
   }
 }
 
-export class FileError extends ClaimWiseError {
+export class FileError extends AppError {
   constructor(message: string, filename?: string, options: {
     userMessage?: string;
     details?: ErrorDetails;
@@ -229,7 +228,7 @@ export class FileError extends ClaimWiseError {
   }
 }
 
-export class RateLimitError extends ClaimWiseError {
+export class RateLimitError extends AppError {
   constructor(message: string, retryAfter?: number, options: {
     userMessage?: string;
     details?: ErrorDetails;
@@ -253,7 +252,7 @@ export class RateLimitError extends ClaimWiseError {
 }
 
 // Error parsing utilities
-export function parseApiError(response: Response, data?: unknown): ClaimWiseError {
+export function parseApiError(response: Response, data?: unknown): AppError {
   const traceId = response.headers.get('X-Trace-ID') || undefined;
   const detailPayload = getDetailPayload(data)
   const detailString = getDetailString(data)
@@ -272,7 +271,7 @@ export function parseApiError(response: Response, data?: unknown): ClaimWiseErro
           }
         );
       }
-      return new ClaimWiseError(
+      return new AppError(
         detailString || 'Bad request',
         ErrorCategory.CLIENT_ERROR,
         ErrorSeverity.LOW,
@@ -290,7 +289,7 @@ export function parseApiError(response: Response, data?: unknown): ClaimWiseErro
       );
 
     case 403:
-      return new ClaimWiseError(
+      return new AppError(
         detailPayload?.message || 'Access denied',
         ErrorCategory.AUTHENTICATION,
         ErrorSeverity.MEDIUM,
@@ -327,7 +326,7 @@ export function parseApiError(response: Response, data?: unknown): ClaimWiseErro
     case 502:
     case 503:
     case 504:
-      return new ClaimWiseError(
+      return new AppError(
         detailPayload?.message || 'Server error',
         ErrorCategory.SERVER_ERROR,
         ErrorSeverity.HIGH,
@@ -339,7 +338,7 @@ export function parseApiError(response: Response, data?: unknown): ClaimWiseErro
       );
 
     default:
-      return new ClaimWiseError(
+      return new AppError(
         detailString || `HTTP ${response.status} error`,
         ErrorCategory.UNKNOWN,
         ErrorSeverity.MEDIUM,
@@ -361,7 +360,7 @@ export function parseNetworkError(error: Error): NetworkError {
 // Error logging
 export class ErrorLogger {
   private static instance: ErrorLogger;
-  private errorQueue: ClaimWiseError[] = [];
+  private errorQueue: AppError[] = [];
   private isOnline = true; // Default to online
 
   private constructor() {
@@ -388,7 +387,7 @@ export class ErrorLogger {
     return ErrorLogger.instance;
   }
 
-  public logError(error: ClaimWiseError): void {
+  public logError(error: AppError): void {
     // Log to console for development
     if (process.env.NODE_ENV === 'development') {
       console.group(`🔴 ${error.category.toUpperCase()} Error`);
@@ -447,9 +446,9 @@ export function setupGlobalErrorHandling(): void {
 
   // Handle unhandled promise rejections
   window.addEventListener('unhandledrejection', (event) => {
-    const error = event.reason instanceof ClaimWiseError 
+    const error = event.reason instanceof AppError 
       ? event.reason 
-      : new ClaimWiseError(
+      : new AppError(
           event.reason?.message || 'Unhandled promise rejection',
           ErrorCategory.UNKNOWN,
           ErrorSeverity.HIGH
@@ -460,7 +459,7 @@ export function setupGlobalErrorHandling(): void {
 
   // Handle uncaught errors
   window.addEventListener('error', (event) => {
-    const error = new ClaimWiseError(
+    const error = new AppError(
       event.error?.message || event.message || 'Uncaught error',
       ErrorCategory.UNKNOWN,
       ErrorSeverity.HIGH,
@@ -481,10 +480,10 @@ export function setupGlobalErrorHandling(): void {
 export function useErrorHandler() {
   const errorLogger = ErrorLogger.getInstance();
 
-  const handleError = (error: Error | ClaimWiseError, context?: string) => {
-    const claimWiseError = error instanceof ClaimWiseError 
+  const handleError = (error: Error | AppError, context?: string) => {
+    const claimWiseError = error instanceof AppError 
       ? error 
-      : new ClaimWiseError(
+      : new AppError(
           error.message,
           ErrorCategory.UNKNOWN,
           ErrorSeverity.MEDIUM,

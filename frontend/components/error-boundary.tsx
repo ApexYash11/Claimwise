@@ -5,18 +5,18 @@ import { AlertTriangle, RefreshCw, Home, Bug, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ClaimWiseError, ErrorCategory, ErrorSeverity, ErrorLogger } from '@/lib/error-handling';
+import { AppError, ErrorCategory, ErrorSeverity, ErrorLogger } from '@/lib/error-handling';
 
 interface Props {
   children: ReactNode;
   fallback?: ReactNode;
   showDetails?: boolean;
-  onError?: (error: ClaimWiseError) => void;
+  onError?: (error: AppError) => void;
 }
 
 interface State {
   hasError: boolean;
-  error: ClaimWiseError | null;
+  error: AppError | null;
   eventId: string | null;
 }
 
@@ -34,10 +34,10 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   static getDerivedStateFromError(error: Error): State {
-    // Convert regular error to ClaimWiseError
-    const claimWiseError = error instanceof ClaimWiseError 
+    // Convert regular error to AppError
+    const claimWiseError = error instanceof AppError 
       ? error 
-      : new ClaimWiseError(
+      : new AppError(
           error.message || 'Component error',
           ErrorCategory.CLIENT_ERROR,
           ErrorSeverity.HIGH,
@@ -254,9 +254,9 @@ Please describe what you were doing when this error occurred:
 // Hook for using error boundary in function components
 export function useErrorBoundary() {
   return {
-    captureError: (error: Error | ClaimWiseError) => {
+    captureError: (error: Error | AppError) => {
       // This will trigger the error boundary
-      throw error instanceof ClaimWiseError ? error : new ClaimWiseError(
+      throw error instanceof AppError ? error : new AppError(
         error.message,
         ErrorCategory.CLIENT_ERROR,
         ErrorSeverity.MEDIUM

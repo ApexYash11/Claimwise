@@ -1,13 +1,11 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Inter, Instrument_Serif, JetBrains_Mono } from "next/font/google"
+import { Inter } from "next/font/google"
 import "./globals.css"
 
-import { AuthProvider } from "@/hooks/use-auth"
 import { ThemeProvider } from "@/components/theme-provider"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { ErrorBoundary } from "@/components/error-boundary"
-import { RouteTransitions } from "@/components/motion/route-transitions"
 import { QueryProvider } from "@/components/query-provider"
 
 const inter = Inter({
@@ -16,36 +14,21 @@ const inter = Inter({
   variable: "--font-inter",
 })
 
-const instrumentSerif = Instrument_Serif({
-  subsets: ["latin"],
-  weight: ["400"],
-  display: "swap",
-  variable: "--font-serif",
-})
-
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ["latin"],
-  variable: "--font-mono",
-})
-
 export const metadata: Metadata = {
-  title: "ClaimWise - AI-Powered Insurance Policy Analysis",
-  description: "Analyze, compare, and understand your insurance policies with AI-powered insights",
-  generator: "ClaimWise",
+  title: "Application",
+  description: "Built with Next.js",
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable} antialiased`} suppressHydrationWarning>
-      <body className="font-sans bg-slate-50 dark:bg-slate-950">
+    <html lang="en" className={`${inter.variable} antialiased`} suppressHydrationWarning>
+      <body className="font-sans bg-background">
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
           <TooltipProvider>
             <ErrorBoundary>
-              <AuthProvider>
-                <QueryProvider>
-                  <RouteTransitions>{children}</RouteTransitions>
-                </QueryProvider>
-              </AuthProvider>
+              <QueryProvider>
+                {children}
+              </QueryProvider>
             </ErrorBoundary>
           </TooltipProvider>
         </ThemeProvider>

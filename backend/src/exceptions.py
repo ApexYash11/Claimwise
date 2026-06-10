@@ -1,25 +1,24 @@
 """
-Enhanced error handling system for ClaimWise backend.
-Provides structured error categories, user-friendly messages, and recovery suggestions.
+Structured error categories, user-friendly messages, and recovery suggestions.
 """
 
 import logging
 import traceback
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Optional, Any
 from functools import wraps
-from fastapi import HTTPException, Request, Response
+from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
 
 
-class ClaimWiseError(Exception):
-    """Base exception class for ClaimWise application errors"""
+class AppError(Exception):
+    """Base exception class for application errors"""
 
     def __init__(
         self,
         message: str,
-        error_code: str = "CLAIMWISE_ERROR",
+        error_code: str = "APP_ERROR",
         details: Optional[Dict[str, Any]] = None,
         recovery_suggestions: Optional[List[str]] = None,
         severity: str = "error",
@@ -47,7 +46,7 @@ class ClaimWiseError(Exception):
         }
 
 
-class ValidationError(ClaimWiseError):
+class ValidationError(AppError):
     """Raised when input validation fails"""
 
     def __init__(
@@ -68,7 +67,7 @@ class ValidationError(ClaimWiseError):
         super().__init__(message, **kwargs)
 
 
-class AuthenticationError(ClaimWiseError):
+class AuthenticationError(AppError):
     """Raised when authentication fails"""
 
     def __init__(self, message: str = "Authentication required", **kwargs):
@@ -84,7 +83,7 @@ class AuthenticationError(ClaimWiseError):
         super().__init__(message, **kwargs)
 
 
-class AuthorizationError(ClaimWiseError):
+class AuthorizationError(AppError):
     """Raised when user lacks required permissions"""
 
     def __init__(self, message: str = "Access denied", **kwargs):
@@ -99,7 +98,7 @@ class AuthorizationError(ClaimWiseError):
         super().__init__(message, **kwargs)
 
 
-class ProcessingError(ClaimWiseError):
+class ProcessingError(AppError):
     """Raised when document/data processing fails"""
 
     def __init__(self, message: str, operation: Optional[str] = None, **kwargs):
@@ -120,7 +119,7 @@ class ProcessingError(ClaimWiseError):
         super().__init__(message, **kwargs)
 
 
-class FileHandlingError(ClaimWiseError):
+class FileHandlingError(AppError):
     """Raised when file operations fail"""
 
     def __init__(self, message: str, filename: Optional[str] = None, **kwargs):
@@ -141,7 +140,7 @@ class FileHandlingError(ClaimWiseError):
         super().__init__(message, **kwargs)
 
 
-class DatabaseError(ClaimWiseError):
+class DatabaseError(AppError):
     """Raised when database operations fail"""
 
     def __init__(self, message: str, operation: Optional[str] = None, **kwargs):
@@ -162,7 +161,7 @@ class DatabaseError(ClaimWiseError):
         super().__init__(message, **kwargs)
 
 
-class ExternalAPIError(ClaimWiseError):
+class ExternalAPIError(AppError):
     """Raised when external API calls fail"""
 
     def __init__(
@@ -191,7 +190,7 @@ class ExternalAPIError(ClaimWiseError):
         super().__init__(message, **kwargs)
 
 
-class RateLimitError(ClaimWiseError):
+class RateLimitError(AppError):
     """Raised when rate limits are exceeded"""
 
     def __init__(
@@ -224,7 +223,7 @@ def handle_exceptions(logger_instance: Optional[logging.Logger] = None):
         async def async_wrapper(*args, **kwargs):
             try:
                 return await func(*args, **kwargs)
-            except ClaimWiseError:
+            except AppError:
                 # Re-raise our custom exceptions
                 raise
             except HTTPException:
@@ -246,7 +245,7 @@ def handle_exceptions(logger_instance: Optional[logging.Logger] = None):
         def sync_wrapper(*args, **kwargs):
             try:
                 return func(*args, **kwargs)
-            except ClaimWiseError:
+            except AppError:
                 # Re-raise our custom exceptions
                 raise
             except HTTPException:
@@ -275,8 +274,8 @@ def handle_exceptions(logger_instance: Optional[logging.Logger] = None):
     return decorator
 
 
-def convert_to_http_exception(error: ClaimWiseError) -> HTTPException:
-    """Convert ClaimWise exceptions to FastAPI HTTPExceptions"""
+def convert_to_http_exception(error: AppError) -> HTTPException:
+    """Convert AppError exceptions to FastAPI HTTPExceptions"""
 
     # Map error types to HTTP status codes
     status_code_map = {
@@ -288,7 +287,7 @@ def convert_to_http_exception(error: ClaimWiseError) -> HTTPException:
         DatabaseError: 500,
         ExternalAPIError: 502,
         ProcessingError: 500,
-        ClaimWiseError: 500,
+        AppError: 500,
     }
 
     status_code = status_code_map.get(type(error), 500)
@@ -296,14 +295,12 @@ def convert_to_http_exception(error: ClaimWiseError) -> HTTPException:
     return HTTPException(status_code=status_code, detail=error.to_dict())
 
 
-async def claimwise_exception_handler(
-    request: Request, exc: ClaimWiseError
-) -> JSONResponse:
-    """Global exception handler for ClaimWise exceptions"""
+async def app_exception_handler(request: Request, exc: AppError) -> JSONResponse:
+    """Global exception handler for application exceptions"""
 
     # Log the exception
     logger.error(
-        f"ClaimWise exception in {request.method} {request.url}: {exc.message}",
+        f"App exception in {request.method} {request.url}: {exc.message}",
         extra={
             "error_code": exc.error_code,
             "details": exc.details,
@@ -324,7 +321,7 @@ async def claimwise_exception_handler(
         DatabaseError: 500,
         ExternalAPIError: 502,
         ProcessingError: 500,
-        ClaimWiseError: 500,
+        AppError: 500,
     }
 
     status_code = status_code_map.get(type(exc), 500)

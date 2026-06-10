@@ -1,6 +1,5 @@
 """
-Advanced caching system for ClaimWise backend.
-Provides multi-layer caching with LRU, Redis-like features, and smart cache invalidation.
+Multi-layer caching system with LRU eviction, TTL support, and cache invalidation.
 """
 
 import time

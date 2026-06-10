@@ -1,10 +1,10 @@
 /**
- * Enhanced API client for ClaimWise with comprehensive error handling,
+ * API client with comprehensive error handling,
  * retry logic, caching, and request monitoring
  */
 
 import { 
-  ClaimWiseError, 
+  AppError, 
   NetworkError, 
   AuthenticationError, 
   parseApiError, 
@@ -249,8 +249,8 @@ export class ApiClient {
         throw networkError;
       }
 
-      // Re-throw ClaimWiseError instances
-      if (error instanceof ClaimWiseError) {
+      // Re-throw AppError instances
+      if (error instanceof AppError) {
         throw error;
       }
 
@@ -282,7 +282,7 @@ export class ApiClient {
       } catch (error) {
         // Don't retry on authentication errors or client errors
         if (error instanceof AuthenticationError || 
-            (error instanceof ClaimWiseError && error.category === 'validation')) {
+            (error instanceof AppError && error.category === 'validation')) {
           throw error;
         }
 
