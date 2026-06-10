@@ -239,7 +239,7 @@ export default function AnalyzePage() {
 
                   {currentPolicy ? (
                     <ScrollArea className="flex-1">
-                      <div className="max-w-5xl mx-auto p-6 lg:p-8 space-y-8 pb-24">
+                      <div className="p-6 lg:p-8 space-y-8 pb-24">
                         <div className="flex items-start justify-between gap-4">
                           <div>
                             <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
@@ -259,7 +259,7 @@ export default function AnalyzePage() {
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                           {[
                             { label: "Annual Premium", value: currentPolicy.premium },
                             { label: "Coverage Amount", value: currentPolicy.coverageAmount },

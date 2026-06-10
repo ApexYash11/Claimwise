@@ -34,9 +34,10 @@ def _is_admin_user(user_id: str) -> bool:
             role = str(row.get("role", "")).strip().lower()
             is_admin = bool(row.get("is_admin", False))
             return is_admin or role == "admin"
-    except Exception:
+    except (OSError, ValueError) as admin_check_err:
         logging.debug(
-            "Admin check via users table unavailable; using env allowlist only"
+            "Admin check via users table unavailable; using env allowlist only: %s",
+            admin_check_err,
         )
     return False
 
@@ -82,7 +83,7 @@ def _duplicate_conflict_detail(error_obj: Any) -> str:
                 constraint_name = (
                     getattr(diag, "constraint_name", None) if diag is not None else None
                 )
-    except Exception:
+    except AttributeError:
         constraint_name = None
     if constraint_name:
         return f"Conflict: duplicate value for constraint '{constraint_name}'"
