@@ -17,21 +17,16 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   useEffect(() => {
     if (!loading && !user) {
-      // Redirect to home page on logout/unauthorized access
       router.push("/")
     }
   }, [user, loading, router])
 
-  if (loading) {
+  if (loading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
       </div>
     )
-  }
-
-  if (!user) {
-    return null
   }
 
   return <>{children}</>

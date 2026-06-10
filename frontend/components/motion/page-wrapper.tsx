@@ -12,9 +12,9 @@ const variants = {
   },
 }
 
-export function PageWrapper({ children }: { children: ReactNode }) {
+export function PageWrapper({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <motion.div variants={variants} initial="hidden" animate="visible">
+    <motion.div variants={variants} initial="hidden" animate="visible" className={className}>
       {children}
     </motion.div>
   )

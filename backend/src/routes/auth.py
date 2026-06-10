@@ -43,5 +43,5 @@ async def test_gemini(file: UploadFile, user_id: str = Depends(get_current_user)
         try:
             if temp_file_path and os.path.exists(temp_file_path):
                 os.unlink(temp_file_path)
-        except Exception:
+        except OSError:
             pass

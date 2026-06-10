@@ -135,10 +135,10 @@ export default function PolicyManagerPage() {
   if (loading) {
     return (
       <ProtectedRoute>
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-slate-50">
           <Header />
           <div className="max-w-4xl mx-auto px-4 py-8">
-            <div className="text-center">Loading policies...</div>
+            <div className="text-center text-muted-foreground">Loading policies...</div>
           </div>
         </div>
       </ProtectedRoute>
@@ -148,12 +148,12 @@ export default function PolicyManagerPage() {
   if (!isAdmin) {
     return (
       <ProtectedRoute>
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-slate-50">
           <Header />
           <div className="max-w-4xl mx-auto px-4 py-8">
             <Card>
               <CardContent className="text-center py-8">
-                <p className="text-gray-700">Admin access is required to view this page.</p>
+                <p className="text-slate-700">Admin access is required to view this page.</p>
                 <Button asChild className="mt-4">
                   <Link href="/dashboard">Go to Dashboard</Link>
                 </Button>
@@ -167,7 +167,7 @@ export default function PolicyManagerPage() {
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-slate-50">
         <Header />
         
         <div className="max-w-4xl mx-auto px-4 py-8">
@@ -180,8 +180,8 @@ export default function PolicyManagerPage() {
               </Link>
             </Button>
             
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Policy Name Manager</h1>
-            <p className="text-gray-600">Update your policy names to display properly in the dashboard</p>
+            <h1 className="text-3xl font-bold text-slate-900 mb-2">Policy Name Manager</h1>
+            <p className="text-slate-600">Update your policy names to display properly in the dashboard</p>
           </div>
 
           {/* Policies List */}
@@ -204,7 +204,7 @@ export default function PolicyManagerPage() {
                   <div className="space-y-4">
                     {/* Current Name */}
                     <div>
-                      <label className="text-sm font-medium text-gray-700">Current Name:</label>
+                      <label className="text-sm font-medium text-slate-700">Current Name:</label>
                       {editingId === policy.id ? (
                         <div className="flex gap-2 mt-1">
                           <Input
@@ -233,7 +233,7 @@ export default function PolicyManagerPage() {
                     </div>
 
                     {/* Policy Details */}
-                    <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
+                    <div className="grid grid-cols-2 gap-4 text-sm text-slate-600">
                       <div>
                         <span className="font-medium">Policy Number:</span> {policy.policy_number || "Not set"}
                       </div>
@@ -245,7 +245,7 @@ export default function PolicyManagerPage() {
                     {/* Quick Actions */}
                     {editingId !== policy.id && (
                       <div>
-                        <label className="text-sm font-medium text-gray-700 mb-2 block">Quick Apply:</label>
+                        <label className="text-sm font-medium text-slate-700 mb-2 block">Quick Apply:</label>
                         <div className="flex flex-wrap gap-2">
                           <Button 
                             size="sm" 
@@ -254,9 +254,9 @@ export default function PolicyManagerPage() {
                           >
                             Use Sample Name
                           </Button>
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
+                              <Button
+                            size="sm"
+                            variant="outline"
                             onClick={() => applySampleName(policy.id, Math.floor(Math.random() * sampleNames.length))}
                           >
                             Random Name
@@ -273,7 +273,7 @@ export default function PolicyManagerPage() {
           {policies.length === 0 && (
             <Card>
               <CardContent className="text-center py-8">
-                <p className="text-gray-500">No policies found. Upload some policies first.</p>
+                <p className="text-slate-500">No policies found. Upload some policies first.</p>
                 <Button asChild className="mt-4">
                   <Link href="/upload">Upload Policies</Link>
                 </Button>

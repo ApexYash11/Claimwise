@@ -2,8 +2,8 @@ from dotenv import load_dotenv
 import os
 
 # Explicitly load .env from the backend folder (this file is in backend/src)
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-DOTENV_PATH = os.path.join(BASE_DIR, '.env')
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+DOTENV_PATH = os.path.join(BASE_DIR, ".env")
 load_dotenv(dotenv_path=DOTENV_PATH)
 
 from supabase.client import create_client, Client
@@ -23,7 +23,8 @@ if service_role_key:
     supabase_storage: Client = create_client(url, service_role_key)
 else:
     import logging
-    logging.getLogger(__name__).warning("SUPABASE_SERVICE_ROLE not found, using anon key for storage (may have limited permissions)")
+
+    logging.getLogger(__name__).warning(
+        "SUPABASE_SERVICE_ROLE not found, using anon key for storage (may have limited permissions)"
+    )
     supabase_storage = supabase
-
-

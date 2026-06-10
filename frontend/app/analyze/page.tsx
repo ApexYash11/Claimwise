@@ -1,22 +1,20 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import dynamic from "next/dynamic"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { Header } from "@/components/layout/header"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
-import { ArrowLeft, BarChart3, FileText, MessageSquare, CheckCircle, Shield, AlertCircle, FileJson, Trash2, Loader2 } from "lucide-react"
+import { ArrowLeft, BarChart3, FileText, MessageSquare, CheckCircle, Shield, AlertTriangle, Lightbulb, ScrollText, ChevronRight, Trash2 } from "lucide-react"
 import Link from "next/link"
 import type { PolicySummary } from "@/lib/api"
 import { cn } from "@/lib/utils"
-import type { BackendPolicyRecord } from "@/types/policies"
+import { Skeleton } from "@/components/ui/skeleton"
+import { ErrorBoundary } from "@/components/error-boundary"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,11 +26,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { toast } from "sonner"
-import { motion } from "framer-motion"
 import { PageWrapper } from "@/components/motion/page-wrapper"
-import { AnalyzeSkeleton } from "@/components/ui/skeleton"
 
 import { usePolicies } from "@/lib/use-queries"
+import { useQueryClient } from "@tanstack/react-query"
 import { getSupabase } from "@/lib/get-supabase"
 import { createApiUrlWithLogging } from "@/lib/url-utils"
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
@@ -40,177 +37,62 @@ import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
 const InsightsPanel = dynamic(
   () => import("@/components/analysis/insights-panel").then((mod) => ({ default: mod.InsightsPanel })),
   {
-    loading: () => <div className="h-48 w-full rounded-lg bg-slate-100 dark:bg-slate-800 animate-pulse" />,
+    loading: () => <div className="h-48 w-full rounded-lg bg-muted animate-pulse" />,
     ssr: false,
   },
 )
 
 export default function AnalyzePage() {
-  const [policies, setPolicies] = useState<PolicySummary[]>([])
-  const [, setSelectedPolicies] = useState<string[]>([])
   const [selectedPolicyId, setSelectedPolicyId] = useState<string>("")
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState("")
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [tabValue, setTabValue] = useState("analysis")
 
-  const { data: policiesData, isLoading: policiesLoading } = usePolicies()
+  const queryClient = useQueryClient()
+  const { data: policiesData, isLoading, isError } = usePolicies()
+
+  const mapPolicy = (policyData: any): PolicySummary => {
+    const analysis = policyData?.validation_metadata?.analysis_result || {}
+    return {
+      id: policyData.id,
+      fileName: policyData.policy_name || (policyData.policy_number ? `Policy ${policyData.policy_number}` : `Policy ${String(policyData.id).slice(0, 8)}`),
+      policyType: analysis.policy_type || policyData.policy_type || "Insurance",
+      provider: analysis.provider || policyData.provider || "Unknown Provider",
+      coverageAmount: analysis.coverage_amount || "Not specified",
+      premium: analysis.premium || "Not specified",
+      deductible: analysis.deductible || "Not specified",
+      keyFeatures: Array.isArray(analysis.key_features) ? analysis.key_features : [analysis.coverage || "Basic coverage"],
+      expirationDate: analysis.expiration_date || "Not specified",
+      rawAnalysis: analysis,
+    }
+  }
+
+  const policies: PolicySummary[] = useMemo(
+    () => policiesData?.policies?.map(mapPolicy) ?? [],
+    [policiesData]
+  )
+  const loading = isLoading
+  const currentPolicy = selectedPolicyId ? policies.find((p) => p.id === selectedPolicyId) : (policies[0] ?? null)
 
   useEffect(() => {
-    if (policiesLoading) return
-    if (!policiesData?.policies?.length) {
-      setError("No policies found. Please upload some policies first.")
-      setLoading(false)
-      return
+    if (!loading && policies.length > 0 && !selectedPolicyId) {
+      setSelectedPolicyId(policies[0].id)
     }
+  }, [loading, policies, selectedPolicyId])
 
-    const backendPolicies = policiesData.policies
-    const mappedPolicies: PolicySummary[] = backendPolicies.map((policyData: any) => {
-      const analysis = policyData?.validation_metadata?.analysis_result || {}
-      const fileName = policyData.policy_name || (policyData.policy_number ? `Policy ${policyData.policy_number}` : `Policy ${String(policyData.id).slice(0, 8)}`)
-      return {
-        id: policyData.id,
-        fileName,
-        policyType: analysis.policy_type || policyData.policy_type || "Insurance",
-        provider: analysis.provider || policyData.provider || "Unknown Provider",
-        coverageAmount: analysis.coverage_amount || "Not specified",
-        premium: analysis.premium || "Not specified",
-        deductible: analysis.deductible || "Not specified",
-        keyFeatures: Array.isArray(analysis.key_features) ? analysis.key_features : [analysis.coverage || "Basic coverage"],
-        expirationDate: analysis.expiration_date || "Not specified",
-        rawAnalysis: analysis,
-      }
-    })
+  const getClaimScore = (policy: PolicySummary) => policy.rawAnalysis?.claim_readiness_score || 0
 
-    setPolicies(mappedPolicies)
-    setLoading(false)
-
-    if (mappedPolicies.length > 0) {
-      setSelectedPolicyId(mappedPolicies[0].id)
-    }
-  }, [policiesData, policiesLoading])
-
-
-  const handleCompareToggle = (policyId: string) => {
-    if (!policyId) return
-    setSelectedPolicies((prev) =>
-      prev.includes(policyId) ? prev.filter((id) => id !== policyId) : [...prev, policyId],
-    )
-  }
-
-  const currentPolicy = policies.find((policy) => policy.id === selectedPolicyId)
-
-  // Generate insights and recommendations for the currently selected policy only
-  const generateSinglePolicyInsights = (policy: PolicySummary) => {
-    const insights: string[] = []
-    
-    if (!policy) return insights
-    
-    // Expiration analysis
-    let daysUntilExpiration = NaN
-    if (policy.expirationDate) {
-      const expDate = new Date(policy.expirationDate)
-      if (!isNaN(expDate.getTime())) {
-        daysUntilExpiration = Math.ceil(
-          (expDate.getTime() - new Date().getTime()) / (1000 * 3600 * 24)
-        )
-      }
-    }
-    
-    if (!isNaN(daysUntilExpiration)) {
-      if (daysUntilExpiration <= 30) {
-        insights.push(`Policy expires in ${daysUntilExpiration} days - urgent renewal required`)
-      } else if (daysUntilExpiration <= 60) {
-        insights.push(`Policy expires in ${daysUntilExpiration} days - start planning renewal`)
-      } else {
-        insights.push(`Policy valid for ${daysUntilExpiration} days - renewal timeline is comfortable`)
-      }
-    } else {
-      insights.push("Expiration date not found - please check your policy document")
-    }
-    
-    // Premium analysis
-    const premium = parseFloat(policy.premium.replace(/[^0-9.]/g, "") || "0")
-    if (premium > 0) {
-      if (premium > 50000) {
-        insights.push("High premium policy - consider comparing alternatives during renewal")
-      } else if (premium < 10000) {
-        insights.push("Cost-effective premium - good value for basic coverage")
-      } else {
-        insights.push("Moderate premium - balanced cost and coverage approach")
-      }
-    }
-    
-    // Coverage analysis
-    const coverage = parseFloat(policy.coverageAmount.replace(/[^0-9.]/g, "") || "0")
-    if (coverage > 0) {
-      if (coverage >= 1000000) {
-        insights.push("Excellent coverage amount - provides strong financial protection")
-      } else if (coverage >= 500000) {
-        insights.push("Good coverage amount - adequate for most scenarios")
-      } else {
-        insights.push("Basic coverage amount - consider increasing for better protection")
-      }
-    }
-    
-    // Provider analysis
-    const providerName = policy.provider
-    const invalidProviderNames = ["unknown provider", "not specified", "analysis unavailable", "insurance provider name not found in policy"]
-    
-    if (providerName && !invalidProviderNames.includes(providerName.toLowerCase())) {
-      insights.push(`Policy provided by ${providerName} - research their claim settlement ratio and customer reviews`)
-    } else {
-      insights.push("Provider name could not be verified - check policy document for insurer details")
-    }
-
-    // Add insights from raw analysis if available
-    if (policy.rawAnalysis) {
-      if (policy.rawAnalysis.waiting_period && policy.rawAnalysis.waiting_period !== "Not specified") {
-         insights.push(`Note waiting period: ${policy.rawAnalysis.waiting_period}`)
-      }
-      if (policy.rawAnalysis.copay && policy.rawAnalysis.copay !== "Not specified" && policy.rawAnalysis.copay !== "None") {
-         insights.push(`Be aware of copay: ${policy.rawAnalysis.copay}`)
-      }
-    }
-    
-    return insights
-  }
-
-  const generateSinglePolicyRecommendations = (policy: PolicySummary) => {
-    const recommendations: string[] = []
-    
-    if (!policy) return recommendations
-    
-    // Claim readiness
-    const claimScore = policy.rawAnalysis?.claim_readiness_score || 70
-    recommendations.push(`Claim readiness score: ${claimScore}/100`)
-    
-    if (claimScore < 80) {
-      recommendations.push("Improve claim readiness by organizing required documents and understanding the claim process")
-    }
-    
-    // Documentation
-    recommendations.push("Keep policy documents, ID proofs, and relevant certificates easily accessible")
-    
-    // Contact information
-    recommendations.push("Save insurer's claim helpline and customer service numbers in your phone")
-    
-    // Policy features
-    if (policy.keyFeatures.length > 0) {
-      recommendations.push("Review all policy features and exclusions to understand your coverage fully")
-    }
-    
-    // Deductible guidance
-    const deductible = parseFloat(policy.deductible.replace(/[^0-9.]/g, "") || "0")
-    if (deductible > 0) {
-      recommendations.push(`Maintain emergency funds to cover your ₹${deductible.toLocaleString('en-IN')} deductible`)
-    }
-    
-    // Regular review
-    recommendations.push("Review your coverage needs annually and compare policies during renewal")
-    
-    return recommendations
+  const getRiskItems = (policy: PolicySummary) => {
+    const items: { severity: "critical" | "warning" | "info"; title: string; desc: string; source?: string }[] = []
+    const s = getClaimScore(policy)
+    if (s < 60) items.push({ severity: "critical", title: "Low claim readiness", desc: `Score of ${s}/100 indicates documentation gaps that may delay claims.`, source: "Claim Readiness Assessment" })
+    if (policy.rawAnalysis?.exclusions) items.push({ severity: "warning", title: "Exclusions detected", desc: policy.rawAnalysis.exclusions.slice(0, 120) + "...", source: "Section 4 - Exclusions" })
+    if (policy.rawAnalysis?.waiting_period && policy.rawAnalysis.waiting_period !== "Not specified") items.push({ severity: "warning", title: "Active waiting period", desc: policy.rawAnalysis.waiting_period, source: "Section 2 - Waiting Periods" })
+    if (policy.rawAnalysis?.copay && policy.rawAnalysis.copay !== "Not specified" && policy.rawAnalysis.copay !== "None") items.push({ severity: "info", title: "Co-pay applies", desc: policy.rawAnalysis.copay, source: "Section 3 - Cost Sharing" })
+    if (!items.length) items.push({ severity: "info", title: "No critical risks detected", desc: "Preliminary scan shows standard coverage terms.", source: "AI Analysis" })
+    return items
   }
 
   const handleDeleteClick = (e: React.MouseEvent, policyId: string) => {
@@ -221,46 +103,29 @@ export default function AnalyzePage() {
 
   const handleDeleteConfirm = async () => {
     if (!deleteTargetId) return
-
     setIsDeleting(true)
     try {
       const supabase = await getSupabase()
       const session = await supabase.auth.getSession()
       const token = session.data.session?.access_token
-      
       const deleteUrl = createApiUrlWithLogging(`/policies/${deleteTargetId}`)
-      
       const response = await fetchWithTimeout(deleteUrl, {
         method: "DELETE",
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         timeoutMs: 12000,
       })
-
       if (!response.ok) {
         let errorMessage = "Failed to delete policy"
-        try {
-          const errorData = await response.json()
-          errorMessage = errorData.detail || errorMessage
-        } catch {
-          errorMessage = `Error ${response.status}: ${response.statusText}`
-        }
+        try { const errorData = await response.json(); errorMessage = errorData.detail || errorMessage } catch { errorMessage = `Error ${response.status}` }
         throw new Error(errorMessage)
       }
-
-      const updatedPolicies = policies.filter(p => p.id !== deleteTargetId)
-      setPolicies(updatedPolicies)
-      
-      if (selectedPolicyId === deleteTargetId) {
-        setSelectedPolicyId(updatedPolicies.length > 0 ? updatedPolicies[0].id : "")
-      }
-      
-      const policyIds = updatedPolicies.map(p => p.id)
-      localStorage.setItem("claimwise_uploaded_policy_ids", JSON.stringify(policyIds))
-      
-      toast.success("Policy deleted successfully")
+      const updatedIds = policies.filter(p => p.id !== deleteTargetId).map(p => p.id)
+      if (selectedPolicyId === deleteTargetId) setSelectedPolicyId(updatedIds.length > 0 ? updatedIds[0] : "")
+      localStorage.setItem("claimwise_uploaded_policy_ids", JSON.stringify(updatedIds))
+      queryClient.invalidateQueries({ queryKey: ["policies"] })
+      toast.success("Policy deleted")
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Failed to delete policy. Please try again."
-      toast.error(message)
+      toast.error(err instanceof Error ? err.message : "Delete failed")
     } finally {
       setIsDeleting(false)
       setDeleteDialogOpen(false)
@@ -268,292 +133,262 @@ export default function AnalyzePage() {
     }
   }
 
-  const currentPolicyInsights = currentPolicy ? generateSinglePolicyInsights(currentPolicy) : []
-  const currentPolicyRecommendations = currentPolicy ? generateSinglePolicyRecommendations(currentPolicy) : []
-
   return (
     <ProtectedRoute>
-      <div className="h-screen flex flex-col bg-slate-50 dark:bg-slate-950 overflow-hidden">
+      <ErrorBoundary>
+      <div className="h-screen flex flex-col bg-background overflow-hidden">
         <Header />
-        
         <main className="flex-1 overflow-hidden">
-          <PageWrapper>
-          {loading ? (
-            <AnalyzeSkeleton />
-          ) : error ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center space-y-4 max-w-md mx-auto p-6 bg-white rounded-lg shadow-sm border border-red-100">
-                <AlertCircle className="h-12 w-12 text-red-500 mx-auto" />
-                <h3 className="text-lg font-medium text-slate-900">Analysis Error</h3>
-                <p className="text-slate-500">{error}</p>
-                <Button onClick={() => window.location.reload()}>Try Again</Button>
-              </div>
-            </div>
-          ) : (
-            <ResizablePanelGroup direction="horizontal" className="h-full border-t border-slate-200 dark:border-slate-800">
-              
-              {/* Left Panel: Policy List / Document Source */}
-              <ResizablePanel defaultSize={25} minSize={20} maxSize={40} className="bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800">
-                <div className="h-full flex flex-col">
-                  <div className="p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
-                    <h2 className="font-serif font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-slate-500" />
-                      Documents
-                    </h2>
+          <PageWrapper className="h-full">
+            {loading ? (
+              <div className="flex flex-col h-full">
+                <div className="flex-1 flex">
+                  <div className="w-64 border-r bg-muted/20 p-4 space-y-3">
+                    <Skeleton className="h-4 w-24" />
+                    {[1, 2, 3].map((i) => <Skeleton key={i} className="h-16 w-full rounded-lg" />)}
                   </div>
-                  <ScrollArea className="flex-1">
-                    <div className="p-3 space-y-2">
-                      {policies.map((policy) => (
-                        <div 
-                          key={policy.id}
-                          onClick={() => setSelectedPolicyId(policy.id)}
-                          className={`p-3 rounded-md cursor-pointer transition-all border ${
-                            selectedPolicyId === policy.id 
-                              ? "bg-slate-100 border-slate-300 dark:bg-slate-800 dark:border-slate-700 shadow-sm" 
-                              : "bg-white border-transparent hover:bg-slate-50 dark:bg-transparent dark:hover:bg-slate-800/50"
-                          }`}
-                        >
-                          <div className="flex items-start justify-between mb-1">
-                            <span className="font-medium text-sm text-slate-900 dark:text-slate-100 line-clamp-1">
-                              {policy.fileName}
-                            </span>
-                            <div className="flex items-center gap-2">
-                              {selectedPolicyId === policy.id && <CheckCircle className="h-3 w-3 text-teal-600 mt-1" />}
-                              <button 
-                                 onClick={(e) => handleDeleteClick(e, policy.id)}
-                                className="text-slate-400 hover:text-red-500 transition-colors p-1"
-                                title="Delete Policy"
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </button>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2 text-xs text-slate-500">
-                            <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-normal">
-                              {policy.policyType}
-                            </Badge>
-                            <span>•</span>
-                            <span>{policy.provider}</span>
-                          </div>
-                        </div>
-                      ))}
+                  <div className="flex-1 p-6 space-y-6">
+                    <Skeleton className="h-8 w-64" />
+                    <div className="grid grid-cols-3 gap-4">
+                      <Skeleton className="h-24 rounded-xl" />
+                      <Skeleton className="h-24 rounded-xl" />
+                      <Skeleton className="h-24 rounded-xl" />
                     </div>
-                  </ScrollArea>
-                  <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
-                    <Button variant="outline" className="w-full text-xs h-8" asChild>
-                      <Link href="/upload">
-                        <ArrowLeft className="h-3 w-3 mr-2" /> Upload New
-                      </Link>
-                    </Button>
+                    <Skeleton className="h-48 rounded-xl" />
                   </div>
                 </div>
-              </ResizablePanel>
-
-              <ResizableHandle />
-
-              {/* Right Panel: Analysis Content */}
-              <ResizablePanel defaultSize={75}>
-                <div className="h-full flex flex-col bg-background">
-                  {/* Toolbar */}
-                  <div className="h-14 border-b bg-card flex items-center justify-between px-6">
-                    <div className="flex items-center gap-4">
-                      <h1 className="font-serif font-bold text-lg text-foreground">
-                        {currentPolicy?.fileName || "Select a Policy"}
-                      </h1>
-                      {currentPolicy && (
-                        <Badge variant="outline" className="bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-900/20 dark:text-teal-300 dark:border-teal-800">
-                          Active Analysis
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {currentPolicy && (
-                        <Sheet>
-                          <SheetTrigger asChild>
-                            <Button variant="ghost" size="icon" title="View Raw Data">
-                              <FileJson className="h-4 w-4 text-muted-foreground" />
-                            </Button>
-                          </SheetTrigger>
-                          <SheetContent className="w-[400px] sm:w-[540px]">
-                            <SheetHeader>
-                              <SheetTitle>Policy Details</SheetTitle>
-                              <SheetDescription>
-                                Raw data extracted from the policy document.
-                              </SheetDescription>
-                            </SheetHeader>
-                            <div className="mt-6 h-full overflow-hidden">
-                              <ScrollArea className="h-[calc(100vh-120px)] w-full rounded-md border p-4 bg-muted/50">
-                                <pre className="text-xs font-mono whitespace-pre-wrap break-words">
-                                  {JSON.stringify(currentPolicy, null, 2)}
-                                </pre>
-                              </ScrollArea>
-                            </div>
-                          </SheetContent>
-                        </Sheet>
-                      )}
-                      <Button variant="ghost" size="sm" onClick={() => handleCompareToggle(selectedPolicyId)}>
-                        <BarChart3 className="h-4 w-4 mr-2" />
-                        Compare
+              </div>
+            ) : isError ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center space-y-4 max-w-md mx-auto p-6">
+                  <AlertTriangle className="h-12 w-12 text-destructive mx-auto" />
+                  <h3 className="text-lg font-medium">Analysis Error</h3>
+                  <p className="text-muted-foreground">Failed to load policies. Please try again.</p>
+                  <Button onClick={() => window.location.reload()}>Try Again</Button>
+                </div>
+              </div>
+            ) : policies.length === 0 ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center space-y-4 max-w-md mx-auto p-6">
+                  <FileText className="h-12 w-12 text-muted-foreground mx-auto opacity-40" />
+                  <h3 className="text-lg font-medium">No policies found</h3>
+                  <p className="text-muted-foreground">Upload a policy to get started with AI-powered analysis.</p>
+                  <Button asChild><Link href="/upload">Upload Policy</Link></Button>
+                </div>
+              </div>
+            ) : (
+              <div className="h-full flex">
+                {sidebarOpen && (
+                  <div className="w-64 border-r bg-muted/20 flex flex-col shrink-0">
+                    <div className="flex items-center justify-between p-4 border-b">
+                      <h2 className="text-sm font-medium flex items-center gap-2">
+                        <FileText className="h-4 w-4" />
+                        Documents
+                      </h2>
+                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setSidebarOpen(false)}>
+                        <ChevronRight className="h-3 w-3" />
                       </Button>
-                      <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90">
-                        <MessageSquare className="h-4 w-4 mr-2" />
-                        Ask AI
+                    </div>
+                    <ScrollArea className="flex-1">
+                      <div className="p-3 space-y-1">
+                        {policies.map((policy) => (
+                          <div key={policy.id} className="group">
+                            <div
+                              onClick={() => setSelectedPolicyId(policy.id)}
+                              role="button"
+                              tabIndex={0}
+                              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setSelectedPolicyId(policy.id) }}
+                              className={cn(
+                                "cursor-pointer w-full text-left px-3 py-2.5 rounded-lg text-sm transition-colors",
+                                selectedPolicyId === policy.id
+                                  ? "bg-muted font-medium"
+                                  : "hover:bg-muted/50 text-muted-foreground hover:text-foreground",
+                              )}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <span className="line-clamp-1">{policy.fileName}</span>
+                                <button onClick={(e) => handleDeleteClick(e, policy.id)} className="opacity-40 group-hover:opacity-100 text-muted-foreground hover:text-destructive shrink-0">
+                                  <Trash2 className="h-3 w-3" />
+                                </button>
+                              </div>
+                              <div className="flex items-center gap-2 mt-1">
+                                <Badge variant="secondary" className="text-[10px] h-4 px-1 font-normal">{policy.policyType}</Badge>
+                                <span className="text-xs text-muted-foreground">{policy.provider}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                    <div className="p-3 border-t">
+                      <Button variant="outline" className="w-full text-xs h-8" asChild>
+                        <Link href="/upload"><ArrowLeft className="h-3 w-3 mr-2" />Upload New</Link>
                       </Button>
                     </div>
                   </div>
+                )}
 
-                  {/* Content Area */}
-                  <ScrollArea className="flex-1 p-6">
-                    <div className="max-w-5xl mx-auto space-y-8 pb-20">
-                      {currentPolicy ? (
-                        <Tabs defaultValue="analysis" className="w-full">
-                          <TabsList className="w-full justify-start border-b rounded-none bg-transparent h-auto p-0 mb-6">
-                            <TabsTrigger 
-                              value="analysis" 
-                              className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2"
-                            >
-                              Analysis
-                            </TabsTrigger>
-                            <TabsTrigger 
-                              value="insights" 
-                              className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2"
-                            >
-                              Smart Insights
-                            </TabsTrigger>
+                <div className="flex-1 flex flex-col min-w-0">
+                  {!sidebarOpen && (
+                    <div className="border-b px-4 py-2">
+                      <Button variant="ghost" size="sm" onClick={() => setSidebarOpen(true)}>
+                        <FileText className="h-4 w-4 mr-2" />Show Documents
+                      </Button>
+                    </div>
+                  )}
+
+                  {currentPolicy ? (
+                    <ScrollArea className="flex-1">
+                      <div className="p-6 lg:p-8 space-y-8 pb-24">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+                              <span>{currentPolicy.provider}</span>
+                              <span>·</span>
+                              <span>{currentPolicy.policyType}</span>
+                            </div>
+                            <h1 className="font-serif text-2xl font-normal tracking-tight">{currentPolicy.fileName}</h1>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Button variant="outline" size="sm" asChild>
+                              <Link href="/compare"><BarChart3 className="h-4 w-4 mr-2" />Compare</Link>
+                            </Button>
+                            <Button size="sm" asChild>
+                              <Link href="/chat"><MessageSquare className="h-4 w-4 mr-2" />Ask AI</Link>
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                          {[
+                            { label: "Annual Premium", value: currentPolicy.premium },
+                            { label: "Coverage Amount", value: currentPolicy.coverageAmount },
+                            { label: "Deductible", value: currentPolicy.deductible },
+                          ].map((stat) => (
+                            <div key={stat.label} className="card-flat-subtle space-y-1">
+                              <p className="metric-label">{stat.label}</p>
+                              <p className={cn("font-mono text-lg font-semibold", stat.value === "Not specified" && "text-muted-foreground italic text-sm font-normal")}>
+                                {stat.value !== "Not specified" ? stat.value : "N/A"}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="rounded-xl border bg-card p-6">
+                          <div className="flex items-center justify-between mb-5">
+                            <h2 className="text-base font-semibold tracking-tight">Executive Summary</h2>
+                            <div className="flex items-center gap-2">
+                              <span className="metric-label">Claim Readiness</span>
+                              <span className={cn("font-serif text-xl", getClaimScore(currentPolicy) >= 75 ? "text-[hsl(var(--success))]" : getClaimScore(currentPolicy) >= 40 ? "text-[hsl(var(--warning))]" : "text-[hsl(var(--critical))]")}>
+                                {getClaimScore(currentPolicy)}/100
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="space-y-3">
+                            {getRiskItems(currentPolicy).map((item, i) => (
+                              <div key={i} className={`flex gap-3 rounded-lg p-4 priority-${item.severity}`}>
+                                {item.severity === "critical" ? <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--critical))]" /> :
+                                 item.severity === "warning" ? <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--warning))]" /> :
+                                 <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--info))]" />}
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <p className="text-sm font-medium">{item.title}</p>
+                                    {item.source && (
+                                      <span className="text-xs text-muted-foreground shrink-0 flex items-center gap-1">
+                                        <ScrollText className="h-3 w-3" />
+                                        {item.source}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-sm text-muted-foreground mt-0.5">{item.desc}</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          {getClaimScore(currentPolicy) < 60 && (
+                            <div className="flex gap-3 pt-2">
+                              <Button size="sm" asChild>
+                                <Link href={`/chat?policy=${currentPolicy.id}`}>
+                                  <MessageSquare className="h-3.5 w-3.5 mr-1.5" />Review Coverage Gaps
+                                </Link>
+                              </Button>
+                              <Button variant="outline" size="sm" onClick={() => setTabValue("insights")}>
+                                <Lightbulb className="h-3.5 w-3.5 mr-1.5" />Get Recommendations
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+
+                        <Tabs value={tabValue} onValueChange={setTabValue} className="w-full">
+                          <TabsList className="bg-muted/40">
+                            <TabsTrigger value="analysis">Analysis</TabsTrigger>
+                            <TabsTrigger value="insights">Smart Insights</TabsTrigger>
+                            <TabsTrigger value="features">Features & Exclusions</TabsTrigger>
                           </TabsList>
 
-                          <TabsContent value="analysis" className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            {/* Key Metrics Grid - Refactored */}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                              <div className="p-4 rounded-lg bg-muted/50 space-y-1">
-                                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Premium</p>
-                                <div className="text-xl font-mono font-semibold text-foreground">
-                                  {(!currentPolicy.premium || currentPolicy.premium === "Not specified") ? (
-                                    <span className="text-sm italic text-muted-foreground">Not specified</span>
-                                  ) : (
-                                    currentPolicy.premium
-                                  )}
+                          <TabsContent value="analysis" className="mt-6 space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                              <div className="card-flat-subtle space-y-4">
+                                <h3 className="text-sm font-medium flex items-center gap-2">
+                                  <Shield className="h-4 w-4" />
+                                  Coverage Details
+                                </h3>
+                                <div className="space-y-3">
+                                  {[
+                                    { label: "Premium", value: currentPolicy.premium },
+                                    { label: "Coverage", value: currentPolicy.coverageAmount },
+                                    { label: "Deductible", value: currentPolicy.deductible },
+                                    { label: "Expiration", value: currentPolicy.expirationDate },
+                                    { label: "Provider", value: currentPolicy.provider },
+                                  ].map((item) => (
+                                    <div key={item.label} className="flex justify-between text-sm">
+                                      <span className="text-muted-foreground">{item.label}</span>
+                                      <span className="font-medium">{item.value !== "Not specified" ? item.value : "—"}</span>
+                                    </div>
+                                  ))}
                                 </div>
-                                <p className="text-xs text-muted-foreground">Annual payment</p>
-                              </div>
-                              
-                              <div className="p-4 rounded-lg bg-muted/50 space-y-1">
-                                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Coverage</p>
-                                <div className="text-xl font-mono font-semibold text-foreground">
-                                  {(!currentPolicy.coverageAmount || currentPolicy.coverageAmount === "Not specified") ? (
-                                    <span className="text-sm italic text-muted-foreground">Not specified</span>
-                                  ) : (
-                                    currentPolicy.coverageAmount
-                                  )}
-                                </div>
-                                <p className="text-xs text-muted-foreground">Total sum insured</p>
                               </div>
 
-                              <div className="p-4 rounded-lg bg-muted/50 space-y-1">
-                                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Deductible</p>
-                                <div className="text-xl font-mono font-semibold text-foreground">
-                                  {(!currentPolicy.deductible || currentPolicy.deductible === "Not specified") ? (
-                                    <span className="text-sm italic text-muted-foreground">Not specified</span>
-                                  ) : (
-                                    currentPolicy.deductible
-                                  )}
-                                </div>
-                                <p className="text-xs text-muted-foreground">Out of pocket</p>
+                              <div className="card-flat-subtle space-y-4">
+                                <h3 className="text-sm font-medium flex items-center gap-2">
+                                  <CheckCircle className="h-4 w-4 text-[hsl(var(--success))]" />
+                                  Key Features
+                                </h3>
+                                <ul className="space-y-2">
+                                  {currentPolicy.keyFeatures.map((feature, i) => (
+                                    <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
+                                      <CheckCircle className="h-3.5 w-3.5 mt-0.5 shrink-0 text-[hsl(var(--success))]" />
+                                      {feature}
+                                    </li>
+                                  ))}
+                                </ul>
                               </div>
                             </div>
 
-                            {/* Claim Readiness Score - Animated Ring */}
-                            <Card className="border-none shadow-none bg-card">
-                              <CardContent className="p-0 pt-2">
-                                <div className="flex items-center justify-between mb-2">
-                                  <div className="space-y-1">
-                                    <h3 className="font-medium text-foreground">Claim Readiness Score</h3>
-                                    <p className="text-xs text-muted-foreground">Based on document completeness</p>
-                                  </div>
-                                  <div className="relative flex items-center justify-center">
-                                    {(() => {
-                                      const s = currentPolicy.rawAnalysis?.claim_readiness_score || 0
-                                      return (
-                                        <>
-                                          <svg className="-rotate-90" width="56" height="56">
-                                            <circle
-                                              className="text-slate-100 dark:text-slate-800"
-                                              strokeWidth="5"
-                                              stroke="currentColor"
-                                              fill="transparent"
-                                              r="22"
-                                              cx="28"
-                                              cy="28"
-                                            />
-                                            <motion.circle
-                                              className={cn(
-                                                s >= 75 ? "text-green-500" :
-                                                s >= 40 ? "text-amber-500" : "text-red-500"
-                                              )}
-                                              strokeWidth="5"
-                                              strokeDasharray={138.23}
-                                              stroke="currentColor"
-                                              fill="transparent"
-                                              r="22"
-                                              cx="28"
-                                              cy="28"
-                                              strokeLinecap="round"
-                                              initial={{ strokeDashoffset: 138.23 }}
-                                              animate={{ strokeDashoffset: 138.23 - (138.23 * s / 100) }}
-                                              transition={{ duration: 1, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
-                                            />
-                                          </svg>
-                                          <span className={cn(
-                                            "absolute text-xs font-bold",
-                                            s >= 75 ? "text-green-600" :
-                                            s >= 40 ? "text-amber-600" : "text-red-600"
-                                          )}>
-                                            {s}
-                                          </span>
-                                        </>
-                                      )
-                                    })()}
-                                  </div>
-                                </div>
-                              </CardContent>
-                            </Card>
-
-                            {/* Accordion for Details - Progressive Disclosure */}
-                            <Accordion type="single" collapsible defaultValue="features" className="w-full border rounded-lg bg-card px-4">
-                              <AccordionItem value="features" className="border-b-0">
-                                <AccordionTrigger className="text-base font-medium hover:no-underline py-4">Key Features & Inclusions</AccordionTrigger>
-                                <AccordionContent>
-                                  <ul className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-4">
-                                    {currentPolicy.keyFeatures.map((feature, i) => (
-                                      <li key={i} className="flex items-start gap-3 text-sm text-muted-foreground">
-                                        <CheckCircle className="h-5 w-5 text-teal-600 flex-shrink-0 mt-0.5" />
-                                        <span>{feature}</span>
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </AccordionContent>
-                              </AccordionItem>
-
-                              <AccordionItem value="exclusions" className="border-t">
-                                <AccordionTrigger className="text-base font-medium hover:no-underline py-4">Exclusions & Limitations</AccordionTrigger>
-                                <AccordionContent>
-                                  <div className="text-sm text-muted-foreground leading-relaxed pb-4">
+                            <Accordion type="single" collapsible className="w-full border rounded-xl">
+                              <AccordionItem value="exclusions">
+                                <AccordionTrigger className="px-4 py-3 text-sm font-medium hover:no-underline">
+                                  Exclusions & Limitations
+                                </AccordionTrigger>
+                                <AccordionContent className="px-4 pb-4">
+                                  <div className="text-sm text-muted-foreground leading-relaxed">
                                     {currentPolicy.rawAnalysis?.exclusions ? (
                                       <div className="whitespace-pre-line">{currentPolicy.rawAnalysis.exclusions}</div>
                                     ) : (
-                                      <p className="italic">No specific exclusions detected in the summary analysis.</p>
+                                      <p className="italic">No specific exclusions detected in the summary analysis. Review the full policy document for complete terms.</p>
                                     )}
                                   </div>
                                 </AccordionContent>
                               </AccordionItem>
-
-                              <AccordionItem value="waiting" className="border-t border-b-0">
-                                <AccordionTrigger className="text-base font-medium hover:no-underline py-4">Waiting Periods</AccordionTrigger>
-                                <AccordionContent>
-                                  <div className="text-sm text-muted-foreground leading-relaxed pb-4">
-                                    {/* Attempt to find waiting periods in raw analysis or show generic message */}
-                                    {currentPolicy.rawAnalysis?.waiting_period ? (
-                                       <div className="whitespace-pre-line">{currentPolicy.rawAnalysis.waiting_period}</div>
+                              <AccordionItem value="waiting" className="border-t">
+                                <AccordionTrigger className="px-4 py-3 text-sm font-medium hover:no-underline">
+                                  Waiting Periods
+                                </AccordionTrigger>
+                                <AccordionContent className="px-4 pb-4">
+                                  <div className="text-sm text-muted-foreground leading-relaxed">
+                                    {currentPolicy.rawAnalysis?.waiting_period && currentPolicy.rawAnalysis.waiting_period !== "Not specified" ? (
+                                      <div className="whitespace-pre-line">{currentPolicy.rawAnalysis.waiting_period}</div>
                                     ) : (
                                       <p className="italic">Waiting periods not explicitly extracted. Please check the full policy document.</p>
                                     )}
@@ -561,60 +396,51 @@ export default function AnalyzePage() {
                                 </AccordionContent>
                               </AccordionItem>
                             </Accordion>
+                          </TabsContent>
 
-                            {/* AI Insights - Refined to fit background */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
-                              <Card className="bg-muted/30 border-none shadow-sm">
-                                <CardHeader className="pb-2">
-                                  <CardTitle className="font-serif text-lg flex items-center gap-2 text-foreground">
-                                    <Shield className="h-5 w-5 text-primary/80" />
-                                    Coverage Analysis
-                                  </CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-3">
-                                  {currentPolicyInsights.map((insight, i) => (
-                                    <p key={i} className="text-sm text-muted-foreground leading-relaxed">
-                                      • {insight}
-                                    </p>
-                                  ))}
-                                </CardContent>
-                              </Card>
+                          <TabsContent value="insights" className="mt-6">
+                            <InsightsPanel insights={[]} recommendations={[]} />
+                          </TabsContent>
 
-                              <Card className="bg-muted/30 border-none shadow-sm">
-                                <CardHeader className="pb-2">
-                                  <CardTitle className="font-serif text-lg flex items-center gap-2 text-foreground">
-                                    <AlertCircle className="h-5 w-5 text-primary/80" />
-                                    Recommendations
-                                  </CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-3">
-                                  {currentPolicyRecommendations.map((rec, i) => (
-                                    <p key={i} className="text-sm text-muted-foreground leading-relaxed">
-                                      • {rec}
-                                    </p>
-                                  ))}
-                                </CardContent>
-                              </Card>
+                          <TabsContent value="features" className="mt-6">
+                            <div className="space-y-4">
+                              {currentPolicy.keyFeatures.map((feature, i) => (
+                                <div key={i} className="flex items-start gap-3 rounded-xl border bg-card p-4">
+                                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border bg-muted/40">
+                                    <CheckCircle className="h-4 w-4 text-[hsl(var(--success))]" />
+                                  </div>
+                                  <div>
+                                    <p className="text-sm font-medium">Feature {i + 1}</p>
+                                    <p className="text-sm text-muted-foreground mt-0.5">{feature}</p>
+                                  </div>
+                                </div>
+                              ))}
+                              {currentPolicy.rawAnalysis?.exclusions && (
+                                <div className="flex items-start gap-3 rounded-xl border bg-card p-4">
+                                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border bg-destructive/10">
+                                    <AlertTriangle className="h-4 w-4 text-destructive" />
+                                  </div>
+                                  <div>
+                                    <p className="text-sm font-medium">Exclusions</p>
+                                    <p className="text-sm text-muted-foreground mt-0.5">{currentPolicy.rawAnalysis.exclusions.slice(0, 200)}</p>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </TabsContent>
-
-                          <TabsContent value="insights">
-                            <InsightsPanel insights={currentPolicyInsights} recommendations={currentPolicyRecommendations} />
-                          </TabsContent>
                         </Tabs>
-                      ) : (
-                        <div className="flex flex-col items-center justify-center h-[60vh] text-muted-foreground">
-                          <FileText className="h-16 w-16 mb-4 opacity-20" />
-                          <p className="text-lg font-medium">Select a policy to view analysis</p>
-                          <p className="text-sm">Choose a document from the sidebar</p>
-                        </div>
-                      )}
+                      </div>
+                    </ScrollArea>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                      <FileText className="h-16 w-16 mb-4 opacity-20" />
+                      <p className="text-lg font-medium">Select a policy to view analysis</p>
+                      <p className="text-sm">Choose a document from the sidebar</p>
                     </div>
-                  </ScrollArea>
+                  )}
                 </div>
-              </ResizablePanel>
-            </ResizablePanelGroup>
-          )}
+              </div>
+            )}
           </PageWrapper>
         </main>
       </div>
@@ -623,29 +449,17 @@ export default function AnalyzePage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Policy</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this policy? This action cannot be undone.
-            </AlertDialogDescription>
+            <AlertDialogDescription>Are you sure you want to delete this policy? This action cannot be undone.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteConfirm}
-              disabled={isDeleting}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              {isDeleting ? (
-                <span className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Deleting...
-                </span>
-              ) : (
-                "Delete"
-              )}
+            <AlertDialogAction onClick={handleDeleteConfirm} disabled={isDeleting} className="bg-destructive hover:bg-destructive/90">
+              {isDeleting ? <span className="flex items-center gap-2"><div className="h-4 w-4 rounded-full border-2 border-background border-t-transparent animate-spin" />Deleting...</span> : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      </ErrorBoundary>
     </ProtectedRoute>
   )
 }

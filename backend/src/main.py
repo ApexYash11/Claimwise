@@ -1,4 +1,6 @@
-from fastapi import FastAPI
+import asyncio
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 import os
 import logging
@@ -19,6 +21,8 @@ from src.routes.admin import router as admin_router
 from src.routes.auth import router as auth_router
 
 logging.basicConfig(level=logging.INFO)
+
+REQUEST_TIMEOUT_SECONDS = int(os.getenv("REQUEST_TIMEOUT_SECONDS", "120"))
 
 app = FastAPI()
 app.add_exception_handler(ClaimWiseError, claimwise_exception_handler)
@@ -41,6 +45,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+async def timeout_middleware(request: Request, call_next):
+    try:
+        response = await asyncio.wait_for(
+            call_next(request), timeout=REQUEST_TIMEOUT_SECONDS
+        )
+        return response
+    except asyncio.TimeoutError:
+        logging.error("Request timeout on %s %s", request.method, request.url.path)
+        return JSONResponse(
+            status_code=504,
+            content={"detail": "Request timed out. Please try again."},
+        )
+
+
+app.middleware("http")(timeout_middleware)
 app.middleware("http")(performance_middleware())
 
 app.include_router(monitoring_router)

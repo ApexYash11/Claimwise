@@ -4,152 +4,151 @@ import { ProtectedRoute } from "@/components/auth/protected-route"
 import { Header } from "@/components/layout/header"
 import { useAuth } from "@/hooks/use-auth"
 import { signOut } from "@/lib/auth"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, LogOut, Mail, User, Shield } from "lucide-react"
+import { ArrowLeft, LogOut, Mail, FileText, Activity, HardDrive, BarChart3, History, Shield } from "lucide-react"
 import Link from "next/link"
 import { useState } from "react"
 import { PageWrapper } from "@/components/motion/page-wrapper"
+import { usePolicies } from "@/lib/use-queries"
 
 export default function ProfilePage() {
   const { user } = useAuth()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const { data: policiesData } = usePolicies()
 
   const userName = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User"
   const userEmail = user?.email || "No email"
-  const userInitials = userName
-    .split(" ")
-    .map((n: string) => n[0])
-    .join("")
-    .toUpperCase()
+  const userInitials = userName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
+  const policiesCount = policiesData?.policies?.length ?? 0
 
   const handleLogout = async () => {
     setIsLoggingOut(true)
     try {
       const { error } = await signOut()
-      if (error) {
-        console.error("Logout error:", error)
-        setIsLoggingOut(false)
-        return
-      }
-      // Auth state will change and ProtectedRoute will handle the redirect to /login
-      // No need to manually navigate - the auth state subscription will trigger it
-    } catch (err) {
-      console.error("Logout failed:", err)
+      if (error) setIsLoggingOut(false)
+    } catch {
       setIsLoggingOut(false)
     }
   }
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-50">
+      <div className="min-h-screen bg-background">
         <Header />
-        <main className="container mx-auto px-4 py-8 max-w-2xl">
-          <PageWrapper>
-          {/* Back Button */}
-          <Link href="/dashboard" className="inline-flex items-center gap-2 text-indigo-600 dark:text-indigo-400 hover:underline mb-8">
-            <ArrowLeft className="h-4 w-4" />
-            Back to Dashboard
-          </Link>
+        <PageWrapper>
+          <main className="page-container-sm py-8 space-y-8">
+            <div>
+              <Button variant="ghost" asChild className="text-muted-foreground">
+                <Link href="/dashboard"><ArrowLeft className="h-4 w-4 mr-2" />Dashboard</Link>
+              </Button>
+            </div>
 
-          {/* Profile Header */}
-          <div className="mb-8">
-            <h1 className="text-4xl font-serif font-bold tracking-tight">Profile Settings</h1>
-            <p className="text-muted-foreground mt-2">Manage your account and preferences</p>
-          </div>
-
-          {/* Profile Card */}
-          <Card className="border border-slate-200 dark:border-slate-800 shadow-sm mb-8">
-            <CardHeader>
-              <div className="flex items-center gap-6">
-                <div className="flex items-center justify-center w-20 h-20 rounded-full bg-slate-900 text-white font-bold text-2xl dark:bg-slate-700">
+            <div className="card-flat space-y-6">
+              <div className="flex items-center gap-4">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-foreground text-background font-serif text-xl font-medium">
                   {userInitials}
                 </div>
                 <div>
-                  <CardTitle className="text-2xl">{userName}</CardTitle>
-                  <CardDescription className="text-base mt-1 flex items-center gap-2">
-                    <Mail className="h-4 w-4" />
+                  <h1 className="text-xl font-semibold tracking-tight">{userName}</h1>
+                  <p className="text-sm text-muted-foreground flex items-center gap-1.5 mt-0.5">
+                    <Mail className="h-3.5 w-3.5" />
                     {userEmail}
-                  </CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-
-            <CardContent className="p-8 space-y-6">
-              {/* Account Information Section */}
-              <div className="space-y-4">
-                <h2 className="text-lg font-semibold flex items-center gap-2">
-                  <User className="h-5 w-5 text-indigo-600" />
-                  Account Information
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-muted-foreground">Full Name</p>
-                    <p className="text-base font-semibold text-slate-900 dark:text-slate-50">{userName}</p>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-muted-foreground">Email Address</p>
-                    <p className="text-base font-semibold text-slate-900 dark:text-slate-50 break-all">{userEmail}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="h-px bg-slate-200 dark:bg-slate-800" />
-
-              {/* Account Status Section */}
-              <div className="space-y-4">
-                <h2 className="text-lg font-semibold flex items-center gap-2">
-                  <Shield className="h-5 w-5 text-green-600" />
-                  Account Status
-                </h2>
-                <div className="flex items-center justify-between p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-                  <div>
-                    <p className="text-sm font-medium text-green-700 dark:text-green-400">Active & Verified</p>
-                    <p className="text-xs text-green-600 dark:text-green-500 mt-1">Your account is in good standing</p>
-                  </div>
-                  <div className="w-3 h-3 rounded-full bg-green-600 animate-pulse" />
-                </div>
-              </div>
-
-              <div className="h-px bg-slate-200 dark:bg-slate-800" />
-
-              {/* Security Section */}
-              <div className="space-y-4">
-                <h2 className="text-lg font-semibold">Security & Privacy</h2>
-                <div className="space-y-3">
-                  <p className="text-sm text-muted-foreground">
-                    Your policies and data are encrypted and securely stored on Supabase. Only you can access your uploaded documents and analysis.
                   </p>
-                  <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                    <p className="text-sm font-medium text-blue-700 dark:text-blue-400">
-                      ✓ End-to-end encrypted storage
-                    </p>
-                    <p className="text-sm font-medium text-blue-700 dark:text-blue-400 mt-2">
-                      ✓ No data sharing with third parties
-                    </p>
-                  </div>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-
-          {/* Logout Section */}
-          <div className="flex items-center justify-between px-2">
-            <div>
-              <p className="text-sm text-muted-foreground">Signed in as <span className="font-medium text-slate-900 dark:text-slate-50">{userEmail}</span></p>
             </div>
-            <Button
-              onClick={handleLogout}
-              disabled={isLoggingOut}
-              variant="outline"
-              className="text-red-600 border-red-200 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-950/20"
-            >
-              <LogOut className="mr-2 h-4 w-4" />
-              {isLoggingOut ? "Signing out..." : "Sign Out"}
-            </Button>
-          </div>
-          </PageWrapper>
-        </main>
+
+            <div className="grid grid-cols-3 gap-4">
+              {[
+                { icon: FileText, label: "Uploaded Policies", value: policiesCount },
+                { icon: Activity, label: "Analyses Completed", value: policiesCount > 0 ? `${policiesCount * 3}+` : "0" },
+                { icon: HardDrive, label: "Storage Used", value: "—" },
+              ].map((stat) => (
+                <div key={stat.label} className="card-flat-subtle space-y-2">
+                  <stat.icon className="h-4 w-4 text-muted-foreground" />
+                  <p className="metric-label">{stat.label}</p>
+                  <p className="metric-value">{stat.value}</p>
+                </div>
+              ))}
+            </div>
+
+            <Card>
+              <CardContent className="p-6 space-y-6">
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <BarChart3 className="h-4 w-4 text-muted-foreground" />
+                    Account Information
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Full Name</p>
+                      <p className="text-sm font-medium mt-0.5">{userName}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Email</p>
+                      <p className="text-sm font-medium mt-0.5 break-all">{userEmail}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="h-px bg-border" />
+
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <Shield className="h-4 w-4 text-[hsl(var(--success))]" />
+                    Account Status
+                  </div>
+                  <div className="rounded-lg border-l-2 priority-success px-4 py-3">
+                    <p className="text-sm font-medium">Active & Verified</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Your account is in good standing</p>
+                  </div>
+                </div>
+
+                <div className="h-px bg-border" />
+
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <History className="h-4 w-4 text-muted-foreground" />
+                    Recent Activity
+                  </div>
+                  {policiesCount > 0 ? (
+                    <div className="space-y-2">
+                      {policiesData?.policies?.slice(0, 3).map((policy: any) => (
+                        <div key={policy.id} className="flex items-center gap-3 rounded-lg bg-muted/40 px-4 py-3">
+                          <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm truncate">{policy.policy_name || `Policy ${policy.id}`}</p>
+                            <p className="text-xs text-muted-foreground">{policy.policy_type || "Insurance"} · {policy.provider || "—"}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No policies uploaded yet.</p>
+                  )}
+                </div>
+
+                <div className="h-px bg-border" />
+
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">Security</p>
+                  <p className="text-sm text-muted-foreground">
+                    Your policies and data are encrypted and securely stored. Only you can access your uploaded documents and analysis.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">Signed in as {userEmail}</p>
+              <Button onClick={handleLogout} disabled={isLoggingOut} variant="outline" className="text-destructive border-destructive/20 hover:bg-destructive/5">
+                <LogOut className="mr-2 h-4 w-4" />
+                {isLoggingOut ? "Signing out..." : "Sign Out"}
+              </Button>
+            </div>
+          </main>
+        </PageWrapper>
       </div>
     </ProtectedRoute>
   )

@@ -31,20 +31,14 @@ export function SignupForm() {
     setSocialLoading(provider)
     setError("")
     try {
-      console.log(`🔗 Starting ${provider} social signup`)
       const { error: authError } = await signInWithProvider(provider)
-      
+
       if (authError) {
-        console.error(`❌ ${provider} signup failed:`, authError.message)
         setError(`${provider} signup failed. Please try again or use email signup.`)
         setSocialLoading(null)
         return
       }
-      
-      console.log(`✅ ${provider} signup initiated - redirecting...`)
-      // Supabase will handle the redirect on success
-    } catch (err) {
-      console.error(`💥 ${provider} signup error:`, err)
+    } catch {
       setError(`An error occurred during ${provider} sign up. Please try again or use email signup.`)
       setSocialLoading(null)
     }
@@ -54,10 +48,7 @@ export function SignupForm() {
     e.preventDefault()
     setError("")
     if (loading) return
-    
-    // Phase 1: Client-side validation (as per flow diagram)
-    console.log('🔍 Phase 1: Starting form validation')
-    
+
     if (password !== confirmPassword) {
       setError("Passwords do not match")
       return
@@ -75,86 +66,61 @@ export function SignupForm() {
       return
     }
 
-    console.log('✅ Phase 1: Validation passed, proceeding to authentication')
     setLoading(true)
-    
+
     try {
-      console.log('🚀 Phase 2: Starting 3-strategy authentication for:', email)
       const { data, error: authError } = await signUp(email, password, fullName.trim())
-      
-      console.log('📊 Authentication result:', { 
-        hasData: !!data, 
-        hasUser: !!data?.user,
-        hasSession: !!data?.session,
-        errorType: authError?.name,
-        errorMessage: authError?.message
-      })
-      
+
       if (authError) {
-        console.error('❌ Authentication failed:', authError)
-        
-        // Enhanced error handling with specific user guidance
         let errorMessage = authError.message
-        
-        // Handle specific error types with user-friendly messages
-        if (authError.message.includes('User already registered') || 
+
+        if (authError.message.includes('User already registered') ||
             authError.message.includes('already registered')) {
           errorMessage = 'This email is already registered. Please use the login page instead.'
-        } else if (authError.message.includes('Invalid email') || 
+        } else if (authError.message.includes('Invalid email') ||
                    authError.message.includes('invalid_email')) {
           errorMessage = 'Please enter a valid email address.'
-        } else if (authError.message.includes('Password should be at least') || 
+        } else if (authError.message.includes('Password should be at least') ||
                    authError.message.includes('password')) {
           errorMessage = 'Password must be at least 6 characters long.'
         } else if (authError.message.includes('Email not confirmed')) {
           errorMessage = 'Please check your email and click the confirmation link.'
         } else if (authError.message.includes('Invalid credentials')) {
           errorMessage = 'Invalid email or password format.'
-        } else if (authError.message.includes('Email signup is temporarily unavailable') || 
+        } else if (authError.message.includes('Email signup is temporarily unavailable') ||
                    authError.message.includes('server configuration')) {
-          errorMessage = '📧 Email signup is temporarily unavailable. Please use Google or GitHub signup instead.'
+          errorMessage = 'Email signup is temporarily unavailable. Please use Google or GitHub signup instead.'
         } else if (authError.message.includes('Account creation failed')) {
-          errorMessage = '⚠️ Having trouble with email signup? Try Google or GitHub signup for instant access.'
-        } else if (authError.message.includes('rate limit') || 
+          errorMessage = 'Having trouble with email signup? Try Google or GitHub signup for instant access.'
+        } else if (authError.message.includes('rate limit') ||
                    authError.message.includes('too many')) {
           errorMessage = 'Too many signup attempts. Please wait a few minutes and try again.'
-        } else if (authError.message.includes('network') || 
+        } else if (authError.message.includes('network') ||
                    authError.message.includes('connection')) {
           errorMessage = 'Connection issue. Please check your internet and try again.'
         } else {
-          // Keep original error for debugging
           errorMessage = `Signup failed: ${authError.message}`
         }
-        
+
         setError(errorMessage)
         setLoading(false)
         return
       }
-      
-      // Phase 5: Success flow
+
       if (data?.user) {
-        console.log('🎉 Phase 5: Signup successful for user:', data.user.email)
-        console.log('🔄 Checking session state...')
-        
         if (data.session) {
-          console.log('✅ Session created, redirecting to dashboard')
           setSuccess(true)
-          // Auto-redirect after showing success message
           setTimeout(() => {
             router.push('/dashboard')
           }, 2000)
         } else {
-          console.log('📧 No immediate session - likely email confirmation required')
           setSuccess(true)
-          // Show success message about email confirmation
         }
       } else {
-        console.error('❌ Unexpected state: No error but no user created')
         setError('Account creation incomplete. Please try again or use social login.')
       }
 
-    } catch (err) {
-      console.error('💥 Unexpected error during signup process:', err)
+    } catch {
       setError('An unexpected error occurred. Please try again or use Google/GitHub signup.')
     } finally {
       setLoading(false)
